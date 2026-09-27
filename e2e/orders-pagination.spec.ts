@@ -65,7 +65,7 @@ test.beforeAll(async () => {
     project_id: projectId,
     order_number: i + 1,
     status: i < DELIVERED ? 'delivered' : 'pending',
-    type: 'dine_in',
+    type: 'dinein',
     service_type: null,
     total_amount: 1.5,
     created_at: new Date(new Date(from).getTime() + i * 1000).toISOString(),
@@ -113,9 +113,14 @@ test('the header total and chips count the WHOLE day, not the loaded page (FIX-P
   await page.goto('/dashboard/orders');
   await expect(page.getByRole('heading', { name: 'الطلبات' })).toBeVisible();
 
-  // 120 seeded orders: the «الكل» chip is the assertion. If the chips were
-  // computed from the loaded page it would read 50 (or 100 after a page load)
-  // instead of the true 120.
+  // 120 seeded orders. This PINS the full-day behaviour; it is not a
+  // reproduction of the original defect, and the comment says why: the server
+  // component ships the whole day (1000/page, 5-page cap), so at 121 orders the
+  // old code's `loaded` span was also 121 and its chips also read 120. The real
+  // FIX-PAGE-004 failure needs a store past the 5000-row SSR cap, which is not
+  // a fixture worth creating in production. The arithmetic is still worth
+  // pinning: a future change that moves the header back onto the paged list
+  // would pass test 1 and only fail here.
   await expect(page.getByRole('button', { name: /^الكل/ })).toContainText('120');
   await expect(page.getByRole('button', { name: /^مسلّم/ })).toContainText('100');
   await expect(page.getByRole('button', { name: /^جديد/ })).toContainText('20');
@@ -133,26 +138,36 @@ test('a 60s refresh does not collapse pages 2+ back to the first page (FIX-PAGE-
   await expect(page.getByRole('heading', { name: 'الطلبات' })).toBeVisible();
 
   const cards = page.locator('article.dashboard-card');
-  // Page 1 = 50 rows. Load page 2 so 100 are in the DOM, then assert a refresh
-  // (the realtime debounce and the 60s heartbeat both call the same helper)
-  // re-reads the LOADED SPAN rather than replacing state with .range(0, 49).
-  await expect(cards).toHaveCount(50);
-  await page.getByRole('button', { name: 'تحميل المزيد' }).click();
-  await expect(cards).toHaveCount(100);
+  // The server component loops 1000/page up to 5 pages, so at 121 orders it
+  // ships the WHOLE day in the RSC payload — the client pages at 50 only as a
+  // safety net for stores past the 5000-row cap. So on THIS fixture the row
+  // count is the same before and after a refresh under both the old and the new
+  // code, and this test pins the invariant rather than reproducing the defect.
+  //
+  // The original FIX-PAGE-002 collapse (state replaced with .range(0, 49))
+  // needed `loaded > span`, i.e. a store past the SSR cap. What IS asserted
+  // here is real and was verified live: the new order inserted below DOES
+  // reach the list, which means the realtime → refresh path fired at all —
+  // without that, a passing count could just mean "nothing happened".
+  const initial = await cards.count();
+  expect(initial).toBeGreaterThan(0);
 
   // Fire a real order event through the DB so the realtime path triggers.
   const { error } = await admin.from('orders').insert({
     project_id: projectId,
     order_number: 999,
     status: 'pending',
-    type: 'dine_in',
+    type: 'dinein',
     service_type: null,
     total_amount: 1.5,
   });
   expect(error).toBeNull();
 
-  // 500ms debounce, then the fetch. It must still hold 100+ rows, NOT snap
-  // back to 50 — that snap-back was the reported merchant bug.
-  await expect(cards).not.toHaveCount(50, { timeout: 8_000 });
-  expect(await cards.count()).toBeGreaterThanOrEqual(100);
+  // The new row MUST appear: this is what proves the realtime → refresh path
+  // actually fired. Without it, a stable row count could mean "the channel
+  // never subscribed" rather than "the refresh preserved the page".
+  await expect(page.getByText('order-999')).toBeVisible({ timeout: 10_000 });
+
+  // And the list must still hold every row — NOT snap back to 50.
+  expect(await cards.count()).toBeGreaterThanOrEqual(initial);
 });

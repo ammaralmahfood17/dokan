@@ -14,7 +14,6 @@ import {
 } from '@/lib/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PullToRefresh } from '@/components/ui/pull-to-refresh';
-import { countStatuses, sumDaySales, type StatusCounts } from '@/lib/order-stats';
 
 const FILTERS: { value: OrderStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'الكل' },
@@ -27,9 +26,6 @@ const FILTERS: { value: OrderStatus | 'all'; label: string }[] = [
 
 /** ترتيب مراحل الحالة — تسلسل حقيقي (عملية الطهي/التسليم) */
 const STATUS_STEPS: OrderStatus[] = ['pending', 'preparing', 'ready', 'delivered'];
-
-/** حجم صفحة التحميل اليدوي (تحميل المزيد) */
-const PAGE_SIZE = 50;
 
 type OrderRow = Order & {
   tables?: { number: number; slug: string } | null;
@@ -72,6 +68,7 @@ export function OrdersClient({
   // FIX-P-002: تأجيل الفلترة — لا تحجب الـ main thread أثناء الكتابة
   const deferredQuery = useDeferredValue(query);
   // تحميل المزيد — إزاحة للصفحة التالية (50/صفحة)
+  const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   // فرز: أحدث / أقدم / أعلى مبلغ
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'amount'>('newest');
@@ -79,77 +76,12 @@ export function OrdersClient({
   const isToday = dateKey === toDateKey(new Date());
   const mountedRef = useRef(false);
 
-  // FIX-PAGE-001 (2026-09-26) + FIX-PAGE-002/003/004 (2026-09-28):
-  //
-  // `loaded` is the ONE source of truth for "how far the merchant has paged".
-  // A plain refresh used to re-query only .range(0,49) and REPLACE state, so
-  // every realtime event (and the 60s heartbeat) silently threw away pages 2+.
-  // It now re-reads the loaded span, and everything else derives from it:
-  //
-  //   hasMore   — derived, never stored. It used to be state written by TWO
-  //               disagreeing rules (loadMore: `data.length === 50`, refresh:
-  //               `data.length >= span`), so a page landing exactly on the page
-  //               size left it true forever and the merchant clicked into empty
-  //               pages. React's ref lint also rejects reading a ref in render,
-  //               which is why this is plain state and not a ref.
-  //   the gate   — keyed on `loaded`, NEVER on `filtered`. The old
-  //               `hasMore && filtered.length >= 50` made the button
-  //               unreachable under any rare filter (12 «مسلّم» out of 100 →
-  //               12 < 50 → never rendered), silently capping that view at
-  //               page 1.
-  //   dayTotal / counts — from a separate full-day read (dayStats), not from
-  //               the loaded page, so a busy day no longer under-reports.
-  //
-  // Two holders, one value: `loaded` is state (the render reads it for hasMore),
-  // `loadedRef` is the same value for async callbacks that must NOT re-create
-  // on every page. React's ref lint rejects reading a ref DURING render, which
-  // is exactly the split we need — state for render, ref for the callback.
-  const [loaded, setLoaded] = useState(initialOrders.length);
-  const loadedRef = useRef(initialOrders.length);
-  const hasMore = loaded >= PAGE_SIZE;
-
-  /** Write both holders. Never touch one without the other. */
-  const setLoadedCount = useCallback((n: number) => {
-    loadedRef.current = n;
-    setLoaded(n);
-  }, []);
-
-  // FIX-PAGE-004 (2026-09-28): مبيعات اليوم and the status chips were computed
-  // from the LOADED rows, so on a busy day the header total under-reported and
-  // the chips counted only the pages fetched so far. A lean second read
-  // (id,status,total_amount only — no order_items/tables blobs) returns the
-  // whole day for ~90 bytes per order, so the header is now exact. It is a
-  // separate fetch on purpose: the main list is paged, the header is not.
-  const [dayStats, setDayStats] = useState<{
-    total: number;
-    counts: StatusCounts;
-  }>(() => ({
-    total: sumDaySales(initialOrders),
-    counts: countStatuses(initialOrders),
-  }));
-
-  const refreshDayStats = useCallback(
-    async (key?: string) => {
-      const { start, end } = dayRange(key ?? dateKey);
-      const supabase = createClient();
-      // Two columns only. `order_items(*)` and `tables(*)` are the heavy part
-      // of the orders row and the header needs neither — measured live at
-      // ~90 bytes/order for this shape vs the full row.
-      const { data } = await supabase
-        .from('orders')
-        .select('status,total_amount')
-        .eq('project_id', projectId)
-        .is('service_type', null)
-        .gte('created_at', start.toISOString())
-        .lt('created_at', end.toISOString());
-      if (!data) return;
-      setDayStats({
-        total: sumDaySales(data as { status: OrderStatus; total_amount: number }[]),
-        counts: countStatuses(data as { status: OrderStatus }[]),
-      });
-    },
-    [projectId, dateKey]
-  );
+  // FIX-PAGE-001: how many rows the merchant has actually loaded. A plain
+  // refresh used to re-query only .range(0,49) and REPLACE state, so every
+  // realtime event (and the 60s heartbeat) silently threw away pages 2+ — the
+  // merchant who scrolled was yanked back to the newest 50 orders. Track the
+  // loaded span in a ref and re-query the same width on refresh.
+  const loadedCountRef = useRef(initialOrders.length);
 
   const refresh = useCallback(
     async (key?: string, append = false) => {
@@ -157,12 +89,7 @@ export function OrdersClient({
       const { start, end } = dayRange(target);
       const supabase = createClient();
       // A different day starts fresh; the same day re-reads what was loaded.
-      // Read through the ref, not `loaded`: `refresh` must keep a STABLE
-      // identity because the realtime channel below depends on it, and
-      // resubscribing on every appended page would drop live events. The ref
-      // is never read during render (react-hooks/refs rejects that), only
-      // inside this async callback, which is where it belongs.
-      const span = key && key !== dateKey ? PAGE_SIZE : Math.max(PAGE_SIZE, loadedRef.current);
+      const span = key && key !== dateKey ? 50 : Math.max(50, loadedCountRef.current);
       const { data } = await supabase
         .from('orders')
         .select('*, tables(number, slug), order_items(*)')
@@ -173,6 +100,7 @@ export function OrdersClient({
         .order('created_at', { ascending: false })
         .range(0, span - 1);
       if (data) {
+        loadedCountRef.current = data.length;
         setOrders((prev) => {
           // When appending, merge by id (realtime may have added rows).
           if (!append) return data as unknown as OrderRow[];
@@ -180,22 +108,18 @@ export function OrdersClient({
           for (const o of data as unknown as OrderRow[]) byId.set(o.id, o);
           return [...byId.values()];
         });
-        setLoadedCount(data.length);
-        void refreshDayStats(target);
+        // A full page came back → there may be more.
+        setHasMore(data.length >= span);
       }
     },
-    [projectId, dateKey, refreshDayStats, setLoadedCount]
+    [projectId, dateKey]
   );
 
   const loadMore = useCallback(async () => {
-    if (loadingMore) return;
+    if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     const { start, end } = dayRange(dateKey);
     const supabase = createClient();
-    // Offset from the ref so a burst of clicks can't reuse a stale closure.
-    // (React batches, so `loadingMore` only flips on the next render; the ref
-    // is already correct by then, which is the point of having both.)
-    const from = loadedRef.current;
     const { data } = await supabase
       .from('orders')
       .select('*, tables(number, slug), order_items(*)')
@@ -204,16 +128,17 @@ export function OrdersClient({
       .gte('created_at', start.toISOString())
       .lt('created_at', end.toISOString())
       .order('created_at', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
+      .range(orders.length, orders.length + 49);
     if (data) {
       const byId = new Map(orders.map((o) => [o.id, o]));
       for (const o of data as unknown as OrderRow[]) byId.set(o.id, o);
-      setOrders([...byId.values()]);
-      setLoadedCount(from + data.length);
-      void refreshDayStats();
+      const merged = [...byId.values()];
+      loadedCountRef.current = merged.length;
+      setOrders(merged);
+      setHasMore(data.length === 50);
     }
     setLoadingMore(false);
-  }, [loadingMore, dateKey, projectId, orders, refreshDayStats, setLoadedCount]);
+  }, [loadingMore, hasMore, dateKey, orders, projectId]);
 
   // SSR (Vercel = UTC) يجلب نطاقًا مختلفًا عن نطاق المتصفح المحلي (Asia/Bahrain) —
   // إعادة جلب واحدة عند أول mount توحّد العرض على توقيت المستخدم.
@@ -341,10 +266,28 @@ export function OrdersClient({
     return sorted;
   }, [orders, filter, deferredQuery, sortBy]);
 
-  // FIX-PAGE-004: sum and the status chips come from the full-day read
-  // (dayStats), not from the loaded page — a busy day no longer under-reports.
-  const dayTotal = dayStats.total;
-  const counts = dayStats.counts;
+  // مجموع مبيعات اليوم (غير الملغاة) — يعرض في الرأس
+  const dayTotal = useMemo(
+    () =>
+      orders
+        .filter((o) => o.status !== 'cancelled')
+        .reduce((s, o) => s + Number(o.total_amount), 0),
+    [orders]
+  );
+
+  // عدادات حية لكل حالة — معلومة حقيقية من البيانات المعروضة
+  const counts = useMemo(() => {
+    const c: Record<OrderStatus | 'all', number> = {
+      all: orders.length,
+      pending: 0,
+      preparing: 0,
+      ready: 0,
+      delivered: 0,
+      cancelled: 0,
+    };
+    for (const o of orders) c[o.status] += 1;
+    return c;
+  }, [orders]);
 
   return (
     <div className="page">
@@ -586,12 +529,8 @@ export function OrdersClient({
           ))}
         </div>
       )}
-      {/* تحميل المزيد — صفحة تالية (50/صفحة).
-          FIX-PAGE-003: gated on the RAW loaded span, never on `filtered`.
-          Keying it on the filtered list made the button unreachable under any
-          rare filter (12 «مسلّم» out of 100 → 12 < 50 → never renders), which
-          silently capped the merchant at page 1 of that filter. */}
-      {hasMore && (
+      {/* تحميل المزيد — صفحة تالية (50/صفحة) */}
+      {hasMore && filtered.length >= 50 && (
         <div className="mt-5 flex justify-center">
           <button
             type="button"
