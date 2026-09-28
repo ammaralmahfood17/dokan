@@ -24,15 +24,26 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
-type Check = { ok: boolean; ms: number; detail?: string };
+type Check = { ok: boolean; ms: number; detail?: 'down' | 'skipped' };
 
-async function timed<T>(fn: () => Promise<T>): Promise<{ value?: T; check: Check }> {
+async function timed<T>(
+  fn: () => Promise<T>,
+  timeoutMs = 4_000
+): Promise<{ value?: T; check: Check }> {
   const started = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const value = await fn();
+    const value = await Promise.race([
+      fn(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+      }),
+    ]);
     return { value, check: { ok: true, ms: Date.now() - started } };
   } catch {
     return { check: { ok: false, ms: Date.now() - started, detail: 'down' } };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -45,16 +56,20 @@ export async function GET(request: Request) {
   // 2. Can we authenticate to Supabase with the service key at all? A missing
   //    or rotated key is the single most common production breakage, and it is
   //    invisible until a real request fails.
-  const keyPresent = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const coreConfigured = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
   const env: Check = {
-    ok: keyPresent,
+    ok: coreConfigured,
     ms: 0,
-    ...(keyPresent ? {} : { detail: 'SUPABASE_SERVICE_ROLE_KEY missing' }),
+    ...(coreConfigured ? {} : { detail: 'down' }),
   };
 
   // 3. Does the database actually answer, and is the schema reachable?
   let database: Check = { ok: false, ms: 0, detail: 'skipped' };
-  if (keyPresent) {
+  if (coreConfigured) {
     const probe = await timed(async () => {
       const supabase = createAdminClient();
       // `limit(1)` on the single most fundamental table. A missing relation
@@ -70,6 +85,22 @@ export async function GET(request: Request) {
 
   const checks = { runtime, env, database };
   const healthy = Object.values(checks).every((c) => c.ok);
+  const integrations = {
+    push: Boolean(
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+    ),
+    telegram: Boolean(
+      process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_WEBHOOK_SECRET
+    ),
+    browserMonitoring: Boolean(
+      process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN
+    ),
+    sourceMaps: Boolean(
+      process.env.SENTRY_ORG &&
+        process.env.SENTRY_PROJECT &&
+        process.env.SENTRY_AUTH_TOKEN
+    ),
+  };
 
   return NextResponse.json(
     {
@@ -77,12 +108,17 @@ export async function GET(request: Request) {
       // Per-dependency, not a boolean blob: the whole point is knowing WHICH
       // one broke.
       checks,
-      ...(light ? {} : { timestamp: new Date().toISOString() }),
+      ...(light
+        ? {}
+        : { integrations, timestamp: new Date().toISOString() }),
     },
     {
       status: healthy ? 200 : 503,
       // Never cache: a cached "ok" is worse than no health check at all.
-      headers: { 'Cache-Control': 'no-store' },
+      headers: {
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
+      },
     }
   );
 }

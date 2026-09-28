@@ -50,7 +50,7 @@ export async function sendPushToProject(
     .eq('project_id', projectId)
     .eq('notify_push', true);
 
-  const optedInIds = (optedInStaff ?? []).map((s: any) => s.user_id);
+  const optedInIds = (optedInStaff ?? []).map((staff) => staff.user_id);
   if (!optedInIds.length) return { sent: 0, failed: 0, cleaned: 0 };
 
   const { data: subs } = await admin
@@ -62,7 +62,7 @@ export async function sendPushToProject(
   if (!subs?.length) return { sent: 0, failed: 0, cleaned: 0 };
 
   const results = await Promise.allSettled(
-    subs.map((sub: any) =>
+    subs.map((sub) =>
       webpush.sendNotification(
         {
           endpoint: sub.endpoint,

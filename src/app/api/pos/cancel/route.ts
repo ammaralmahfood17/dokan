@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Get current order state — verify it belongs to one of the user's projects
     const { data: order } = await supabase
       .from('orders')
-      .select('id, status, total_amount, project_id')
+      .select('id, status')
       .eq('id', orderId)
       .in('project_id', projectIds)
       .single();
@@ -75,50 +75,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Perform the cancellation using admin client — re-scope by project_id
-    // (defense in depth) and re-check the status INSIDE the UPDATE so a
-    // concurrent deliver/cancel between the read above and this write cannot
-    // cancel an already-delivered order (TOCTOU). `ready` is cancellable too
-    // (kitchen printed it but it hasn't been picked up yet).
-    const { data: updated, error: updateErr } = await supabase
-      .from('orders')
-      .update({ status: 'cancelled' })
-      .eq('id', orderId)
-      .in('project_id', projectIds)
-      .in('status', ['pending', 'preparing', 'ready'])
-      .select('id')
-      .maybeSingle();
+    // The single transition RPC locks the order, validates the state machine,
+    // updates it, and inserts the audit event in the same transaction.
+    const { data: updated, error: updateErr } = await supabase.rpc('advance_order_status', {
+      p_order_id: orderId,
+      p_expected_status: order.status,
+      p_new_status: 'cancelled',
+      p_caller_user_id: user.id,
+    });
 
-    if (updateErr) {
-      console.error('[Cancel] DB update error:', updateErr);
-      return NextResponse.json({ error: 'فشل إلغاء الطلب' }, { status: 500 });
-    }
-
-    // 0 rows matched → the order changed status between our read and the
-    // update (concurrent deliver/cancel). Don't claim success.
-    if (!updated) {
+    if (updateErr?.message.includes('STALE_STATUS')) {
       return NextResponse.json(
         { error: 'تعذر الإلغاء — تغيرت حالة الطلب، حدّث الصفحة وحاول مجدداً' },
         { status: 409 }
       );
     }
-
-    // Audit log (best-effort)
-    try {
-      await supabase.from('order_audit_logs').insert({
-        order_id: orderId,
-        project_id: order.project_id,
-        event: 'cancelled',
-        old_status: order.status,
-        new_status: 'cancelled',
-        actor_user_id: user.id,
-        metadata: {
-          type: 'staff_cancellation',
-          total_amount: order.total_amount,
-        },
-      });
-    } catch (auditErr) {
-      console.warn('[Cancel] Audit log error:', auditErr);
+    if (updateErr?.message.includes('INVALID_TRANSITION')) {
+      return NextResponse.json({ error: 'لا يمكن إلغاء الطلب في حالته الحالية' }, { status: 400 });
+    }
+    if (updateErr || !updated) {
+      console.error('[Cancel] transition error:', updateErr);
+      return NextResponse.json({ error: 'فشل إلغاء الطلب' }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });

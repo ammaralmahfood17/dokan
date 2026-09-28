@@ -24,9 +24,13 @@
  */
 import * as Sentry from '@sentry/nextjs';
 
-if (process.env.SENTRY_DSN) {
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+
+const clientDsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+if (clientDsn) {
   Sentry.init({
-    dsn: process.env.SENTRY_DSN,
+    dsn: clientDsn,
     tracesSampleRate: 0.1,
     // No session replays by default — a merchant's dashboard is customer data.
     // Errors still sample, so a broken flow can be replayed on demand later.

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getPublicSupabaseConfig } from '@/lib/env/public';
 
 /**
  * Public, session-less Supabase client for server components that render
@@ -8,9 +9,10 @@ import { createClient } from '@supabase/supabase-js';
  * signed-in users too (see 0061: role-scoped policies).
  */
 export function createAnonClient() {
+  const { url, anonKey } = getPublicSupabaseConfig();
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     { auth: { persistSession: false, autoRefreshToken: false } }
   );
 }

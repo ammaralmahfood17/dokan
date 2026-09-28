@@ -28,6 +28,16 @@ import { OrderSuccessState } from '@/components/menu/order-success-state';
 import { MenuProductRow } from '@/components/menu/product-card';
 // D7: offline indicator on the customer-facing menu (banner, not blocker).
 import { OfflineBanner } from '@/components/ui/offline-banner';
+import {
+  queuePendingOrder,
+  registerPendingOrderSync,
+  removePendingOrder,
+  type PendingOrderPayload,
+} from '@/lib/pending-orders';
+import {
+  PENDING_ORDER_EVENT,
+  type PendingOrderSyncMessage,
+} from '@/lib/pwa-events';
 
 /** Generic blur placeholder for product images — tiny 16×16 grey base64 */
 const BLUR_PLACEHOLDER =
@@ -74,6 +84,7 @@ export function MenuClient({
   // the UI, and it must stay identical across the button retry AND the
   // offline-queue replay. Reset to null once the order is confirmed.
   const orderKeyRef = useRef<string | null>(null);
+  const queuedCartRef = useRef<CartLine[] | null>(null);
   const [lastAddedKey, setLastAddedKey] = useState<string | null>(null);
   const lastAddedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // بحث في المنتجات (فقط للمنيو الكبير — 12+ منتج)
@@ -110,6 +121,39 @@ export function MenuClient({
     return () => {
       if (lastAddedTimer.current) clearTimeout(lastAddedTimer.current);
     };
+  }, []);
+
+  useEffect(() => {
+    const handlePendingOrder = (event: Event) => {
+      const message = (event as CustomEvent<PendingOrderSyncMessage>).detail;
+      if (!message || message.id !== orderKeyRef.current) return;
+
+      if (message.type === 'PENDING_ORDER_FAILED') {
+        setOrderError(message.error);
+        return;
+      }
+      if (!message.order) {
+        setOrderError('تم إرسال الطلب، لكن تعذّر تحميل تفاصيل التأكيد');
+        return;
+      }
+
+      if (queuedCartRef.current) setLastCart(queuedCartRef.current);
+      orderKeyRef.current = null;
+      queuedCartRef.current = null;
+      setOrderError(null);
+      setOrderDone({
+        id: message.order.id,
+        totalAmount: message.order.totalAmount,
+        orderNumber: message.order.orderNumber,
+      });
+      setCart([]);
+      setCartOpen(false);
+      setOrderNotes('');
+      setItemNotes('');
+    };
+
+    window.addEventListener(PENDING_ORDER_EVENT, handlePendingOrder);
+    return () => window.removeEventListener(PENDING_ORDER_EVENT, handlePendingOrder);
   }, []);
 
   // Ref for smooth-scrolling to products section
@@ -331,6 +375,8 @@ export function MenuClient({
       // fresh one. Until this point it must be preserved: a retry after a
       // lost response is the whole point.
       orderKeyRef.current = null;
+      queuedCartRef.current = null;
+      void removePendingOrder(idempotencyKey).catch(() => {});
       setOrderDone({
         id: data.order.id,
         totalAmount: data.order.totalAmount,
@@ -344,9 +390,8 @@ export function MenuClient({
       // FIX-W-002: حفظ الطلب في IndexedDB + تسجيل Background Sync —
       // عند عودة الاتصال يُرسل تلقائيًا (Chromium). Safari/Firefox:
       // زر إعادة المحاولة (D10) يغطيهم.
-      setOrderError('تعذّر الاتصال — سيُرسل الطلب تلقائيًا عند عودة الإنترنت');
       try {
-        const payload = {
+        const payload: PendingOrderPayload = {
           projectSlug: project.slug,
           tableSlug: table.slug,
           // SAME key as the attempt that just failed. The service worker
@@ -362,33 +407,17 @@ export function MenuClient({
             notes: l.notes || undefined,
           })),
         };
-        const dbReq = indexedDB.open('dokan-pending-orders', 1);
-        dbReq.onupgradeneeded = () => {
-          dbReq.result.createObjectStore('orders', { keyPath: 'id' });
-        };
-        dbReq.onsuccess = () => {
-          const db = dbReq.result;
-          const tx = db.transaction('orders', 'readwrite');
-          tx.objectStore('orders').put({
-            // Queue key = the idempotency key, NOT a fresh random uuid. A
-            // random one let the same logical checkout sit in the queue
-            // twice (once per failed attempt) and each copy would replay as a
-            // separate order. Keying by the idempotency key makes the queue
-            // hold at most one entry per checkout.
-            id: idempotencyKey,
-            payload,
-          });
-          // Register background sync (best-effort — Safari/Firefox throw)
-          // FIX-W-002: sync غير معرّف في TS types — وصول آمن عبر optional
-          navigator.serviceWorker?.ready
-            .then((reg) =>
-              (reg as unknown as { sync?: { register: (t: string) => Promise<void> } })
-                .sync?.register('submit-pending-order')
-            )
-            .catch(() => {});
-        };
+        queuedCartRef.current = [...cart];
+        await queuePendingOrder(idempotencyKey, payload);
+        const syncRegistered = await registerPendingOrderSync().catch(() => false);
+        setOrderError(
+          syncRegistered
+            ? 'تعذّر الاتصال — حُفظ الطلب وسيُرسل تلقائيًا عند عودة الإنترنت'
+            : 'تعذّر الاتصال — حُفظ الطلب، اضغط إعادة المحاولة عند عودة الإنترنت'
+        );
       } catch {
-        // IndexedDB غير متاح — زر إعادة المحاولة يبقى الخيار
+        queuedCartRef.current = null;
+        setOrderError('تعذّر الاتصال وحفظ الطلب — أعد المحاولة عند عودة الإنترنت');
       }
     } finally {
       setSubmitting(false);

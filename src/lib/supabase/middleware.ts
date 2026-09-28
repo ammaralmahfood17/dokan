@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getPublicSupabaseConfig } from '@/lib/env/public';
 
 /**
  * Refresh Supabase session cookies and enforce auth for protected routes.
@@ -10,10 +11,22 @@ import { NextResponse, type NextRequest } from 'next/server';
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
+  const path = request.nextUrl.pathname;
+  const { url: supabaseUrl, anonKey } = getPublicSupabaseConfig();
+
+  // An impersonation session has no usable refresh token by design. Avoid the
+  // SSR helper's refresh path; dashboard layout verifies the server-side marker
+  // and presents a recovery screen after expiry.
+  if (
+    request.cookies.has('dokan-impersonation') &&
+    (path.startsWith('/dashboard') || path.startsWith('/api/pos/'))
+  ) {
+    return response;
+  }
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    anonKey,
     {
       cookies: {
         getAll() {
@@ -38,8 +51,6 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getSession();
 
   const user = session?.user ?? null;
-  const path = request.nextUrl.pathname;
-
   const isAuthPage =
     path === '/login' ||
     path === '/register' ||

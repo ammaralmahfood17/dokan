@@ -1,13 +1,11 @@
-import { redirect } from 'next/navigation';
-import { getCurrentProject } from '@/lib/project';
+import { requireCurrentProjectRole } from '@/lib/project';
 import { getSiteUrl } from '@/lib/site-url';
 import { createClient } from '@/lib/supabase/server';
 import { TablesClient } from './tables-client';
 import type { Table } from '@/lib/types';
 
 export default async function TablesPage() {
-  const ctx = await getCurrentProject();
-  if (!ctx) redirect('/onboarding');
+  const ctx = await requireCurrentProjectRole(['owner', 'manager']);
 
   const supabase = await createClient();
   const { data: tables } = await supabase

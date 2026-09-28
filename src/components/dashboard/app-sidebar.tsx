@@ -19,46 +19,65 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import type { StaffRole } from '@/lib/types';
 
 type NavItem = {
   href: string;
   label: string;
   shortLabel: string;
   icon: React.ComponentType<{ className?: string }>;
+  roles?: readonly StaffRole[];
 };
 
 const NAV_MAIN: NavItem[] = [
   { href: '/dashboard', label: 'الرئيسية', shortLabel: 'الرئيسية', icon: LayoutDashboard },
-  { href: '/dashboard/analytics', label: 'الإحصائيات', shortLabel: 'إحصائيات', icon: BarChart3 },
-  { href: '/dashboard/products', label: 'المنتجات', shortLabel: 'منتجات', icon: Package },
+  { href: '/dashboard/analytics', label: 'الإحصائيات', shortLabel: 'إحصائيات', icon: BarChart3, roles: ['owner', 'manager'] },
+  { href: '/dashboard/products', label: 'المنتجات', shortLabel: 'منتجات', icon: Package, roles: ['owner', 'manager'] },
   { href: '/dashboard/orders', label: 'الطلبات', shortLabel: 'طلبات', icon: ClipboardList },
   { href: '/dashboard/kitchen', label: 'شاشة المطبخ', shortLabel: 'مطبخ', icon: ChefHat },
   { href: '/dashboard/pos', label: 'نقطة البيع', shortLabel: 'POS', icon: Monitor },
-  { href: '/dashboard/tables', label: 'الطاولات و QR', shortLabel: 'طاولات', icon: QrCode },
+  { href: '/dashboard/tables', label: 'الطاولات و QR', shortLabel: 'طاولات', icon: QrCode, roles: ['owner', 'manager'] },
 ];
 
 const NAV_BOTTOM: NavItem[] = [
-  { href: '/dashboard/settings', label: 'الإعدادات', shortLabel: 'إعدادات', icon: Settings },
+  { href: '/dashboard/settings', label: 'الإعدادات', shortLabel: 'إعدادات', icon: Settings, roles: ['owner'] },
 ];
 
 export function AppSidebar({
   projectName,
+  role,
 }: {
   projectName: string;
+  role: StaffRole;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    try { router.prefetch('/dashboard/settings'); } catch {}
-    try { router.prefetch('/dashboard/tables'); } catch {}
-    try { router.prefetch('/dashboard/analytics'); } catch {}
-  }, [router]);
+    if (role === 'owner') {
+      try { router.prefetch('/dashboard/settings'); } catch {}
+    }
+    if (role !== 'staff') {
+      try { router.prefetch('/dashboard/tables'); } catch {}
+      try { router.prefetch('/dashboard/analytics'); } catch {}
+    }
+  }, [role, router]);
 
   async function logout() {
     try {
-      const { createClient } = await import('@/lib/supabase/client');
+      const { createClient, isBrowserSupportMode } = await import('@/lib/supabase/client');
+
+      if (isBrowserSupportMode()) {
+        const response = await fetch('/api/super-admin/impersonate/end', { method: 'POST' });
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error('support session end failed');
+        window.location.assign(
+          result.restored ? '/super-admin/subscriptions' : '/login'
+        );
+        return;
+      }
+
       const supabase = createClient();
       await supabase.auth.signOut();
       // Purge SW-cached pages/RSC so the next user of this device never gets
@@ -175,12 +194,12 @@ export function AppSidebar({
 
         {/* Navigation */}
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-2 lg:p-2">
-          {NAV_MAIN.map(navItem)}
+          {NAV_MAIN.filter((item) => !item.roles || item.roles.includes(role)).map(navItem)}
         </nav>
 
         {/* Bottom */}
         <div className="border-t border-[var(--color-border)] p-2 space-y-0.5">
-          {NAV_BOTTOM.map(navItem)}
+          {NAV_BOTTOM.filter((item) => !item.roles || item.roles.includes(role)).map(navItem)}
 
           {/* Logout */}
           <button

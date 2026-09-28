@@ -1,7 +1,7 @@
 // Dokan Service Worker — Precache build assets + RSC caching + Push + Offline-first
 // M6: single source of truth for cache versioning — bump CACHE_VERSION on every
 // SW change so old caches are evicted by activate() (matched by prefix).
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v9';
 const CACHE_SHELL = `dokan-shell-${CACHE_VERSION}`;
 const CACHE_IMAGES = `dokan-images-${CACHE_VERSION}`;
 const CACHE_STATIC = `dokan-static-${CACHE_VERSION}`;
@@ -138,9 +138,37 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API routes: network-first (fresh data), fall back to cache if available
+  // API data is never cached. A cached authenticated JSON response can expose
+  // the previous operator's data on a shared iOS PWA, and an HTML offline page
+  // is not a valid API response.
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(event.request, CACHE_PAGES));
+    event.respondWith(
+      fetch(event.request).catch(() =>
+        new Response(JSON.stringify({ error: 'offline' }), {
+          status: 503,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+          },
+        })
+      )
+    );
+    return;
+  }
+
+  // Authenticated, account, and credential pages are network-only, including
+  // their RSC payloads. Logout cache purging remains defence in depth; privacy
+  // must not depend on logout completing successfully.
+  if (isPrivatePath(url.pathname)) {
+    event.respondWith(
+      fetch(event.request).catch(() =>
+        event.request.mode === 'navigate'
+          ? caches.match('/offline.html').then(
+              (response) => response || new Response('Offline', { status: 503 })
+            )
+          : new Response('', { status: 503, headers: { 'Cache-Control': 'no-store' } })
+      )
+    );
     return;
   }
 
@@ -185,6 +213,18 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+function isPrivatePath(pathname) {
+  return [
+    '/dashboard',
+    '/super-admin',
+    '/onboarding',
+    '/login',
+    '/register',
+    '/reset-password',
+    '/update-password',
+  ].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 /** M6: LRU-ish trim — keep the most recent MAX_CACHE_ENTRIES in a cache. */
 async function trimCache(cache, maxEntries) {
@@ -260,13 +300,8 @@ function openPendingDb() {
 }
 
 async function submitPendingOrders() {
-  const db = await openPendingDb();
-  const tx = db.transaction(PENDING_STORE, 'readwrite');
-  const store = tx.objectStore(PENDING_STORE);
-  const all = await new Promise((resolve) => {
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result || []);
-  });
+  const all = await readPendingOrders();
+  let shouldRetry = false;
 
   for (const order of all) {
     try {
@@ -276,16 +311,84 @@ async function submitPendingOrders() {
         body: JSON.stringify(order.payload),
       });
       if (res.ok) {
-        // Drop it. Note a `replayed` 200 still means "this checkout is
-        // handled" — the server returned the original order instead of making
-        // a second one, so re-sending would be pointless.
-        store.delete(order.id);
+        const result = await readJsonResponse(res);
+        await deletePendingOrder(order.id);
+        await notifyWindowClients({
+          type: 'PENDING_ORDER_SUBMITTED',
+          id: order.id,
+          order: result?.order || null,
+        });
       } else {
-        // Permanent failure (4xx) — drop it; the customer saw the error
-        if (res.status >= 400 && res.status < 500) store.delete(order.id);
+        if (res.status >= 400 && res.status < 500) {
+          const result = await readJsonResponse(res);
+          await deletePendingOrder(order.id);
+          await notifyWindowClients({
+            type: 'PENDING_ORDER_FAILED',
+            id: order.id,
+            error: result?.error || 'تعذّر إرسال الطلب المؤجل',
+          });
+        } else {
+          shouldRetry = true;
+        }
       }
     } catch {
-      // still offline — leave in queue, sync will retry
+      shouldRetry = true;
+    }
+  }
+
+  // Rejecting the sync promise asks the browser to schedule another attempt.
+  // Resolving while retryable entries remain would strand them indefinitely.
+  if (shouldRetry) throw new Error('pending orders still require retry');
+}
+
+async function readPendingOrders() {
+  const db = await openPendingDb();
+  try {
+    const tx = db.transaction(PENDING_STORE, 'readonly');
+    const store = tx.objectStore(PENDING_STORE);
+    return await new Promise((resolve, reject) => {
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function deletePendingOrder(id) {
+  const db = await openPendingDb();
+  try {
+    const tx = db.transaction(PENDING_STORE, 'readwrite');
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+      tx.objectStore(PENDING_STORE).delete(id);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function readJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function notifyWindowClients(message) {
+  const clients = await self.clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true,
+  });
+  for (const client of clients) {
+    try {
+      client.postMessage(message);
+    } catch {
+      // A window can close between matchAll() and postMessage().
     }
   }
 }

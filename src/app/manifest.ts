@@ -5,13 +5,17 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'دكان',
     short_name: 'دكان',
     description: 'إدارة طلبات المطاعم والمقاهي',
+    id: '/',
     start_url: '/dashboard',
+    scope: '/',
     display: 'standalone',
-    background_color: '#F8FAFC',
+    background_color: '#FAF9F6',
     theme_color: '#4F46E5',
     orientation: 'any',
     lang: 'ar',
     dir: 'rtl',
+    categories: ['business', 'productivity'],
+    prefer_related_applications: false,
     icons: [
       {
         src: '/icons/icon-192.png',
@@ -46,6 +50,26 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/png',
         form_factor: 'narrow',
         label: 'دكان — لوحة التحكم',
+      },
+    ],
+    shortcuts: [
+      {
+        name: 'الطلبات',
+        short_name: 'الطلبات',
+        url: '/dashboard/orders',
+        icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }],
+      },
+      {
+        name: 'شاشة المطبخ',
+        short_name: 'المطبخ',
+        url: '/dashboard/kitchen',
+        icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }],
+      },
+      {
+        name: 'نقطة البيع',
+        short_name: 'POS',
+        url: '/dashboard/pos',
+        icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }],
       },
     ],
   };

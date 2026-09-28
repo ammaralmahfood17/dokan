@@ -22,6 +22,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  database-security:
+    name: Fresh database · Security assertions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Apply every migration from zero
+        run: supabase db reset
+
+      - name: Run database security tests
+        run: supabase test db
+
   verify:
     name: Typecheck · Lint · Build
     runs-on: ubuntu-latest
@@ -44,6 +65,9 @@ jobs:
       - name: Install (npm ci)
         run: npm ci
 
+      - name: Verify environment contract
+        run: npm run env:check
+
       # Placeholder env for the build only. No real secret is needed and none is
       # exposed: `NEXT_PUBLIC_*` values are inlined at build time, so the build
       # must be given *something*, but nothing here reaches production. The
@@ -53,10 +77,13 @@ jobs:
         run: |
           cat > .env.local <<'EOF'
           NEXT_PUBLIC_SITE_URL=https://dokanstore.xyz
-          NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-placeholder-anon-key
-          SUPABASE_SERVICE_ROLE_KEY=ci-placeholder-service-role
+          NEXT_PUBLIC_SUPABASE_URL=https://ci-supabase.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-anon-key
+          SUPABASE_SERVICE_ROLE_KEY=ci-service-role-key-do-not-bundle
           EOF
+
+      - name: Validate deployment environment shape
+        run: npm run env:validate
 
       # The three gates the project already used manually. `lint` runs with
       # --max-warnings 0, so a new warning fails the build.
@@ -81,7 +108,7 @@ jobs:
       # catches the single worst thing that could be committed.
       - name: Assert no service-role key in client assets
         run: |
-          if grep -rl "sbp_" .next/static/ 2>/dev/null; then
+          if grep -rl "ci-service-role-key-do-not-bundle" .next/static/ 2>/dev/null; then
             echo "::error::SUPABASE_SERVICE_ROLE_KEY found in client bundle"
             exit 1
           fi
@@ -122,9 +149,9 @@ jobs:
       - name: Write env placeholders for module load
         run: |
           cat > .env.local <<'EOF'
-          NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-placeholder-anon-key
-          SUPABASE_SERVICE_ROLE_KEY=ci-placeholder-service-role
+          NEXT_PUBLIC_SUPABASE_URL=https://ci-supabase.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-anon-key
+          SUPABASE_SERVICE_ROLE_KEY=ci-service-role-key-do-not-bundle
           EOF
 
       - name: List Playwright specs

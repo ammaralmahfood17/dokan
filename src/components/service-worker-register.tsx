@@ -2,6 +2,10 @@
 
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import {
+  isPendingOrderSyncMessage,
+  PENDING_ORDER_EVENT,
+} from '@/lib/pwa-events';
 
 /**
  * Registers the Service Worker on first app load (any page — public menu or dashboard).
@@ -40,12 +44,27 @@ export function ServiceWorkerRegister() {
     // New SW took control (skipWaiting fired) — prompt, don't auto-reload.
     navigator.serviceWorker.addEventListener('controllerchange', showUpdateToast);
 
+    const handleMessage = (event: MessageEvent<unknown>) => {
+      if (!isPendingOrderSyncMessage(event.data)) return;
+
+      window.dispatchEvent(
+        new CustomEvent(PENDING_ORDER_EVENT, { detail: event.data })
+      );
+      if (event.data.type === 'PENDING_ORDER_SUBMITTED') {
+        toast.success('تم إرسال الطلب المؤجل بنجاح');
+      } else {
+        toast.error(event.data.error);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleMessage);
+
     navigator.serviceWorker
       .register('/sw.js')
       .catch(() => {}); // silent — PWA is progressive enhancement
 
     return () => {
       navigator.serviceWorker.removeEventListener('controllerchange', showUpdateToast);
+      navigator.serviceWorker.removeEventListener('message', handleMessage);
     };
   }, []);
 

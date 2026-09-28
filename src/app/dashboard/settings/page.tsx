@@ -1,10 +1,8 @@
-import { redirect } from 'next/navigation';
-import { getCurrentProject } from '@/lib/project';
+import { requireCurrentProjectRole } from '@/lib/project';
 import { SettingsClient } from './settings-client';
 
 export default async function SettingsPage() {
-  const ctx = await getCurrentProject();
-  if (!ctx) redirect('/onboarding');
+  const ctx = await requireCurrentProjectRole(['owner']);
 
   return (
     <SettingsClient

@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import type { Json } from '@/lib/database.types';
 import { getSiteUrl } from '@/lib/site-url';
+import { getJwtExpiryMs } from '@/lib/jwt';
+import { getPublicSupabaseConfig } from '@/lib/env/public';
 
 /**
  * Super-admin surface helpers (server-only).
@@ -22,6 +24,8 @@ import { getSiteUrl } from '@/lib/site-url';
  *  the dashboard layout + end route. Never exposed to page JS (2026-09-20
  *  hardening: the value alone must not authorize ending a session). */
 export const MARKER_COOKIE = 'dokan-impersonation';
+/** Non-secret browser hint used only to disable automatic token refresh. */
+export const SUPPORT_MODE_COOKIE = 'dokan-support-mode';
 
 /** Shape of the session objects we mint and store server-side ourselves. */
 export type StoredSession = {
@@ -90,10 +94,11 @@ export async function logSuperAdminAction(input: {
 // HOW IT WORKS (investigated against the real Supabase admin API before
 // building — see the live probe):
 //   admin.generateLink({type:'magiclink'}) + verifyOtp(token_hash) mints a
-//   REAL session for the target user with NO password exposure and NO email
-//   confirmation needed. We store both the target's session (the one the
-//   browser will use) and the super admin's own session (to restore on end)
-//   in impersonation_sessions, then swap the auth cookie.
+//   short-lived session for the target user with NO password exposure. The
+//   real target refresh token is revoked before any response is sent; the
+//   browser receives only the access token plus a deliberately unusable local
+//   placeholder. Supabase Auth must therefore be configured with a JWT expiry
+//   of at most 30 minutes, which is checked at runtime and fails closed.
 //
 // LIMITATION (reported explicitly): this requires the target user to not
 // have MFA / TOTP enabled — verifyOtp with a magiclink token_hash bypasses
@@ -102,6 +107,7 @@ export async function logSuperAdminAction(input: {
 // ===========================================================================
 
 const IMPERSONATION_TTL_MS = 30 * 60 * 1000; // hard 30-minute limit
+const IMPERSONATION_TTL_TOLERANCE_MS = 5_000;
 
 export type ImpersonationSession = {
   id: string;
@@ -109,6 +115,7 @@ export type ImpersonationSession = {
   targetProjectId: string | null;
   targetEmail: string;
   expiresAt: string;
+  expired: boolean;
 };
 
 /** Mint a session for the target and store both sessions (service_role). */
@@ -117,12 +124,27 @@ export async function startImpersonation(input: {
   actorSession: Json; // the super admin's CURRENT session — restored on end
   targetUserId: string;
   targetProjectId: string | null;
-}): Promise<{ sessionId: string; targetSession: Json; expiresAt: string }> {
+}): Promise<{
+  sessionId: string;
+  targetSession: { access_token: string; refresh_token: string };
+  expiresAt: string;
+}> {
   const admin = createAdminClient();
 
   const { data: targetUser } = await admin.auth.admin.getUserById(input.targetUserId);
   if (!targetUser?.user?.email) throw new Error('target user not found');
   const targetEmail = targetUser.user.email;
+
+  if (input.targetProjectId) {
+    const { data: ownerMembership } = await admin
+      .from('staff_members')
+      .select('id')
+      .eq('project_id', input.targetProjectId)
+      .eq('user_id', input.targetUserId)
+      .eq('role', 'owner')
+      .maybeSingle();
+    if (!ownerMembership) throw new Error('target is not the project owner');
+  }
 
   // 1. Mint the owner session (no password involved).
   const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
@@ -134,9 +156,10 @@ export async function startImpersonation(input: {
     throw new Error(`generateLink failed: ${linkErr?.message ?? 'no token'}`);
   }
 
+  const { url: supabaseUrl, anonKey } = getPublicSupabaseConfig();
   const verifier = createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    anonKey,
     { auth: { persistSession: false, autoRefreshToken: false } }
   );
   const { data: verified, error: verifyErr } = await verifier.auth.verifyOtp({
@@ -147,8 +170,26 @@ export async function startImpersonation(input: {
     throw new Error(`verifyOtp failed: ${verifyErr?.message ?? 'no session'} (target may have MFA enabled)`);
   }
 
-  // 2. Persist BOTH sessions + expiry (tokens are secrets — server-side only).
-  const expiresAt = new Date(Date.now() + IMPERSONATION_TTL_MS).toISOString();
+  const tokenExpiresAt = getJwtExpiryMs(verified.session.access_token);
+  const tokenLifetime = tokenExpiresAt - Date.now();
+  if (tokenLifetime > IMPERSONATION_TTL_MS + IMPERSONATION_TTL_TOLERANCE_MS) {
+    await admin.auth.admin.signOut(verified.session.access_token, 'local');
+    throw new Error('SUPABASE_JWT_EXPIRY_TOO_LONG');
+  }
+  if (tokenLifetime <= 0) throw new Error('target access token already expired');
+
+  // Revoke the real refresh token before the access token leaves this process.
+  // Supabase access JWTs remain valid until exp, but this session can never be
+  // extended beyond that cryptographic deadline.
+  const { error: revokeError } = await admin.auth.admin.signOut(
+    verified.session.access_token,
+    'local'
+  );
+  if (revokeError) throw new Error(`target refresh revocation failed: ${revokeError.message}`);
+
+  // Persist the admin session for restoration. The target JSON intentionally
+  // contains no refresh token; the DB constraint enforces that invariant.
+  const expiresAt = new Date(Math.min(Date.now() + IMPERSONATION_TTL_MS, tokenExpiresAt)).toISOString();
   const { data: row, error: insErr } = await admin
     .from('impersonation_sessions')
     .insert({
@@ -156,7 +197,7 @@ export async function startImpersonation(input: {
       target_user_id: input.targetUserId,
       target_project_id: input.targetProjectId,
       super_admin_session: input.actorSession,
-      target_session: verified.session as unknown as Json,
+      target_session: { access_token: verified.session.access_token },
       expires_at: expiresAt,
     })
     .select('id')
@@ -165,7 +206,13 @@ export async function startImpersonation(input: {
 
   return {
     sessionId: row.id,
-    targetSession: verified.session as unknown as Json,
+    targetSession: {
+      access_token: verified.session.access_token,
+      // setSession requires a non-empty value. It is never sent to GoTrue
+      // because the access token is still valid, and auto-refresh is disabled
+      // while the support-mode cookie exists.
+      refresh_token: `non-refreshable-${row.id}`,
+    },
     expiresAt,
   };
 }
@@ -181,8 +228,8 @@ export async function getImpersonationById(
     .select('id, target_user_id, target_project_id, expires_at, ended_at')
     .eq('id', sessionId)
     .maybeSingle();
-  if (!data) return null;
-  if (data.ended_at || new Date(data.expires_at as string).getTime() <= Date.now()) return null;
+  if (!data || data.ended_at) return null;
+  const expired = new Date(data.expires_at as string).getTime() <= Date.now();
 
   const { data: targetUser } = await admin.auth.admin.getUserById(data.target_user_id as string);
   return {
@@ -191,6 +238,7 @@ export async function getImpersonationById(
     targetProjectId: data.target_project_id as string | null,
     targetEmail: targetUser?.user?.email ?? 'unknown',
     expiresAt: data.expires_at as string,
+    expired,
   };
 }
 
@@ -198,19 +246,31 @@ export async function getImpersonationById(
  *  cookie restoration (service_role). */
 export async function endImpersonation(sessionId: string): Promise<{
   superAdminSession: Json | null;
+  superAdminUserId: string;
+  targetProjectId: string | null;
   targetUserId: string;
 } | null> {
   const admin = createAdminClient();
   const { data: row } = await admin
     .from('impersonation_sessions')
-    .select('id, super_admin_session, target_session, target_user_id, ended_at')
+    .select('id, super_admin_session, super_admin_user_id, target_project_id, target_user_id, ended_at')
     .eq('id', sessionId)
     .maybeSingle();
   if (!row || row.ended_at) return null;
 
-  await admin.from('impersonation_sessions').update({ ended_at: new Date().toISOString() }).eq('id', sessionId);
+  const { error: updateError } = await admin
+    .from('impersonation_sessions')
+    .update({
+      ended_at: new Date().toISOString(),
+      super_admin_session: {},
+      target_session: {},
+    })
+    .eq('id', sessionId);
+  if (updateError) throw new Error(`impersonation end failed: ${updateError.message}`);
   return {
     superAdminSession: (row.super_admin_session as Json | null) ?? null,
+    superAdminUserId: row.super_admin_user_id as string,
+    targetProjectId: row.target_project_id as string | null,
     targetUserId: row.target_user_id as string,
   };
 }

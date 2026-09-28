@@ -10,26 +10,37 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const ctx = await getCurrentProject();
-
-  if (!ctx) {
-    redirect('/onboarding');
-  }
-
-  // Phase C: impersonation banner — marker cookie set by the super-admin
-  // "login as" flow. If the marker exists but the session is expired/deleted,
-  // still show the banner in "expired" state so the admin can restore their
-  // own session (never silently stuck impersonated).
+  // Check support mode before touching tenant data. Once the short-lived JWT
+  // expires, authenticated queries fail; the admin still needs this recovery
+  // screen to restore their original session.
   const cookieStore = await cookies();
   const impSessionId = cookieStore.get('dokan-impersonation')?.value ?? '';
   let impersonation: { targetEmail: string; expiresAt: string; expired: boolean } | null = null;
   if (impSessionId) {
-    const active = await getImpersonationById(impSessionId);
-    if (active) {
-      impersonation = { targetEmail: active.targetEmail, expiresAt: active.expiresAt, expired: false };
+    const supportSession = await getImpersonationById(impSessionId);
+    if (supportSession) {
+      impersonation = {
+        targetEmail: supportSession.targetEmail,
+        expiresAt: supportSession.expiresAt,
+        expired: supportSession.expired,
+      };
     } else {
       impersonation = { targetEmail: '', expiresAt: '', expired: true };
     }
+  }
+
+  if (impersonation?.expired) {
+    return (
+      <div className="min-h-dvh bg-[var(--color-bg)]">
+        <ImpersonationBanner targetEmail="" expiresAt="" expired />
+      </div>
+    );
+  }
+
+  const ctx = await getCurrentProject();
+
+  if (!ctx) {
+    redirect('/onboarding');
   }
 
   // Subscription warning banner (7-day grace). Runs server-side so it shows
@@ -57,6 +68,7 @@ export default async function DashboardLayout({
       {/* Sidebar */}
       <AppSidebar
         projectName={ctx.project.name}
+        role={ctx.membership.role}
       />
 
       {/* Content */}

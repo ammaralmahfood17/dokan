@@ -747,7 +747,7 @@ export type Database = {
         Args: {
           p_caller_user_id?: string
           p_items: Json
-          p_notes?: string
+          p_notes?: string | null
           p_order_number: number
           p_project_id: string
           p_status: string
@@ -759,6 +759,14 @@ export type Database = {
       }
       expire_subscriptions: { Args: never; Returns: number }
       generate_basic_slug: { Args: { input: string }; Returns: string }
+      has_project_role: {
+        Args: { p_project_id: string; p_roles: string[] }
+        Returns: boolean
+      }
+      has_project_role_for: {
+        Args: { p_project_id: string; p_roles: string[]; p_user_id: string }
+        Returns: boolean
+      }
       is_project_member: { Args: { p_project_id: string }; Returns: boolean }
       is_project_member_for: {
         Args: { p_project_id: string; p_user_id: string }
@@ -798,6 +806,18 @@ export type Database = {
         }
         Returns: Json
       }
+      record_payment_and_renew: {
+        Args: {
+          p_amount: number
+          p_caller_id?: string
+          p_days?: number
+          p_method: string
+          p_notes?: string | null
+          p_project_id: string
+          p_receipt?: string | null
+        }
+        Returns: string
+      }
       renew_subscription: {
         Args: {
           p_caller_user_id?: string
@@ -815,7 +835,12 @@ export type Database = {
         Returns: boolean
       }
       super_admin_hard_delete_project: {
-        Args: { p_caller_user_id?: string; p_project_id: string }
+        Args: {
+          p_caller_user_id?: string
+          p_confirm_name: string
+          p_project_id: string
+          p_reason: string
+        }
         Returns: boolean
       }
       unaccent: { Args: { "": string }; Returns: string }

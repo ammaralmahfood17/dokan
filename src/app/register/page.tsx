@@ -61,7 +61,7 @@ export default function RegisterPage() {
 
       router.push('/onboarding');
       router.refresh();
-    } catch (err: any) {
+    } catch {
       setError('حدث خطأ غير متوقع أثناء إنشاء الحساب.');
       setLoading(false);
     }

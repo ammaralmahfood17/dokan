@@ -72,7 +72,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   // FIX-R-001: تفعيل safe areas على iPhone مع notch (env(safe-area-inset-*))
   viewportFit: 'cover',
-  themeColor: '#F8FAFC',
+  themeColor: '#FAF9F6',
 };
 
 export default function RootLayout({

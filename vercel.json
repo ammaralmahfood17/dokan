@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run env:validate && npm run build",
   "installCommand": "npm ci",
   "outputDirectory": ".next"
 }

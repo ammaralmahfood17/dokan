@@ -1,14 +1,10 @@
 /**
  * Rate limiter for Dokan API routes.
- * Priority: Vercel KV (Redis) → Supabase Postgres (production default) → in-memory Map.
+ * Priority: Supabase Postgres (production) → in-memory Map (local fallback).
  *
- * Vercel KV: shared across serverless instances when KV_URL is configured.
  * Supabase: atomic counter via SECURITY DEFINER RPC (rate_limit_check) — works on
  *   serverless without extra services. This is the production path.
  * In-memory: local development only (per-instance, resets on cold starts).
- *
- * KV access goes through src/lib/cache (CacheProvider) — swapping Vercel KV
- * for Upstash later is a one-line change in getCacheProvider().
  */
 
 type RateLimitRecord = {
@@ -36,46 +32,6 @@ interface RateLimitResult {
   allowed: boolean;
   remaining: number;
   resetIn: number;
-}
-
-/**
- * Try using Vercel KV if configured, otherwise use in-memory Map.
- */
-async function kvRateLimit(
-  key: string,
-  options: RateLimitOptions
-): Promise<RateLimitResult | null> {
-  try {
-    if (!process.env.KV_URL) return null; // KV not configured
-
-    const cache = (await import('@/lib/cache')).getCacheProvider();
-    const now = Date.now();
-    const windowSeconds = Math.ceil(options.windowMs / 1000);
-
-    // Atomic check-and-increment: HINCRBY is the single source of truth.
-    // (The old hGetAll → check → hSet/hIncrBy order was a check-then-act race:
-    // concurrent requests read the same count, all pass the limit check, and
-    // the window admits more traffic than p_limit.)
-    const count = await cache.hIncrBy(key, 'count', 1);
-
-    if (count === 1) {
-      // Window opened by this request: stamp resetAt + attach the TTL once.
-      await cache.hSet(key, { resetAt: now + options.windowMs });
-      await cache.expire(key, windowSeconds);
-      return { allowed: true, remaining: options.limit - 1, resetIn: options.windowMs };
-    }
-
-    if (count > options.limit) {
-      // Rejected: read the real window end for the retry-after message.
-      const rec = await cache.hGetAll<{ resetAt?: number }>(key);
-      const resetIn = Math.max(0, (rec?.resetAt ?? now + options.windowMs) - now);
-      return { allowed: false, remaining: 0, resetIn };
-    }
-
-    return { allowed: true, remaining: options.limit - count, resetIn: options.windowMs };
-  } catch {
-    return null; // Fall through to Supabase path
-  }
 }
 
 /**
@@ -120,15 +76,11 @@ export async function rateLimit(
 ): Promise<RateLimitResult> {
   const key = options.keyPrefix ? `${options.keyPrefix}:${identifier}` : identifier;
 
-  // 1. Vercel KV if configured
-  const kvResult = await kvRateLimit(key, options);
-  if (kvResult) return kvResult;
-
-  // 2. Supabase Postgres (production path)
+  // 1. Supabase Postgres (production path)
   const supabaseResult = await supabaseRateLimit(key, options);
   if (supabaseResult) return supabaseResult;
 
-  // 3. Fallback: in-memory Map (local dev only)
+  // 2. Fallback: in-memory Map (local dev only)
   if (
     process.env.VERCEL_ENV === 'production' &&
     !fellBackToInMemoryAlerted

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
-import { endImpersonation, logSuperAdminAction, MARKER_COOKIE, type StoredSession } from '@/lib/super-admin';
+import {
+  endImpersonation,
+  logSuperAdminAction,
+  MARKER_COOKIE,
+  SUPPORT_MODE_COOKIE,
+  type StoredSession,
+} from '@/lib/super-admin';
 
 /**
  * POST /api/super-admin/impersonate/end
@@ -54,18 +60,10 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Audit with the original super admin as actor (from the stored row).
-      const admin = (await import('@/lib/supabase/admin')).createAdminClient();
-      const { data: row } = await admin
-        .from('impersonation_sessions')
-        .select('super_admin_user_id, target_project_id')
-        .eq('id', marker)
-        .maybeSingle();
-
       await logSuperAdminAction({
-        actorUserId: (row?.super_admin_user_id as string) ?? 'unknown',
+        actorUserId: result.superAdminUserId,
         action: 'impersonation.end',
-        targetProjectId: (row?.target_project_id as string | null) ?? null,
+        targetProjectId: result.targetProjectId,
         targetUserId: result.targetUserId,
         metadata: { sessionId: marker, restored },
       });
@@ -73,8 +71,11 @@ export async function POST(request: NextRequest) {
 
     // The marker is dead in every outcome: always clear it (path must match
     // how it was set) so a stale banner can never get stuck.
-    const response = NextResponse.json({ ok: !!result, restored });
+    // A stale/invalidated marker is still safely "ended": clear local state
+    // and send the operator to login when no admin session can be restored.
+    const response = NextResponse.json({ ok: true, restored });
     response.cookies.set(MARKER_COOKIE, '', { path: '/', maxAge: 0 });
+    response.cookies.set(SUPPORT_MODE_COOKIE, '', { path: '/', maxAge: 0 });
     return response;
   } catch (err) {
     Sentry.captureException(err);

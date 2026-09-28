@@ -9,7 +9,7 @@ Next.js 16 (App Router) + React 19 + TypeScript strict
 Supabase: Auth (email/password) + Postgres + RLS + Realtime
 Vercel (auto-deploy من master push)
 Tailwind CSS v4 (tokens في @theme داخل globals.css — لا tailwind.config)
-Sentry (monitoring) · @vercel/kv (rate-limit cache) · web-push (إشعارات) · qrcode
+Sentry (monitoring) · Supabase RPC (rate limiting) · web-push (إشعارات) · qrcode
 ```
 
 ## تدفق الطلب (الرئيسي)
@@ -33,8 +33,7 @@ src/
 │   └── api/                      # 14 route handlers (كلها server-side)
 ├── lib/
 │   ├── supabase/                 # server.ts (async createClient) + client.ts + middleware.ts
-│   ├── cache/index.ts            # CacheProvider interface (KV معزول — التبديل لـ Upstash = سطر)
-│   ├── rate-limit.ts             # KV → Supabase RPC → in-memory (fallback chain)
+│   ├── rate-limit.ts             # Supabase RPC → in-memory (fallback محلي)
 │   ├── order-pricing.ts          # التسعير من الخادم (addons + كميات)
 │   ├── push.ts / telegram.ts     # إشعارات web-push + بوت تيليجرام
 │   ├── database.types.ts         # أنواع Supabase المولدة (npm run db:types)
@@ -59,14 +58,12 @@ src/
 | `/api/telegram/link` + `webhook` | ربط تيليجرام | |
 | `/api/vitals` | web vitals beacon | |
 
-## الـ Rate Limiting (3 طبقات)
+## الـ Rate Limiting (طبقتان)
 
 ```
-1. @vercel/kv (Redis)      → shared عبر instances (KV_URL مفعّل)
-2. Supabase RPC            → rate_limit_check (fallback)
-3. in-memory Map           → آخر ملاذ (per-instance فقط)
+1. Supabase RPC            → rate_limit_check (مسار الإنتاج الذري والمشترك)
+2. in-memory Map           → آخر ملاذ محلي (per-instance فقط)
 ```
-الـ abstraction في `src/lib/cache/` — الـ providers قابلة للتبديل (KV → Upstash = تغيير سطر واحد في `getCacheProvider()`).
 
 ## الأمان (غير قابل للتفاوض)
 
@@ -81,7 +78,7 @@ src/
 
 | القرار | السبب |
 |---|---|
-| **عزل KV خلف interface** (2026-08-02) | تجنب vendor lock-in مع @vercel/kv — التبديل لـ Upstash لاحقًا سطر واحد |
+| **Supabase RPC لمحدد المعدل** (2026-09-28) | عداد ذري مشترك بلا خدمة Redis إضافية أو تبعية Vercel متوقفة |
 | **سكواش 59 migration → baseline واحد** (2026-08-02) | القضاء على 59 ملف متضخم — `0000_baseline_consolidated.sql` من pg_dump حي، مُتحقق منه على قاعدة فارغة |
 | **إلغاء ميزة الفروع** (0041) | تبسيط — `branch_id` متروك |
 | **إلغاء الطباعة 80mm** | عملاء العربات بلا طابعات — الكود محفوظ |
@@ -91,17 +88,18 @@ src/
 ## سير العمل (للمطورين والوكلاء)
 
 - فرع واحد: `master` — commits متسلسلة، push → Vercel auto-deploy.
-- قبل الـ commit: `npx tsc --noEmit` + `npm run build` + `npm run lint`.
+- قبل الـ commit: `npm run env:check` + `npm test` + `npx tsc --noEmit` + `npm run lint` + `npm run build`.
 - أي migration جديد: `0001_...` فما فوق على الـ baseline (0000).
 - للوكلاء: `AGENTS.md` هو العقد — اقرأه قبل أي تعديل.
 
 ## البيئة (Env vars)
 
 ```
-NEXT_PUBLIC_SUPABASE_URL / ANON_KEY
+NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY          # server-only
 NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY   # web-push
 TELEGRAM_BOT_TOKEN / USERNAME / WEBHOOK_SECRET
-SENTRY_DSN / SENTRY_AUTH_TOKEN
+NEXT_PUBLIC_SENTRY_DSN / SENTRY_DSN
+SENTRY_ORG / SENTRY_PROJECT / SENTRY_AUTH_TOKEN
 NEXT_PUBLIC_SITE_URL
 ```

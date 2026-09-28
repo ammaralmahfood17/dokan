@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
 
 /**
  * "Login as" (Phase C) — super-admin support impersonation.
@@ -23,7 +22,6 @@ export function ImpersonateButton({
   projectId: string;
   projectName: string;
 }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   if (!ownerUserId) return null;
@@ -42,18 +40,23 @@ export function ImpersonateButton({
         toast.error(data.error || 'فشل بدء الجلسة');
         return;
       }
-      // Swap the auth cookie to the target owner's session (supabase/ssr
-      // writes the cookie automatically), then set the marker.
+      // The refresh token is an intentionally unusable placeholder. The real
+      // target refresh token was revoked server-side before this response.
       const supabase = createClient();
-      await supabase.auth.setSession({
+      const { error } = await supabase.auth.setSession({
         access_token: data.targetSession.access_token,
         refresh_token: data.targetSession.refresh_token,
       });
+      if (error) {
+        toast.error('تعذّر تفعيل جلسة الدعم');
+        return;
+      }
       // dokan-impersonation marker is set by the API response (httpOnly —
       // see impersonate/route.ts). Never write it from JS.
       toast.success(`دخلت باسم ${ownerEmail}`);
-      router.push('/dashboard');
-      router.refresh();
+      // Full navigation rebuilds the browser client with auto-refresh disabled
+      // for support mode. SPA navigation would retain the pre-existing client.
+      window.location.assign('/dashboard');
     } catch {
       toast.error('فشل بدء الجلسة');
     } finally {

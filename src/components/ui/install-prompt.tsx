@@ -8,6 +8,9 @@
 import { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 
+const DISMISSED_AT_KEY = 'dokan-install-dismissed-at';
+const DISMISS_FOR_MS = 7 * 24 * 60 * 60 * 1000;
+
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -15,16 +18,41 @@ interface BeforeInstallPromptEvent extends Event {
 
 export function InstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      const dismissedAt = Number(localStorage.getItem(DISMISSED_AT_KEY));
+      return Boolean(dismissedAt && Date.now() - dismissedAt < DISMISS_FOR_MS);
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);
     };
+    const installed = () => {
+      setDeferred(null);
+      setDismissed(true);
+    };
     window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', installed);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', installed);
+    };
   }, []);
+
+  function dismiss() {
+    setDismissed(true);
+    try {
+      localStorage.setItem(DISMISSED_AT_KEY, String(Date.now()));
+    } catch {
+      // Session-only dismissal is still adequate when storage is unavailable.
+    }
+  }
 
   if (!deferred || dismissed) return null;
 
@@ -54,7 +82,7 @@ export function InstallPrompt() {
       <button
         type="button"
         aria-label="إغلاق"
-        onClick={() => setDismissed(true)}
+        onClick={dismiss}
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-sunken)]"
       >
         <X className="h-4 w-4" />

@@ -203,9 +203,11 @@ export default async function SuperAdminSubscriptionsPage({
                           </button>
                         </form>
                       )}
-                      {!p.deleted_at && (
-                        <ProjectRowActions projectId={p.id} projectName={p.name} />
-                      )}
+                      <ProjectRowActions
+                        projectId={p.id}
+                        projectName={p.name}
+                        deletedAt={p.deleted_at}
+                      />
                       {p.deleted_at && (
                         <span className="inline-flex items-center rounded-full bg-[var(--color-surface-sunken)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-text-muted)]">
                           مؤرشف

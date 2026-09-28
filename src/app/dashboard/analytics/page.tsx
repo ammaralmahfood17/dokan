@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation';
-import { getCurrentProject } from '@/lib/project';
+import { requireCurrentProjectRole } from '@/lib/project';
 import { createClient } from '@/lib/supabase/server';
 import { AnalyticsClient } from './analytics-client';
 
@@ -93,8 +92,7 @@ export default async function AnalyticsPage({
   const { range: rangeParam } = await searchParams;
   const range: Range = rangeParam === 'today' || rangeParam === '30d' ? rangeParam : '7d';
 
-  const ctx = await getCurrentProject();
-  if (!ctx) redirect('/onboarding');
+  const ctx = await requireCurrentProjectRole(['owner', 'manager']);
 
   const count = range === 'today' ? 1 : range === '7d' ? 7 : 30;
 

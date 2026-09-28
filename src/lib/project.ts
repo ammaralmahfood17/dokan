@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import type { Project, StaffMember } from '@/lib/types';
+import type { Project, StaffMember, StaffRole } from '@/lib/types';
 import type { ChecklistItem } from '@/lib/types';
 
 export type ProjectContext = {
@@ -81,6 +81,17 @@ export async function getCurrentProject(): Promise<ProjectContext | null> {
     userId: user.id,
     subscriptionDaysLeft,
   };
+}
+
+/** Server-page authorization guard. RLS remains the data boundary; this keeps
+ * restricted management screens from rendering for operational staff. */
+export async function requireCurrentProjectRole(
+  allowedRoles: readonly StaffRole[]
+): Promise<ProjectContext> {
+  const ctx = await getCurrentProject();
+  if (!ctx) redirect('/onboarding');
+  if (!allowedRoles.includes(ctx.membership.role)) redirect('/dashboard');
+  return ctx;
 }
 
 /** Build live onboarding checklist from real DB counts */

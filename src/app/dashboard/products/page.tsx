@@ -1,12 +1,10 @@
-import { redirect } from 'next/navigation';
-import { getCurrentProject } from '@/lib/project';
+import { requireCurrentProjectRole } from '@/lib/project';
 import { createClient } from '@/lib/supabase/server';
 import { ProductsClient } from './products-client';
 import type { Category, Product, ProductAddon } from '@/lib/types';
 
 export default async function ProductsPage() {
-  const ctx = await getCurrentProject();
-  if (!ctx) redirect('/onboarding');
+  const ctx = await requireCurrentProjectRole(['owner', 'manager']);
 
   const supabase = await createClient();
 

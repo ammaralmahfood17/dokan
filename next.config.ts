@@ -37,6 +37,14 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // A Sentry DSN is intentionally public: the browser SDK must ship it to send
+  // events. Vercel already stores SENTRY_DSN for the server, so expose the same
+  // project DSN at build time when a dedicated public value is not configured.
+  // Authentication still uses SENTRY_AUTH_TOKEN, which remains server-only.
+  env: {
+    NEXT_PUBLIC_SENTRY_DSN:
+      process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN || '',
+  },
   images: {
     remotePatterns: [
       {

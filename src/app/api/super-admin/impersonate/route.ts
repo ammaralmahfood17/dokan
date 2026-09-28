@@ -2,17 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { limitSuperAdmin } from '@/lib/super-admin-rate-limit';
 import { createClient } from '@/lib/supabase/server';
-import { startImpersonation, logSuperAdminAction, MARKER_COOKIE } from '@/lib/super-admin';
+import {
+  startImpersonation,
+  logSuperAdminAction,
+  MARKER_COOKIE,
+  SUPPORT_MODE_COOKIE,
+} from '@/lib/super-admin';
 import type { Json } from '@/lib/database.types';
 
 /**
  * POST /api/super-admin/impersonate
  * Body: { targetUserId: string, projectId?: string }
  *
- * Super-admin only (re-checked at mutation time). Mints a REAL session for
- * the target user via generateLink+verifyOtp (no password involved), stores
- * both sessions + 30-min expiry, swaps the auth cookie, and writes an audit
- * start entry.
+ * Super-admin only. Mints a non-refreshable target session capped at 30
+ * minutes, stores the admin session for restoration, and writes an audit entry.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -62,9 +65,6 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({
       ok: true,
-      // sessionId stays in the body for the e2e harness; with the 2026-09-20
-      // hardening it grants nothing by itself — only this browser's httpOnly
-      // marker cookie can end the session.
       sessionId: result.sessionId,
       expiresAt: result.expiresAt,
       targetSession: result.targetSession,
@@ -78,13 +78,25 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       maxAge: 12 * 60 * 60,
     });
-    // The client swaps the session cookie (browser-side supabase client with
-    // the minted tokens); the marker above is set by this response.
+    response.cookies.set(SUPPORT_MODE_COOKIE, '1', {
+      path: '/',
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 12 * 60 * 60,
+    });
     return response;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unknown';
     if (message.includes('MFA')) {
       return NextResponse.json({ error: 'المستخدم مفعّل لديه MFA — لا يمكن انتحال الجلسة' }, { status: 409 });
+    }
+    if (message.includes('SUPABASE_JWT_EXPIRY_TOO_LONG')) {
+      Sentry.captureException(err);
+      return NextResponse.json(
+        { error: 'وضع الدعم متوقف بأمان: يجب ضبط مدة JWT في Supabase على 1800 ثانية' },
+        { status: 503 }
+      );
     }
     Sentry.captureException(err);
     return NextResponse.json({ error: 'فشل بدء الجلسة' }, { status: 500 });

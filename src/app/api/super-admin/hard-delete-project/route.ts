@@ -3,15 +3,14 @@ import * as Sentry from '@sentry/nextjs';
 import { limitSuperAdmin } from '@/lib/super-admin-rate-limit';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { logSuperAdminAction } from '@/lib/super-admin';
 
 /**
  * POST /api/super-admin/hard-delete-project
  * Body: { projectId, confirmName, reason }
  *
- * HARD delete — deliberately NOT the default. Requires typing the exact
- * project name (server-side verified, not just client-side) plus a reason.
- * Irreversible: cascades through all child rows.
+ * Permanent deletion is available only after 30 days in the archive. The
+ * database RPC re-checks the name, reason, archive age, super-admin identity,
+ * writes the audit event, and deletes in one transaction.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,15 +39,29 @@ export async function POST(request: NextRequest) {
     };
     const reason = (body.reason ?? '').trim();
     if (!body.projectId) return NextResponse.json({ error: 'projectId مطلوب' }, { status: 400 });
-    if (!reason) return NextResponse.json({ error: 'السبب مطلوب' }, { status: 400 });
+    if (reason.length < 10) {
+      return NextResponse.json({ error: 'سبب الحذف يجب أن يكون 10 أحرف على الأقل' }, { status: 400 });
+    }
 
     const admin = createAdminClient();
     const { data: project } = await admin
       .from('projects')
-      .select('id, name, slug')
+      .select('id, name, slug, deleted_at')
       .eq('id', body.projectId)
       .single();
     if (!project) return NextResponse.json({ error: 'المشروع غير موجود' }, { status: 404 });
+
+    if (!project.deleted_at) {
+      return NextResponse.json({ error: 'يجب أرشفة المشروع قبل الحذف النهائي' }, { status: 409 });
+    }
+
+    const eligibleAt = new Date(project.deleted_at).getTime() + 30 * 86400e3;
+    if (eligibleAt > Date.now()) {
+      return NextResponse.json(
+        { error: 'لا يمكن الحذف النهائي قبل مرور 30 يومًا على الأرشفة', eligibleAt: new Date(eligibleAt).toISOString() },
+        { status: 409 }
+      );
+    }
 
     // Exact-name confirmation — server-side, not just UI.
     if ((body.confirmName ?? '').trim() !== project.name) {
@@ -60,19 +73,14 @@ export async function POST(request: NextRequest) {
 
     const { error } = await admin.rpc('super_admin_hard_delete_project', {
       p_project_id: body.projectId,
+      p_confirm_name: body.confirmName ?? '',
+      p_reason: reason,
       p_caller_user_id: user.id,
     });
     if (error) {
       Sentry.captureException(error);
       return NextResponse.json({ error: 'فشل الحذف' }, { status: 500 });
     }
-
-    await logSuperAdminAction({
-      actorUserId: user.id,
-      action: 'project.hard_delete',
-      targetProjectId: body.projectId,
-      metadata: { projectName: project.name, slug: project.slug, reason },
-    });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

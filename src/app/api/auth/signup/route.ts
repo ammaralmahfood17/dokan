@@ -108,8 +108,11 @@ export async function POST(request: Request) {
       },
       message: 'تم إنشاء الحساب بنجاح',
     });
-  } catch (err: any) {
-    console.error('[API /auth/signup] unexpected error:', err?.message);
+  } catch (err: unknown) {
+    console.error(
+      '[API /auth/signup] unexpected error:',
+      err instanceof Error ? err.message : 'unknown error'
+    );
     Sentry.captureException(err);
     return NextResponse.json({
       error: 'خطأ داخلي في الخادم',

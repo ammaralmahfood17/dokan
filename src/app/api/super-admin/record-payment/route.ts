@@ -75,9 +75,8 @@ export async function POST(request: NextRequest) {
       .single();
     if (!project) return NextResponse.json({ error: 'المشروع غير موجود' }, { status: 404 });
 
-    // Atomically record payment + renew (RPC not yet in generated types — 
-    // migration 0010 ships before this endpoint is called in production)
-    const { data: newExpiry, error } = await (admin.rpc as any)('record_payment_and_renew', {
+    // Atomically record payment + renew.
+    const { data: newExpiry, error } = await admin.rpc('record_payment_and_renew', {
       p_project_id: projectId,
       p_amount: amount,
       p_method: method,

@@ -100,9 +100,11 @@ export function CreateProjectForm() {
 export function ProjectRowActions({
   projectId,
   projectName,
+  deletedAt,
 }: {
   projectId: string;
   projectName: string;
+  deletedAt: string | null;
 }) {
   const router = useRouter();
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -110,6 +112,11 @@ export function ProjectRowActions({
   const [reason, setReason] = useState('');
   const [confirmName, setConfirmName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [renderedAt] = useState(() => Date.now());
+  const deleteEligibleAt = deletedAt
+    ? new Date(new Date(deletedAt).getTime() + 30 * 86400e3)
+    : null;
+  const canHardDelete = Boolean(deleteEligibleAt && deleteEligibleAt.getTime() <= renderedAt);
 
   async function archive() {
     if (busy) return;
@@ -165,24 +172,34 @@ export function ProjectRowActions({
   return (
     <>
       <div className="flex gap-1.5">
-        <button
-          type="button"
-          onClick={() => setArchiveOpen(true)}
-          className="btn btn-ghost btn-sm text-[var(--color-text-secondary)]"
-        >
-          أرشفة
-        </button>
-        <button
-          type="button"
-          onClick={() => setDeleteOpen(true)}
-          className="btn btn-ghost btn-sm text-[var(--color-danger)]"
-        >
-          حذف نهائي
-        </button>
+        {!deletedAt && (
+          <button
+            type="button"
+            onClick={() => setArchiveOpen(true)}
+            className="btn btn-ghost btn-sm text-[var(--color-text-secondary)]"
+          >
+            أرشفة
+          </button>
+        )}
+        {deletedAt && (
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            disabled={!canHardDelete}
+            title={
+              canHardDelete
+                ? 'حذف المشروع المؤرشف نهائيًا'
+                : `متاح بعد ${deleteEligibleAt?.toLocaleDateString('ar-BH')}`
+            }
+            className="btn btn-ghost btn-sm text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {canHardDelete ? 'حذف نهائي' : 'فترة الاحتفاظ 30 يومًا'}
+          </button>
+        )}
       </div>
 
       {/* Archive (soft) — reason required */}
-      {archiveOpen && (
+      {archiveOpen && !deletedAt && (
         <Modal onClose={() => setArchiveOpen(false)} title="أرشفة المتجر">
           <div className="space-y-4">
             <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
@@ -213,14 +230,12 @@ export function ProjectRowActions({
       )}
 
       {/* Hard delete — exact name + reason, deliberately separate */}
-      {deleteOpen && (
+      {deleteOpen && deletedAt && canHardDelete && (
         <Modal onClose={() => setDeleteOpen(false)} title="حذف نهائي — لا رجعة">
           <div className="space-y-4">
             <div className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/30 bg-[var(--color-danger-tint)] p-3 text-xs leading-relaxed text-[var(--color-danger)]">
-              ⚠️ الحذف النهائي <span className="font-bold">يمسح المتجر وكل بياناته</span> من
-              القاعدة نهائيًا (الطلبات، المنتجات، الطاولات، الحسابات). هذا إجراء
-              تنظيف بيانات، <span className="font-bold">ليس</span> لإيقاف خدمة عادي —
-              لذلك استخدم «أرشفة» أولًا.
+              الحذف النهائي <span className="font-bold">يمسح بيانات التشغيل</span> بعد
+              انتهاء فترة الاحتفاظ. يبقى سجل الدفعات محفوظًا لأغراض التدقيق المالي.
             </div>
             <label className="flex flex-col gap-1 text-xs font-semibold">
               اكتب اسم المتجر بالضبط للتأكيد: <span dir="ltr">{projectName}</span>
@@ -240,14 +255,14 @@ export function ProjectRowActions({
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 maxLength={500}
-                placeholder="مثال: حذف بيانات تجريبية نهائيًا"
+                placeholder="اكتب سببًا واضحًا من 10 أحرف على الأقل"
               />
             </label>
             <div className="flex gap-2">
               <Button
                 variant="danger"
                 block
-                disabled={busy || confirmName.trim() !== projectName || !reason.trim()}
+                disabled={busy || confirmName.trim() !== projectName || reason.trim().length < 10}
                 onClick={hardDelete}
               >
                 {busy ? 'جاري…' : 'حذف نهائي'}
