@@ -63,6 +63,9 @@ export interface Product {
   price: number;
   image_url: string | null;
   is_available: boolean;
+  /** NULL = untracked (unlimited). Otherwise portions left; 0 = sold out.
+   *  Never merged into is_available — that switch belongs to the merchant. */
+  stock: number | null;
   sort_order: number;
   created_at?: string;
 }

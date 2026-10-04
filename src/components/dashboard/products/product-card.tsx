@@ -6,6 +6,7 @@
 import Image from 'next/image';
 import { ImageIcon, Check } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
+import { isSoldOut, remainingStock } from '@/lib/product-stock';
 import type { Product, ProductAddon } from '@/lib/types';
 
 export type ProductWithAddons = Product & { product_addons: ProductAddon[] };
@@ -25,6 +26,10 @@ export function ProductCard({
   onOpen: () => void;
   onToggleSelect: () => void;
 }) {
+  // Stock (0018): a tracked product with nothing left reads as unavailable to
+  // the merchant too, without touching their manual «متاح للطلب» switch.
+  const left = remainingStock(p);
+  const sold = isSoldOut(p);
   return (
     <div
       key={p.id}
@@ -44,7 +49,7 @@ export function ProductCard({
       aria-label={bulkMode ? undefined : `تعديل ${p.name}`}
       className={`dashboard-card card overflow-hidden text-start transition-all active:scale-[0.98] ${
         bulkMode && selected ? 'ring-2 ring-[var(--color-primary)]' : ''
-      } ${!p.is_available ? 'opacity-60' : ''}`}
+      } ${sold ? 'opacity-60' : ''}`}
     >
       {/* Image / placeholder — 4:3 like the POS grid. surface so no-image
           cards read as one clean card instead of bleeding into the page bg */}
@@ -56,7 +61,7 @@ export function ProductCard({
             fill
             sizes="(max-width: 768px) 50vw, 200px"
             className={`object-cover ${
-              !p.is_available ? 'grayscale' : ''
+              sold ? 'grayscale' : ''
             }`}
           />
         ) : (
@@ -77,13 +82,19 @@ export function ProductCard({
           >
             <Check className="h-5 w-5" />
           </button>
-        ) : (
-          !p.is_available && (
-            <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-surface)]">
-              متوقف
-            </span>
-          )
-        )}
+        ) : !p.is_available ? (
+          <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-surface)]">
+            متوقف
+          </span>
+        ) : left === 0 ? (
+          <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-surface)]">
+            خلص
+          </span>
+        ) : left !== null ? (
+          <span className="absolute end-2 top-2 rounded-[4px] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-text-secondary)]">
+            باقي <span dir="ltr">{left}</span>
+          </span>
+        ) : null}
       </div>
 
       <div className="p-3">

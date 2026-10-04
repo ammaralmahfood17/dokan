@@ -10,6 +10,7 @@ import { CartPanel } from '@/components/pos/cart-panel';
 import { ProductCard } from '@/components/pos/product-card';
 import type { PosLine } from '@/components/pos/types';
 import { toast } from 'sonner';
+import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
 
 type ProductWithAddons = Product & { product_addons: ProductAddon[] };
 
@@ -86,7 +87,7 @@ export function PosClient({
       // UX-U12: ترتيب الأكثر طلبًا أولًا (آخر 7 أيام) — يحافظ على
       // sort_order كـ tiebreaker للاستقرار
       products
-        .filter((p) => p.is_available)
+        .filter((p) => !isSoldOut(p))
         .slice()
         .sort(
           (a, b) =>
@@ -160,6 +161,20 @@ export function PosClient({
     qty = 1,
     silent = false
   ) {
+    // Stock (0018). A tracked product with nothing left reads as unavailable,
+    // and no sale may exceed what remains — the server rejects the WHOLE order
+    // at checkout, so it has to be caught here where the cashier can react.
+    if (isSoldOut(p)) {
+      if (!silent) toast.error('هذا الصنف غير متوفر');
+      return;
+    }
+    const alreadyInCart = lines
+      .filter((l) => l.productId === p.id)
+      .reduce((s, l) => s + l.quantity, 0);
+    if (alreadyInCart + qty > maxOrderableQty(p)) {
+      if (!silent) toast.error('الكمية المطلوبة أكثر من المتوفر');
+      return;
+    }
     const addonTotal = money(
       (p.product_addons || [])
         .filter((a) => addonIds.includes(a.id))

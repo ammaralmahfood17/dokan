@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ShoppingBag, X, Check, Bell, FileText, Search, Languages } from 'lucide-react';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
+import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
 import type {
   CartLine,
   Category,
@@ -275,7 +276,15 @@ export function MenuClient({
   function quickAdd(p: ProductWithAddons) {
     // UX-6 guard: sold-out cards already block interaction, but the picker/
     // stepper paths must never queue an unavailable item (server would 400).
-    if (!p.is_available) return;
+    // 0018: a tracked product with 0 portions left is sold out too.
+    if (isSoldOut(p)) return;
+    // Stock cap — never let the cart hold more portions than remain. The
+    // server rejects the WHOLE order at checkout otherwise, so catching it on
+    // the stepper is the difference between a nudge and a failed checkout.
+    if (qtyOf(p.id) >= maxOrderableQty(p)) {
+      toast.error('وصلت للكمية المتوفرة من هذا الصنف', { duration: 1600 });
+      return;
+    }
     if ((p.product_addons || []).filter((a) => a.is_available).length > 0) {
       openProduct(p);
       return;

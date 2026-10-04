@@ -29,6 +29,15 @@ function revalidateMenuCache(projectId: string) {
   }).catch(() => {});
 }
 
+/** '' → null (untracked/unlimited). Otherwise the whole, non-negative count. */
+function parseStockInput(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number(t);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.trunc(n));
+}
+
 export function ProductFormModal({
   projectId,
   currency,
@@ -58,6 +67,10 @@ export function ProductFormModal({
   const [price, setPrice] = useState(editing ? String(editing.price) : '');
   const [categoryId, setCategoryId] = useState(editing?.category_id ?? categories[0]?.id ?? '');
   const [isAvailable, setIsAvailable] = useState(editing?.is_available ?? true);
+  // Stock (0018). '' = untracked/unlimited — the honest default for every
+  // product that existed before the feature and for merchants who don't count
+  // portions; is_available above remains their manual switch.
+  const [stock, setStock] = useState(editing?.stock != null ? String(editing.stock) : '');
   const [imageUrl, setImageUrl] = useState(editing?.image_url ?? '');
   const [formAddons, setFormAddons] = useState<FormAddon[]>(
     (editing?.product_addons || []).map((a) => ({
@@ -142,6 +155,18 @@ export function ProductFormModal({
     }
 
     const parsedPrice = Number(price);
+
+    // Stock must be a whole, non-negative count — or empty for untracked.
+    // Rejecting here keeps the DB check constraint from surfacing as a
+    // generic «فشل الإضافة».
+    if (stock.trim()) {
+      const n = Number(stock);
+      if (!Number.isInteger(n) || n < 0) {
+        toast.error('عدد الحصص يجب أن يكون رقماً صحيحاً غير سالب');
+        return;
+      }
+    }
+
     setLoading(true);
     const supabase = createClient();
     try {
@@ -153,6 +178,7 @@ export function ProductFormModal({
         category_id: categoryId || null,
         is_available: isAvailable,
         image_url: imageUrl.trim() || null,
+        stock: parseStockInput(stock),
       };
 
       const processedAddons: { id?: string; name: string; price: number }[] =
@@ -261,6 +287,7 @@ export function ProductFormModal({
           is_available: isAvailable,
           image_url: imageUrl.trim() || null,
           sort_order: nextSortOrder,
+          stock: parseStockInput(stock),
         };
         const { data, error } = await supabase
           .from('products')
@@ -543,6 +570,30 @@ export function ProductFormModal({
           <label htmlFor="product-available" className="cursor-pointer text-sm font-semibold">
             المنتج متاح للطلب
           </label>
+        </div>
+
+        {/* ======== STOCK (0018) ======== */}
+        <div className="field">
+          <label className="label" htmlFor="product-stock">
+            عدد الحصص <span className="text-[var(--color-text-muted)]">(اختياري)</span>
+          </label>
+          <input
+            id="product-stock"
+            className="input"
+            type="number"
+            inputMode="numeric"
+            min="0"
+            step="1"
+            maxLength={4}
+            dir="ltr"
+            value={stock}
+            onChange={(e) => setStock(e.target.value)}
+            placeholder="اتركه فارغاً = بدون حد"
+          />
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            فارغ = بلا حد. عند وصول العدد إلى صفر يظهر الصنف «غير متوفر» تلقائياً، ويُرجَع
+            العدد عند إلغاء الطلب. المتاح للطلب أعلاه يبقى مفتاحك اليدوي.
+          </p>
         </div>
 
         {/* ======== BUTTONS ======== */}

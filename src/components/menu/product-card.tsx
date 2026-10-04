@@ -9,6 +9,7 @@
 import Image from 'next/image';
 import { Check, Minus, Plus, X } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
+import { isSoldOut, lowStockLabel, maxOrderableQty } from '@/lib/product-stock';
 import type { Product, ProductAddon } from '@/lib/types';
 
 /** Generic blur placeholder for product images — tiny 16×16 grey base64 */
@@ -41,12 +42,22 @@ export function MenuProductRow({
   // UX-6: sold-out items stay visible, greyed, with a «غير متوفر» badge —
   // customers shouldn't conclude the store shrank when an item is marked
   // unavailable. Ordering is blocked both here and server-side (order API).
-  const soldOut = !product.is_available;
+  // 0018: a tracked product with no portions left reads as sold out too.
+  const soldOut = isSoldOut(product);
+  // «باقي N» — only while it is still orderable and the count is low enough to
+  // matter (lowStockLabel returns null for untracked / sold-out / plenty).
+  const remaining = lowStockLabel(product);
+  const atMax = quantity >= maxOrderableQty(product);
   return (
     <div className="relative flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors duration-150 hover:border-[var(--color-border-strong)]">
       {soldOut && (
         <span className="absolute start-2 top-2 z-10 rounded-full bg-[var(--color-text)] px-2.5 py-1 text-[11px] font-bold text-white">
           غير متوفر
+        </span>
+      )}
+      {!soldOut && remaining !== null && (
+        <span className="absolute end-2 top-2 z-10 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--color-text-secondary)]">
+          باقي <span dir="ltr">{remaining}</span>
         </span>
       )}
       <button
@@ -124,8 +135,10 @@ export function MenuProductRow({
             <button
               type="button"
               onClick={() => onQuickAdd(product)}
+              disabled={atMax}
+              aria-disabled={atMax}
               aria-label={`زيادة كمية ${displayName}`}
-              className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-white/15"
+              className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Plus className="h-4 w-4" />
             </button>

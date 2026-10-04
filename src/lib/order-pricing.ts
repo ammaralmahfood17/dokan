@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@/lib/database.types';
 import type { OrderItemAddon, OrderType, PublicOrderItemInput } from '@/lib/types';
 import { money, currencyDecimals } from '@/lib/utils';
+import { remainingStock } from '@/lib/product-stock';
 
 type AdminClient = SupabaseClient<Database>;
 
@@ -107,7 +108,7 @@ export async function createSecureOrder(
   const [productsRes, addonsRes] = await Promise.all([
     supabase
       .from('products')
-      .select('id, name, price, is_available, project_id')
+      .select('id, name, price, is_available, stock, project_id')
       .in('id', productIds)
       .eq('project_id', projectId),
     addonIds.length > 0
@@ -155,6 +156,19 @@ export async function createSecureOrder(
         ok: false,
         error: 'منتج غير متاح أو لا ينتمي لهذا المتجر',
         status: 400,
+      };
+    }
+
+    // Stock (migration 0018). The DB is authoritative — it decrements under a
+    // row lock inside the transaction — but rejecting here gives the customer
+    // a clear message instead of a generic failure, and keeps the menu's own
+    // quantity cap in agreement with the server. Untracked (null) = unlimited.
+    const left = remainingStock(product);
+    if (left !== null && left < quantity) {
+      return {
+        ok: false,
+        error: left <= 0 ? 'الصنف خلص — حدّث القائمة' : 'الكمية المطلوبة أكثر من المتوفر',
+        status: 409,
       };
     }
 
@@ -253,6 +267,11 @@ export async function createSecureOrder(
     }
     if (msg.includes('ADDON_UNAVAILABLE')) {
       return { ok: false, error: 'إضافة لم تعد متوفرة — حدّث القائمة', status: 409 };
+    }
+    // Stock ran out between our read and the insert (or another cart took the
+    // last portions first). Same 409 family as the item-unavailable case.
+    if (msg.includes('OUT_OF_STOCK')) {
+      return { ok: false, error: 'الكمية المطلوبة أكثر من المتوفر — حدّث القائمة', status: 409 };
     }
     if (
       msg.includes('PRODUCT_NOT_FOUND') ||
