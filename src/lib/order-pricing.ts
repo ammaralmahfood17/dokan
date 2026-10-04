@@ -203,20 +203,22 @@ export async function createSecureOrder(
     });
   }
 
-  // Get daily sequential order number (pass caller id for the DB-side guard)
-  const { data: numData, error: numErr } = await supabase.rpc('next_order_number', {
-    p_project_id: projectId,
-    p_caller_user_id: callerUserId,
-  });
-
-  if (numErr || !numData) {
-    console.error('Order number error:', numErr);
-    return { ok: false, error: 'فشل إنشاء رقم الطلب', status: 500 };
-  }
-
   // One transactional RPC: order + order_items inserted atomically.
   // (The previous two-step insert had a crash window that could leave an
   // orphan order with no items — the manual delete rollback was best-effort.)
+  //
+  // The order number is NOT pre-allocated here any more. Passing 0 arms the
+  // trg_orders_auto_number trigger, which allocates it INSIDE this
+  // transaction — so the daily counter's business day and the row's
+  // created_at are derived from one transaction timestamp (now() is
+  // transaction-fixed) and can never disagree across midnight. A failed
+  // create also no longer burns a counter slot.
+  //
+  // Prices/names/addons below are advisory: migration 0017 makes the RPC
+  // recompute every line from LIVE product/addon rows (FOR SHARE) and take
+  // the total from that recomputation, so a merchant edit between our read
+  // and this insert is either serialised against the order or rejected as
+  // sold out — never silently accepted at the stale price.
   const { data: created, error: createErr } = await supabase.rpc(
     'create_order_transactional',
     {
@@ -226,7 +228,7 @@ export async function createSecureOrder(
       p_status: 'pending',
       p_total_amount: totalAmount,
       p_notes: orderNotes.trim() || undefined,
-      p_order_number: numData,
+      p_order_number: 0,
       p_caller_user_id: callerUserId,
       p_client_request_id: clientRequestId ?? null,
       p_items: validated.map((line) => ({
@@ -241,6 +243,24 @@ export async function createSecureOrder(
   );
 
   if (createErr || !created) {
+    const msg = createErr?.message ?? '';
+    // Migration 0017 rejections — the item/addon went unavailable (or was
+    // never ours) between the read above and the insert. A clean 409 tells
+    // the customer to refresh the menu instead of charging them for
+    // something the kitchen cannot make.
+    if (msg.includes('ITEM_UNAVAILABLE')) {
+      return { ok: false, error: 'أحد الأصناف لم يعد متوفراً — حدّث القائمة', status: 409 };
+    }
+    if (msg.includes('ADDON_UNAVAILABLE')) {
+      return { ok: false, error: 'إضافة لم تعد متوفرة — حدّث القائمة', status: 409 };
+    }
+    if (
+      msg.includes('PRODUCT_NOT_FOUND') ||
+      msg.includes('INVALID_LINE') ||
+      msg.includes('EMPTY_CART')
+    ) {
+      return { ok: false, error: 'بيانات صنف غير صالحة', status: 400 };
+    }
     console.error('Order create error:', createErr);
     return { ok: false, error: 'فشل إنشاء الطلب', status: 500 };
   }

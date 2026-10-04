@@ -53,3 +53,6 @@ ux-probe.mjs
 coverage/
 
 .env*
+
+# Local agent scratch (DB probes, build logs) — never committed
+.hermes-scratch/
