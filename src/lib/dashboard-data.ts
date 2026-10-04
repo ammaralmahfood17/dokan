@@ -4,6 +4,8 @@
 // the dashboard orchestrator and its section components. No React state.
 // ============================================================================
 
+import { ORDER_TYPE_LABELS, type OrderType } from '@/lib/types';
+
 export type HourBucket = { key: string; label: string; revenue: number };
 export type DayBucket = { key: string; label: string; revenue: number };
 
@@ -102,9 +104,11 @@ export type WeekOrder = {
   }[] | null;
 };
 
-/** Table label for the recent-orders table: table number, Drive-NN, or Walk-NN. */
+/** Table label for the recent-orders table: `01`, `سفري 07`, or `سيارة 12`.
+ *  (2026-10-02: the Latin `Drive-NN`/`Walk-NN` fallbacks were the last hardcoded
+ *  English strings in the Arabic dashboard.) */
 export function tableLabel(o: RecentOrder): string {
   if (o.tables) return String(o.tables.number).padStart(2, '0');
-  if (o.type === 'drivethru') return `Drive-${String(o.order_number).padStart(2, '0')}`;
-  return `Walk-${String(o.order_number).padStart(2, '0')}`;
+  const label = ORDER_TYPE_LABELS[o.type as OrderType] ?? o.type;
+  return `${label} ${String(o.order_number).padStart(2, '0')}`;
 }

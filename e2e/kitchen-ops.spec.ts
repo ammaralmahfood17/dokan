@@ -32,7 +32,7 @@ import {
  *     status==='preparing' → button "جاهز للتسليم"
  *     status==='ready'     → button "تم التسليم ✓"
  *     <article aria-label={`طلب رقم ${order.order_number}…`}>
- *     table label → `TABLE·NN`;  qty box → `{quantity}×`
+ *     table label → `طاولة NN` (Arabic word + `dir="ltr"` numerals, 2026-10-02);  qty box → `{quantity}×`
  *   src/lib/kitchen-tickets.ts  (STAGE_COLUMNS → <section aria-label>)
  *     'جديد' | 'قيد التحضير' | 'جاهز للتسليم'
  *   src/app/dashboard/kitchen/kitchen-client.tsx
@@ -368,7 +368,8 @@ test('kitchen board: ticket listed in the جديد column with both product line
   await expect(card.getByText(productAName, { exact: true })).toBeVisible();
   await expect(card.getByText('1×', { exact: true })).toBeVisible();
   await expect(card.getByText(productBName, { exact: true })).toBeVisible();
-  await expect(card.getByText('TABLE·01', { exact: true })).toBeVisible();
+  // 2026-10-02: the KDS label is localized — Arabic word + dir="ltr" numerals.
+  await expect(card.getByText('طاولة 01', { exact: true })).toBeVisible();
   await expect(card.getByText(orderANotes, { exact: true })).toBeVisible();
 
   // Column state: sits in 'جديد' with the start button, nowhere else.

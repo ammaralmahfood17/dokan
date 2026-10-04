@@ -4,7 +4,7 @@
 // One kitchen order card. Calm Surface v1.1: thin neutral border normally,
 // 2px danger border + red timer + "متأخر" badge when overdue (the 3-layer
 // overdue rule), timing badge (warn ≥5min), qty boxes, stage actions.
-import type { OrderStatus } from '@/lib/types';
+import { ORDER_TYPE_LABELS, type OrderStatus, type OrderType } from '@/lib/types';
 
 // FIX-C-002: أنواع محلية مستقلة (بنية التذكرة كما تصل من الـ parent)
 export type KitchenTicketLine = {
@@ -58,11 +58,16 @@ export function KitchenTicket({
   if (status === 'pending' && mins >= OVERDUE_MIN_PENDING) overdue = true;
   if (status === 'preparing' && mins >= OVERDUE_MIN_PREPARING) overdue = true;
 
-  const tableLabel = order.tables
-    ? `TABLE·${String(order.tables.number).padStart(2, '0')}`
-    : order.type === 'drivethru'
-      ? `DRIVE-${String(order.order_number).padStart(2, '0')}`
-      : `WALKIN·${String(order.order_number).padStart(2, '0')}`;
+  // Localized service label: `طاولة 01` / `سفري 07` / `سيارة 12`.
+  // The WORD must stay RTL while the IDENTIFIER must stay LTR — hence the two
+  // spans in the render below (a single dir="ltr" paragraph used to reverse
+  // the Arabic word's reading order).
+  const typeLabel =
+    ORDER_TYPE_LABELS[order.tables ? 'dinein' : (order.type as OrderType)] ?? order.type;
+  const labelNumber = String(order.tables ? order.tables.number : order.order_number).padStart(
+    2,
+    '0'
+  );
 
   return (
     /* AR-4: اسم وصفي للتذكرة لقارئ الشاشة (رقم الطلب + التأخر) */
@@ -81,8 +86,11 @@ export function KitchenTicket({
           >
             #{String(order.order_number).padStart(3, '0')}
           </p>
-          <p className="mt-0.5 font-mono text-[12px] font-semibold tabular-nums text-[var(--color-text-secondary)]" dir="ltr">
-            {tableLabel}
+          <p className="mt-0.5 text-[12px] font-semibold text-[var(--color-text-secondary)]">
+            {typeLabel}{' '}
+            <span className="font-mono tabular-nums" dir="ltr">
+              {labelNumber}
+            </span>
           </p>
         </div>
         <p
