@@ -215,8 +215,9 @@ export function OrdersClient({
     setLoadingMore(false);
   }, [loadingMore, dateKey, projectId, orders, refreshDayStats, setLoadedCount]);
 
-  // SSR (Vercel = UTC) يجلب نطاقًا مختلفًا عن نطاق المتصفح المحلي (Asia/Bahrain) —
-  // إعادة جلب واحدة عند أول mount توحّد العرض على توقيت المستخدم.
+  // الخادم (Vercel = UTC) والآن يجلب نطاق يوم البحرين نفسه الذي يجلبه المتصفح
+  // المحلي (+03) — فالعرض صحيح من أول paint. تبقى إعادة الجلب هذه شبكة أمان
+  // لوقت مستخدم خارج +03 (لا يطابق نطاق المتصفح).
   useEffect(() => {
     if (mountedRef.current) return;
     mountedRef.current = true;

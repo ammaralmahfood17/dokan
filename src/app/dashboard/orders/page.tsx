@@ -10,9 +10,24 @@ export default async function OrdersPage() {
 
   const supabase = await createClient();
 
-  // Filter: only real orders (not waiter/bill requests), today only
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Filter: only real orders (not waiter/bill requests), today only.
+  //
+  // "Today" = Bahrain midnight (UTC+3) — the SAME business day the home
+  // dashboard, the analytics page and the daily order numbering use. The
+  // server clock is UTC, so a naive `new Date(); setHours(0,0,0,0)` started
+  // the day at 03:00 Bahrain and dropped every order placed between 00:00 and
+  // 03:00 local — exactly the window a late-night café trades in. The client
+  // used to paper over the mismatch with a mount-time refetch in the browser's
+  // local day (which is why this page could flash another day's orders before
+  // settling); with the server on the same boundary there is nothing to paper
+  // over, and the merchant sees the right day on first paint.
+  const dayFmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bahrain',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const today = new Date(Date.parse(`${dayFmt.format(new Date())}T00:00:00+03:00`));
 
   // UX-report C1: a busy day silently truncated at 50 rows — day totals and
   // status counts were computed client-side from the first 50 orders only.
