@@ -301,7 +301,9 @@
 .badge-pending { background: var(--color-warn-tint); color: var(--color-warn); }
 .badge-preparing { background: var(--color-info-tint); color: var(--color-info); }
 .badge-ready { background: var(--color-success-tint); color: var(--color-success); }
-.badge-delivered { background: var(--color-surface-sunken); color: var(--color-text-muted); }
+/* delivered = text-secondary, NOT text-muted: muted on the sunken surface is 4.34:1,
+   below the 4.5:1 WCAG AA bar for 12px badge text (guarded by design-tokens.test.ts). */
+.badge-delivered { background: var(--color-surface-sunken); color: var(--color-text-secondary); }
 .badge-cancelled { background: var(--color-danger-tint); color: var(--color-danger); }
 
 /* ==========================================================================
