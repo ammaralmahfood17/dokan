@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/ip';
+import { requireTableToken } from '@/lib/public-write-guard';
 
 // NOTE: This route is currently UNUSED by the frontend (no "request bill"
 // button exists in the menu UI). It's documented in README as a planned
@@ -20,6 +21,8 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       projectSlug?: string;
       tableSlug?: string;
+      /** Table scan token from the printed QR (audit T2 #3). */
+      tableToken?: string;
     };
 
     // A literal `null` body is valid JSON, so request.json() returns null and
@@ -68,16 +71,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'المتجر غير موجود' }, { status: 404 });
     }
 
+    // Audit T2 #3: this endpoint writes rows into `orders` with the service role and is
+    // unauthenticated. The anti-spam check below only blocks a repeat for the SAME table,
+    // and every table slug is public — so table rotation was the bypass. Two fixes:
+    //   1. the caller must prove the scanned table (same rule as public ordering, T2 #1);
+    //   2. a per-PROJECT hourly budget, which rotation cannot dodge.
+    const tokenDecision = requireTableToken(body.tableToken);
+    if (!tokenDecision.ok) {
+      return NextResponse.json({ error: tokenDecision.error }, { status: tokenDecision.status });
+    }
+    const tableToken = tokenDecision.token;
+
+    const projectBudget = await rateLimit(`project:${project.id}`, {
+      limit: 30,
+      windowMs: 60 * 60 * 1000,
+      keyPrefix: 'public-service-project',
+    });
+    if (!projectBudget.allowed) {
+      const res = createRateLimitResponse(projectBudget.resetIn);
+      return NextResponse.json({ error: res.error }, { status: res.status });
+    }
+
     const { data: table } = await supabase
       .from('tables')
-      .select('id, number')
+      .select('id, number, qrcode')
       .eq('slug', tableSlug)
       .eq('project_id', project.id)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
-    if (!table) {
-      return NextResponse.json({ error: 'الطاولة غير موجودة' }, { status: 404 });
+    // `tableToken === ''` is the REQUIRE_TABLE_TOKEN rollout window: accepted and flagged,
+    // never treated as a match.
+    if (!table || (tableToken !== '' && table.qrcode !== tableToken)) {
+      return NextResponse.json({ error: 'الطاولة غير موجودة أو رمز الطاولة غير صالح' }, { status: 404 });
     }
 
     // Anti-spam: block if same table already has an open bill request (5 min)
