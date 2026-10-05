@@ -1,7 +1,7 @@
 # Remediation tracker — 2026-10 frontend + backend audits
 
 Plan: `.hermes/plans/2026-10-05_235725-dokan-v3-full-remediation.md` (44 tasks, 6 waves).
-Branch: `fix/audit-remediation-20261005` · Base commit `5188588` · Last updated 2026-10-06 02:05 +03.
+Branch: `fix/audit-remediation-20261005` · Base commit `5188588` · Last updated 2026-10-06 02:20 +03.
 Human-only steps: `docs/audit-2026-10/OPS-VERIFICATION.md`
 
 Statuses: **DONE** (shipped + verified) · **PARTIAL** (part shipped, part blocked) ·
@@ -18,6 +18,8 @@ Statuses: **DONE** (shipped + verified) · **PARTIAL** (part shipped, part block
 | 2026-10-06 | **Email confirmation ON and CAPTCHA ON** — this SUPERSEDES the earlier "no confirmation, no CAPTCHA" accepted risk. Hosted settings verified by the owner. |
 | 2026-10-06 | five deployment variables must exist in Vercel (prod + preview); boot fails closed without them. |
 | 2026-10-06 | Amendments A1–A4 to the plan (preflight assertion, Referer/Sentry scrubbing, RPC-based resolution, bill/waiter deletion). |
+| 2026-10-06 | Amendments A5–A9: manual confirm + resend UI + unconfirmed-login path; rollout-window hardening; run the realtime probe BEFORE any realtime alarm code; impersonation Option A; W1+W2 are the floor and W3+ waits on their evidence. |
+| 2026-10-06 | Decision 3 = confirm-by-hand + resend (SMTP is not wired up yet); decision 4 = Turnstile. Implemented under the earlier 7/8 numbering. |
 
 ## Wave 0 — Preflight
 
@@ -49,12 +51,25 @@ Statuses: **DONE** (shipped + verified) · **PARTIAL** (part shipped, part block
 | — | **Extra**: non-JSON body → 500 on `/api/public/order` | Major | **DONE** | `208539b`; the repo's own `e2e/resilience.spec.ts` R1 documented it as KNOWN FAILING; now a 400 and the test passes |
 | — | **Extra**: register hint said 6 chars while the minimum is 10 | Minor | **DONE** | `6e1f772` |
 | — | **Extra**: a wrong `TURNSTILE_SECRET` reported as a Cloudflare outage | Major | **DONE** | `65987ce`; the response body is authoritative → `misconfigured` + ERROR-level Sentry; live-verified |
+| A5 | Confirmations ON with no SMTP: a merchant can sign up and then be permanently stuck | Major | **DONE** | `736800b`; `auth-errors.ts` (10 tests, resend offered for exactly one kind), login + register resend UI, `/api/auth/resend-confirmation` (3/15min per address, 10/h per IP, no enumeration answer), super-admin `POST /api/super-admin/confirm-user` + `/super-admin/users` + the new `user.confirm` audit action; password classes pinned as a conjunction; 19 route-level signup tests |
+| A6 | Rollout window: a supplied-but-wrong token was treated as “no token” and ACCEPTED | Major | **DONE** | `488e46e`; three-way split in the guard (absent / malformed = **always 404** / well-formed), tight tokenless budget 10/min + 60/h per project, Sentry warning per tokenless acceptance. Guardrail proven **RED** against the old guard (9 failures) → GREEN 24/24, then live: `'junk'`/`'table-1'`/`42` → 404 (was accepted), tokenless x11 → 400×10 then **429**, orders still at baseline 1 |
+| — | **Extra**: the same non-JSON → 500 as public/order on three UNAUTHENTICATED routes | Major | **DONE** (scope) | `d3999d4`; `/api/auth/signup`, `/api/auth/reset-password`, `/api/telegram/link` (×2) now 400. Found by the new signup route test. **14 further sites are behind a session** — listed below as a dated follow-up, not silently dropped |
 
 **Wave 1 exit criteria: met except the enforcement flip, which is blocked on the physical QR
 reprint.** Until then the fix ships dark: tokenless orders are accepted, recorded
-(`order_audit_logs.metadata.token_present`) and flagged to Sentry.
+(`order_audit_logs.metadata.token_present`) and flagged to Sentry — and, since A6, bounded by a
+10/min + 60/h tokenless budget of their own. A supplied-but-wrong token is a 404 in the window
+too, so the window cannot be used as a bypass.
 
-**Wave 1 gates:** `tsc` 0 · `lint` 0 · **vitest 142/142** · `build` 0 · `env:check` 0 ·
+**Dated follow-up (2026-10-06):** 14 `await request.json()` call sites remain without
+`.catch(() => null)` — all behind a session: `pos/order:40`, `pos/cancel:34`,
+`onboarding/project:60`, `push/subscribe:21`, `push/unsubscribe:20`, `staff/notification-prefs:48`,
+`revalidate-menu:25`, `super-admin/{archive-project:38, create-project:39,
+hard-delete-project:35, impersonate:40}`, `telegram/webhook:30`. There, malformed JSON is a
+cosmetic 500 + Sentry noise from an authenticated caller rather than an anonymous lever, which
+is why the fix was scoped to the unauthenticated set. Same one-line shape when it is done.
+
+**Wave 1 gates:** `tsc` 0 · `lint` 0 · **vitest 187/187 (16 files)** · `build` 0 · `env:check` 0 ·
 `env:validate` 0 (dev) / exit 1 (production simulation).
 `npm run test:db` is **not executable on this host** (no docker group, sudo needs a password)
 → substituted by the PR's CI job; permanent fix in OPS-VERIFICATION §1.

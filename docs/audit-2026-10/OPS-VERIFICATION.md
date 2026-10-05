@@ -128,7 +128,48 @@ Rollback: set `REQUIRE_TABLE_TOKEN=false` and redeploy. No migration to reverse.
 
 ---
 
-## 5. What the agent verified itself (for contrast)
+## 5. Email confirmation: who unblocks a merchant (amendment A5 / decision 3)
+
+Confirmations are ON and the signup route creates accounts **unconfirmed**. That is correct
+security-wise and a hard operational dependency: **until SMTP is configured (section 3), no
+merchant can confirm themselves, and the only way forward is the super-admin panel.**
+
+**Owner action - configure a transactional sender** (Dashboard -> Authentication -> SMTP).
+The built-in sender is heavily rate-limited and usually lands in spam; Resend, SendGrid and
+Postmark all work.
+
+- [ ] SMTP host / port / user / password set
+- [ ] Sender address on a domain with SPF + DKIM
+- [ ] End-to-end test: register a real address, confirm the mail arrives, click the link, sign in
+
+**Shipped escape hatch (use it while SMTP is pending):**
+
+1. Open `/super-admin/users` (new nav item: the accounts page). It lists every account whose
+   `email_confirmed_at IS NULL`.
+2. Press the confirm button on the row. That posts to
+   `/api/super-admin/confirm-user?userId=<uuid>`, which
+   re-checks `is_super_admin()` at mutation time (not at page load), rate limits per admin
+   (30/min), reads the user FIRST so an already-confirmed account answers `alreadyConfirmed`
+   instead of a success that changed nothing, and writes `user.confirm` to
+   `super_admin_audit_log` with the target user id and email.
+3. Verify: the row disappears from the list and the merchant can sign in.
+
+**Self-service resend:** the register success screen and the login error path (when GoTrue
+answers `email_not_confirmed`) both offer a resend ->
+`POST /api/auth/resend-confirmation`. Budgets: 3 per 15 min per address, 10 per hour per IP.
+The response is identical whether or not the account exists, so it is not an existence oracle.
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://dokanstore.xyz/api/auth/resend-confirmation \
+  -H 'content-type: application/json' -d '{"email":"someone@example.com"}'   # expect 200
+```
+
+A 200 for an address with no account is the DESIGNED behaviour, not a bug. If it answers 200
+and no mail arrives, the SMTP configuration (above) is the problem - not this route.
+
+---
+
+## 6. What the agent verified itself (for contrast)
 
 | Claim | How it was proven |
 | --- | --- |
@@ -141,3 +182,9 @@ Rollback: set `REQUIRE_TABLE_TOKEN=false` and redeploy. No migration to reverse.
 | Migration applied | ledger 27 → 28, column present, entitlement grants still locked |
 | Signup gate | 400 missing-token, 400 misconfigured-secret, **503 fail-closed in production**, 0 users created |
 | Env validator fails closed | `VERCEL_ENV=production npm run env:validate` → exit 1 listing all five |
+| A6 supplied-but-wrong token | live, flag OFF: `'junk'` / `'table-1'` / `42` → **404** (all three were ACCEPTED before A6) |
+| A6 well-formed token, no match | live: 32 hex of zeros → 404, decided by the RPC |
+| A6 tokenless budget | live: 11 rapid tokenless orders → `400` x10 then **429**; `orders` still at baseline 1 (no side effects) |
+| A6 guardrail | the new guard tests were run **RED** against the previous guard (9 failures) → GREEN 24/24 |
+| A5 unconfirmed login | 10 unit tests: only ONE error kind offers a resend; unknown errors never surface a raw provider string |
+| A5 signup contract | 19 route-level tests (DB + network mocked): payload shape, fullName TYPE and 2..80 length, password classes, Turnstile refusal creating nothing, account created with `email_confirm:false` |
