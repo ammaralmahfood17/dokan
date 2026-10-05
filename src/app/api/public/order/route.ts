@@ -12,7 +12,10 @@ import type { PublicOrderItemInput } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as {
+    // A non-JSON body (or an empty one) made `request.json()` throw, and the route's
+    // catch-all answered 500 — an unauthenticated caller could spend the error budget and
+    // fill Sentry. The repo's own e2e/resilience.spec.ts R1 asserts the 400 contract.
+    const body = (await request.json().catch(() => null)) as {
       projectSlug?: string;
       tableSlug?: string;
       /**
