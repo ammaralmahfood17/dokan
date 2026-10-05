@@ -98,11 +98,12 @@ export default function RootLayout({
         {/* iOS touch icons */}
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-maskable-512.png" />
         <link rel="apple-touch-startup-image" href="/splash/light-1242x2688.png" />
-        {/* Preload critical routes */}
-        <link rel="prefetch" href="/dashboard" as="document" />
-        <link rel="prefetch" href="/dashboard/kitchen" as="document" />
-        <link rel="prefetch" href="/dashboard/pos" as="document" />
-        <link rel="prefetch" href="/login" as="document" />
+        {/* NOTE: no <link rel="prefetch" as="document"> for the dashboard routes here.
+            These were four full HTML/RSC fetches fired for EVERY visitor — including an
+            anonymous customer who just scanned a QR code on mobile data, for whom the
+            merchant's /dashboard, /dashboard/kitchen, /dashboard/pos and /login are
+            pure waste. A signed-in merchant still gets them warmed: the nav renders
+            <Link>s to those routes, and Next prefetches those on viewport/hover. */}
       </head>
       <body>
         {/* D5: skip-to-content — keyboard users jump straight past the
