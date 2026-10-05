@@ -10,7 +10,10 @@ import { getSiteUrl } from '@/lib/site-url';
  */
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { email?: string };
+    const body = (await request.json().catch(() => null)) as { email?: string };
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
+    }
     // A literal `null` body is valid JSON, so request.json() returns null and
     // `body.email` would throw a TypeError -> a 500 on an anonymous caller.
     // The message stays deliberately vague for every malformed shape so this

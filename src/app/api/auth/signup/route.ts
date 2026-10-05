@@ -26,7 +26,10 @@ import { turnstileErrorMessage, verifyTurnstile } from '@/lib/turnstile';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
+    }
     // A literal `null` body is valid JSON, so request.json() returns null and
     // the destructure below would throw a TypeError -> a 500 on an
     // unauthenticated caller. Non-object input is a 400 like any other bad

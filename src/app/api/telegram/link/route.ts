@@ -29,9 +29,9 @@ async function requireMembership(projectId: string) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as { projectId?: string };
-    // A literal `null` body is valid JSON, so request.json() returns null and
-    // `body.projectId` would throw a TypeError -> a 500 on caller input.
+    // Two ways this used to end as a 500 on an anonymous caller: `request.json()` threw on
+    // a non-JSON body, and a literal `null` body threw a TypeError at the destructure below.
+    const body = (await request.json().catch(() => null)) as { projectId?: string };
     if (body === null || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
     }
@@ -76,7 +76,10 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const body = (await request.json()) as { projectId?: string; chatId?: string };
+    const body = (await request.json().catch(() => null)) as { projectId?: string; chatId?: string };
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
+    }
     if (!body.projectId || !body.chatId) {
       return NextResponse.json({ error: 'بيانات ناقصة' }, { status: 400 });
     }
