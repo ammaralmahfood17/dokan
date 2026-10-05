@@ -1,4 +1,4 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Metadata } from 'next';
@@ -51,10 +51,10 @@ export default async function StorefrontPage({
 
   const activeTables = tables ?? [];
 
-  // ── Rule: 1 active table → redirect straight to its menu ──
-  if (activeTables.length === 1) {
-    redirect(`/${projectSlug}/menu/${activeTables[0].slug}`);
-  }
+  // Owner decision 5 (2026-10-06): the old "1 active table → redirect straight to its menu"
+  // shortcut is gone with the link list. /<slug> now ALWAYS states the rule ("scan the QR on
+  // your table") and offers the single browse link, so the customer learns how ordering works
+  // before they reach a menu they cannot order from.
 
   const heroColor = project.primary_color || '#4338CA';
 
@@ -85,23 +85,22 @@ export default async function StorefrontPage({
         <p className="mt-2 text-sm text-white/70">قائمة طعام ومشروبات</p>
 
         <div className="mt-8">
-          {activeTables.length > 1 ? (
-            /* ── Multiple tables: picker ── */
-            <div>
-              <p className="mb-3 text-sm font-semibold text-white/80">
-                اختر طاولتك
+          {activeTables.length > 0 ? (
+            /* Owner decision 5 (2026-10-06, audit T2 #1): the table LINK LIST is gone. It
+               published every active table slug to anyone who opened the store root, and the
+               slug alone used to authorise an order. Ordering now requires scanning the QR on
+               the physical table — this page says so, and offers ONE read-only browse link
+               (which resolves to a token-less URL that the menu renders read-only). */
+            <div className="flex flex-col items-center gap-4">
+              <p className="max-w-xs text-sm font-semibold leading-6 text-white/85">
+                امسح رمز QR الموجود على طاولتك للطلب
               </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {activeTables.map((t) => (
-                  <Link
-                    key={t.id}
-                    href={`/${projectSlug}/menu/${t.slug}`}
-                    className="inline-flex min-h-[44px] min-w-[72px] items-center justify-center rounded-xl bg-white/15 px-5 text-sm font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 active:scale-95"
-                  >
-                    {t.number}
-                  </Link>
-                ))}
-              </div>
+              <Link
+                href={`/${projectSlug}/menu/${activeTables[0].slug}`}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-white/15 px-5 text-sm font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 active:scale-95"
+              >
+                تصفّح القائمة
+              </Link>
             </div>
           ) : (
             /* ── Zero tables: info + note ── */
