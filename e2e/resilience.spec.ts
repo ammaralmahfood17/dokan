@@ -239,13 +239,14 @@ function expectNoLeak(text: string, label: string): void {
  * ══════════════════════════════════════════════════════════════════════ */
 
 /**
- * KNOWN FAILING (documented defect, not a flaky assertion).
+ * R1 — a non-JSON body must be a 400, never a 500.
+ *
+ * FIXED 2026-10-06 (2026-10 audit remediation, extra finding). Formerly KNOWN FAILING.
  *
  * `const body = (await request.json())` throws on unparseable input, and the
  * handler's catch-all answers 500. The route validates the SHAPE of a parsed
- * body but never that the body PARSED. Same defect in
- * src/app/api/public/waiter/route.ts and src/app/api/public/bill/route.ts
- * (both verified returning 500 for a non-JSON body on production).
+ * body but never that the body PARSED. (The same defect existed in the public
+ * waiter/bill routes, which were DELETED outright — owner decision 2, 2026-10-06.)
  *
  * This test asserts the contract the route is supposed to have (400). It is
  * kept as its own test — not folded into the other validation cases — so this
@@ -278,8 +279,8 @@ test('R1 public order: a body that is not JSON is a 400, never a 500', async ({ 
  *
  * A literal `null` body is VALID JSON, so `await request.json()` returns null
  * and the next property access throws a TypeError that the route's catch turns
- * into a 500. Six routes shipped that way: public/order, public/waiter,
- * public/bill, auth/signup, auth/reset-password and telegram/link — all of them
+ * into a 500. Every json-parsing write route shipped that way: public/order,
+ * auth/signup, auth/reset-password and telegram/link — all of them
  * reachable without a session, so an anonymous visitor could spend the error
  * budget at will. This test is the regression guard, and it covers the whole
  * family (null, array, string, number, bool) rather than the one shape that
@@ -292,8 +293,6 @@ test('R1 public order: a body that is not JSON is a 400, never a 500', async ({ 
 test('R1b no json route 500s on a non-object body (null/array/string/number/bool)', async ({ request }) => {
   const routes = [
     '/api/public/order',
-    '/api/public/waiter',
-    '/api/public/bill',
     '/api/auth/signup',
     '/api/auth/reset-password',
     '/api/telegram/link',
@@ -538,16 +537,13 @@ test('R6 every staff-only API answers an anonymous caller with 401 and leaks not
  * The other side of the same contract: routes that ARE anonymous must still
  * validate, so the public surface cannot be used as a schema oracle. Every
  * status here is the handler's own, read from source and re-verified against
- * production — the two failure modes are deliberately separated per case,
- * because waiter/bill check the slug SHAPE (400) before the store LOOKUP
- * (404), and conflating them is how a 404 silently degrades into a 400.
+ * production. The two failure modes are deliberately separated per case —
+ * conflating "bad parameter" with "not found" is how a 404 silently degrades
+ * into a 400.
  */
 test('R7 public read endpoints validate their parameters (400/404, never 500)', async ({ request }) => {
   // A well-formed but non-existent store slug: passes the shape gate, so it
   // reaches the lookup and comes back as a 404.
-  // A slug that can never exist in the DB (DB slugs are lowercase [a-z0-9-]).
-  const MALFORMED = 'Not A Slug!';
-  const waiterBill = (projectSlug: string, tableSlug: string | null) => ({ projectSlug, tableSlug });
 
   const cases: Array<{
     label: string;
@@ -561,18 +557,6 @@ test('R7 public read endpoints validate their parameters (400/404, never 500)', 
     { label: 'order-status missing projectSlug', status: 400, run: () => request.get(`/api/public/order-status?orderId=${GHOST_UUID}`) },
     { label: 'order-status oversized slug', status: 400, run: () => request.get(`/api/public/order-status?orderId=${GHOST_UUID}&projectSlug=${'x'.repeat(101)}`) },
     { label: 'order-status unknown store', status: 404, run: () => request.get(`/api/public/order-status?orderId=${GHOST_UUID}&projectSlug=${ABSENT}`) },
-    // waiter / bill: required fields first, then the slug shape (400)…
-    { label: 'waiter empty body', status: 400, run: () => request.post('/api/public/waiter', { headers: JSON_CT, data: {} }) },
-    { label: 'waiter null tableSlug', status: 400, run: () => request.post('/api/public/waiter', { headers: JSON_CT, data: waiterBill(ABSENT, null) }) },
-    { label: 'waiter bad slug shape', status: 400, run: () => request.post('/api/public/waiter', { headers: JSON_CT, data: waiterBill(MALFORMED, MALFORMED) }) },
-    { label: 'waiter oversized slug', status: 400, run: () => request.post('/api/public/waiter', { headers: JSON_CT, data: waiterBill('x'.repeat(65), 't1') }) },
-    { label: 'bill empty body', status: 400, run: () => request.post('/api/public/bill', { headers: JSON_CT, data: {} }) },
-    { label: 'bill null tableSlug', status: 400, run: () => request.post('/api/public/bill', { headers: JSON_CT, data: waiterBill(ABSENT, null) }) },
-    { label: 'bill bad slug shape', status: 400, run: () => request.post('/api/public/bill', { headers: JSON_CT, data: waiterBill(MALFORMED, MALFORMED) }) },
-    { label: 'bill oversized slug', status: 400, run: () => request.post('/api/public/bill', { headers: JSON_CT, data: waiterBill('x'.repeat(65), 't1') }) },
-    // …then a well-formed slug that resolves to nothing (404).
-    { label: 'waiter unknown store', status: 404, run: () => request.post('/api/public/waiter', { headers: JSON_CT, data: waiterBill(ABSENT, 't1') }) },
-    { label: 'bill unknown store', status: 404, run: () => request.post('/api/public/bill', { headers: JSON_CT, data: waiterBill(ABSENT, 't1') }) },
   ];
 
   for (const c of cases) {
