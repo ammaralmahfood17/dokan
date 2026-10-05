@@ -1,6 +1,15 @@
 import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 
+/** Dev needs the bundler's eval sourcemaps; production does not. */
+const isDev = process.env.NODE_ENV !== 'production';
+
+/** Emit `upgrade-insecure-requests` only when the app is actually served over
+ *  https. Keying it on NODE_ENV would break LOCAL verification: `next start`
+ *  runs with NODE_ENV=production on http://localhost, and the browser would then
+ *  upgrade every same-origin subresource to https and fail to load them. */
+const siteIsHttps = (process.env.NEXT_PUBLIC_SITE_URL || '').startsWith('https://');
+
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -23,14 +32,36 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.sentry.io https://challenges.cloudflare.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      // 'unsafe-inline' is unavoidable until Next can be given a per-request nonce
+      // (deferred: a nonce makes previously-static pages uncacheable, which costs the
+      // landing page's LCP). 'unsafe-eval' is only needed by the DEV bundler's eval
+      // sourcemaps, so production does not ship it any more.
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://*.sentry.io`,
+      // next/font self-hosts Cairo — the old fonts.googleapis.com allowance was dead.
+      "style-src 'self' 'unsafe-inline'",
       "img-src 'self' blob: data: https://*.supabase.co",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://sentry.io https://*.ingest.sentry.io",
-      "font-src 'self' https://fonts.gstatic.com",
+      // SENTRY FIX (verified by the CSP census, 2026-10-05): the DSN host is
+      // region-scoped — o4511834824638464.ingest.us.sentry.io — and a CSP host
+      // wildcard must match the WHOLE suffix, so "*.ingest.sentry.io" does NOT match
+      // "…ingest.us.sentry.io". Every browser event from every merchant was being
+      // refused by our own policy (server events were unaffected, which is why the
+      // health check's browserMonitoring flag looked fine). "*.sentry.io" covers all
+      // regions.
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io",
+      // No third-party font origin: fonts.gstatic.com was dead too.
+      "font-src 'self'",
+      // Coverage the policy never declared: these fell back to default-src, which
+      // happened to be 'self' — declaring them is explicit and blocks <object>/<embed>
+      // outright. blob: on worker-src is required by Sentry's Replay compression worker.
+      "object-src 'none'",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
+      "frame-src 'none'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
+      // only when the site is really served over https (see siteIsHttps above).
+      ...(siteIsHttps ? ['upgrade-insecure-requests'] : []),
     ].join('; '),
   },
 ];
