@@ -26,7 +26,9 @@ const METRIC_NAMES = new Set(['LCP', 'CLS', 'INP', 'FCP', 'TTFB', 'FID']);
 export async function POST(request: Request) {
   try {
     const limit = await rateLimit(`ip:${getClientIp(request)}`, {
-      limit: 240,
+      // audit T2 #9: 240/min/IP let a single address insert ~345k rows/day into a shared
+      // table. 60/min still covers a real page-view burst (one beacon per metric per load).
+      limit: 60,
       windowMs: 60 * 1000,
       keyPrefix: 'vitals-ip',
     });
@@ -35,6 +37,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.text();
+    // A beacon is a handful of fields; anything larger is not a beacon. Cheap reject
+    // before JSON.parse (audit T2 #9).
+    if (body.length > 512) {
+      return NextResponse.json({ ok: true });
+    }
     let parsed: Record<string, unknown> | null = null;
     try { parsed = JSON.parse(body); } catch { /* ignore malformed */ }
 

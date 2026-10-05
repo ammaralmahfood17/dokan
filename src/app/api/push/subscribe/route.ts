@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { rateLimit, createRateLimitResponse } from '@/lib/rate-limit';
 
 async function db() {
   return await createClient();
@@ -24,6 +25,31 @@ export async function POST(request: NextRequest) {
 
     if (!body.projectId || !body.subscription?.endpoint) {
       return NextResponse.json({ error: 'بيانات ناقصة' }, { status: 400 });
+    }
+
+    // audit T2 #10: the key material was unvalidated (a missing p256dh became a NOT NULL
+    // violation -> 500) and nothing bounded how many subscriptions one staff member could
+    // create. Both are cheap to close here.
+    const sub = body.subscription;
+    const malformed =
+      typeof sub.endpoint !== 'string' ||
+      sub.endpoint.length > 512 ||
+      typeof sub.keys?.p256dh !== 'string' ||
+      sub.keys.p256dh.length > 200 ||
+      typeof sub.keys?.auth !== 'string' ||
+      sub.keys.auth.length > 100;
+    if (malformed) {
+      return NextResponse.json({ error: 'بيانات الاشتراك غير صالحة' }, { status: 400 });
+    }
+
+    const perUser = await rateLimit(`push:${user.id}`, {
+      limit: 10,
+      windowMs: 60 * 60 * 1000,
+      keyPrefix: 'push-subscribe',
+    });
+    if (!perUser.allowed) {
+      const res = createRateLimitResponse(perUser.resetIn);
+      return NextResponse.json({ error: res.error }, { status: res.status });
     }
 
     // Verify the user is a staff member of the target project — otherwise any
