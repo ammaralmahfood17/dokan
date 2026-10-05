@@ -40,7 +40,14 @@ export function KitchenTicket({
   onDeliver,
 }: {
   ticket: KitchenTicketData;
-  now: number;
+  /**
+   * Wall clock from the board, or **null** on the server and on the first client
+   * render — it is filled in a mount effect (see kitchen-client.tsx). Null means
+   * "not known yet": no elapsed time and no overdue badge. Computing it here from
+   * Date.now() instead would make the server HTML and the first client render
+   * disagree, which is React error #418.
+   */
+  now: number | null;
   onStart: () => void;
   onReady: () => void;
   onDeliver: () => void;
@@ -50,9 +57,8 @@ export function KitchenTicket({
   // Guard against a malformed/absent created_at — a NaN diff would silently
   // read "قبل NaN دقيقة" and never flag overdue.
   const createdMs = new Date(order.created_at).getTime();
-  const mins = Number.isFinite(createdMs)
-    ? Math.max(0, Math.floor((now - createdMs) / 60000))
-    : 0;
+  const timeKnown = now !== null && Number.isFinite(createdMs);
+  const mins = timeKnown ? Math.max(0, Math.floor((now - createdMs) / 60000)) : 0;
 
   let overdue = false;
   if (status === 'pending' && mins >= OVERDUE_MIN_PENDING) overdue = true;
@@ -97,7 +103,9 @@ export function KitchenTicket({
           className={`text-[12px] font-bold tabular-nums ${overdue ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-tertiary)]'}`}
           dir="ltr"
         >
-          ⏱ {mins} د
+          {/* The clock glyph keeps the width stable while the value is unknown, so
+              the row does not jump when the real minutes land after mount. */}
+          {timeKnown ? `⏱ ${mins} د` : '⏱ —'}
         </p>
       </div>
 

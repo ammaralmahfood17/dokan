@@ -33,10 +33,15 @@ export function KitchenClient({
 }) {
   const [soundOn, setSoundOn] = useState(true);
   const [newOrderCount, setNewOrderCount] = useState(0);
-  const [time, setTime] = useState(() =>
-    new Date().toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' })
-  );
-  const [now, setNow] = useState(() => Date.now());
+  // These two are rendered on the SERVER as well, so their initial values must be
+  // identical on both sides of hydration. They were not: `new Date().toLocaleTimeString(…)`
+  // formats in the SERVER's UTC but in the merchant's +03 in the browser (never equal),
+  // and `Date.now()` differs by the hydration latency — which also fed the «متأخر»
+  // overdue badge. That is React error #418, firing on every KDS load and forcing React
+  // to throw away the server HTML for the board. Starting null and filling them in on
+  // mount is the fix: server and first client render agree, then the real values land.
+  const [time, setTime] = useState<string | null>(null);
+  const [now, setNow] = useState<number | null>(null);
   const [tab, setTab] = useState<'all' | 'dinein' | 'drivethru' | 'walkin'>('all');
 
   const { playChime, preloadChime, attachAudioResumeOnInteraction } = useKitchenAudio();
@@ -61,12 +66,17 @@ export function KitchenClient({
     notifyNewOrder,
   });
 
-  // Clock + tick — كل دقيقة (60s) لأن العرض بالدقائق
+  // Clock + tick — كل دقيقة (60s) لأن العرض بالدقائق.
+  // The first tick runs immediately so the values are filled the moment we are
+  // mounted (no waiting 60s for a clock), and only then can anything time-derived
+  // differ from the server HTML — by which point hydration is already done.
   useEffect(() => {
-    const id = setInterval(() => {
+    const tick = () => {
       setTime(new Date().toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' }));
       setNow(Date.now());
-    }, 60000);
+    };
+    tick();
+    const id = setInterval(tick, 60000);
     return () => clearInterval(id);
   }, []);
 
@@ -191,7 +201,7 @@ export function KitchenClient({
             قيد التحضير: {preparingCount}
           </span>
           <span className="font-mono text-[15px] tabular-nums text-[var(--color-text-muted)]" dir="ltr">
-            {time}
+            {time ?? '--:--'}
           </span>
           <button
             type="button"
