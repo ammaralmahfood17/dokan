@@ -72,7 +72,11 @@ is why the fix was scoped to the unauthenticated set. Same one-line shape when i
 **Wave 1 gates:** `tsc` 0 · `lint` 0 · **vitest 187/187 (16 files)** · `build` 0 · `env:check` 0 ·
 `env:validate` 0 (dev) / exit 1 (production simulation).
 `npm run test:db` is **not executable on this host** (no docker group, sudo needs a password)
-→ substituted by the PR's CI job; permanent fix in OPS-VERIFICATION §1.
+→ substituted by the PR's CI job and **verified green on the final W1 head `282d7bc`**:
+`Fresh database · Security assertions` (supabase start + db reset + test db, incl.
+`phase6_table_token.sql`), `Typecheck · Lint · Build`, `E2E is configured (not executed)` —
+run 37385404716 was the first head, the pushed W1 head is the one recorded here.
+Permanent fix in OPS-VERIFICATION §1.
 
 ## Waves 2–6 — not started
 
