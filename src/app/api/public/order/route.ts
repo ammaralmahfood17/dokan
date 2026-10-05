@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createSecureOrder } from '@/lib/order-pricing';
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/ip';
+import { requireTableToken } from '@/lib/public-write-guard';
 import { sendPushToProject } from '@/lib/push';
 import { sendTelegramAlert } from '@/lib/telegram';
 import { formatMoney } from '@/lib/utils';
@@ -14,6 +15,12 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       projectSlug?: string;
       tableSlug?: string;
+      /**
+       * Table scan token (tables.qrcode) from the printed QR. Audit 2026-10-05: the slug
+       * alone used to authorise the write, which let anyone inject orders into any active
+       * store — the storefront page publishes every table slug.
+       */
+      tableToken?: string;
       items?: PublicOrderItemInput[];
       notes?: string;
       /**
@@ -80,6 +87,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: res.error }, { status: res.status });
     }
 
+    // 0. Table scan token — audit T2 #1 (CRITICAL). Deliberately AFTER the rate limits so
+    //    that every request is counted (a guard placed first would let an attacker hammer
+    //    the endpoint with malformed tokens without ever touching a budget).
+    const tokenDecision = requireTableToken(body.tableToken);
+    if (!tokenDecision.ok) {
+      return NextResponse.json({ error: tokenDecision.error }, { status: tokenDecision.status });
+    }
+    const tableToken = tokenDecision.token;
+
     const supabase = createAdminClient();
 
     // 1. Validate project — HARD subscription cutoff via the SECURITY
@@ -106,14 +122,19 @@ export async function POST(request: NextRequest) {
     // 2. Validate table belongs to project
     const { data: table, error: tableErr } = await supabase
       .from('tables')
-      .select('id, number, is_active')
+      .select('id, number, is_active, qrcode')
       .eq('slug', tableSlug)
       .eq('project_id', project.id)
-      .single();
+      .eq('is_active', true)
+      .maybeSingle();
 
-    if (tableErr || !table || !table.is_active) {
+    // The token must belong to THIS table of THIS project. A token from another store's
+    // table — or from another table in the same store — is a 404, not a silent pass.
+    // `tableToken === ''` is the rollout window (REQUIRE_TABLE_TOKEN unset/false): accepted
+    // and flagged, never treated as a match.
+    if (tableErr || !table || (tableToken !== '' && table.qrcode !== tableToken)) {
       return NextResponse.json(
-        { error: 'الطاولة غير موجودة أو غير نشطة' },
+        { error: 'الطاولة غير موجودة أو رمز الطاولة غير صالح' },
         { status: 404 }
       );
     }
@@ -154,6 +175,16 @@ export async function POST(request: NextRequest) {
     // via after() — the customer sees the confirmation immediately instead
     // of waiting for external push/telegram HTTP calls. after() is guaranteed
     // on Vercel (fire-and-forget gets frozen). Order already created above.
+    // Rollout telemetry (audit T2 #1): how many real orders still arrive without a token.
+    // This is the number that justifies flipping REQUIRE_TABLE_TOKEN to true — and the only
+    // evidence that a printed QR sheet somewhere still needs reprinting.
+    if (tableToken === '' && process.env.ORDERS_TOKEN_TELEMETRY !== 'false') {
+      Sentry.captureMessage('[order] tokenless order accepted (rollout window)', {
+        level: 'warning',
+        tags: { projectSlug, tableSlug },
+      });
+    }
+
     after(async () => {
       await Promise.all([
         // Phase 3: Audit log
@@ -164,7 +195,7 @@ export async function POST(request: NextRequest) {
               project_id: project.id,
               event: 'created',
               new_status: result.order.status,
-              metadata: { type: 'dinein', item_count: items?.length || 0 },
+              metadata: { type: 'dinein', item_count: items?.length || 0, token_present: tableToken !== '' },
             });
           } catch (auditErr) {
             console.warn('[Audit] Failed to write order audit log', auditErr);
