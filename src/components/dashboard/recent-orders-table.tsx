@@ -19,7 +19,7 @@ export function RecentOrdersTable({
         آخر الطلبات
         <Link
           href="/dashboard/orders"
-          className="text-[11px] font-normal text-[var(--color-primary)]"
+          className="inline-flex min-h-[44px] items-center text-[11px] font-normal text-[var(--color-primary)]"
         >
           عرض الكل
         </Link>

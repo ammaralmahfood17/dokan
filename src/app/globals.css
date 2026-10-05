@@ -212,8 +212,11 @@
 .btn-lg { height: 44px; padding: 0 1.25rem; font-size: 0.9375rem; border-radius: var(--radius-md); }
 .btn-block { width: 100%; }
 
-/* Touch targets — mobile bump keeps ≥44px even for sm (AGENTS.md) */
-@media (max-width: 639px) {
+/* Touch targets — a FINGER needs ≥44px at ANY width. Keying this on
+   max-width:639px left tablets (768px, coarse pointer) with 36px buttons, which is
+   exactly the device a counter/POS merchant uses. A narrow desktop window with a
+   mouse keeps the 36px enterprise density. */
+@media (pointer: coarse) {
   .btn, .btn-sm, [class*="btn-sm"] { min-height: 44px; }
 }
 

@@ -116,7 +116,15 @@ export default function RootLayout({
         <div id="main-content">
           {children}
         </div>
-        <Toaster position="top-center" richColors dir="rtl" />
+        {/* actionButtonStyle: sonner's default action button renders ~24px tall, which
+            is under the 44px touch contract on a phone — and this specific action
+            ("إعادة تحميل") appears after EVERY deploy, i.e. on the merchant's device. */}
+        <Toaster
+          position="top-center"
+          richColors
+          dir="rtl"
+          toastOptions={{ actionButtonStyle: { minHeight: '44px' } }}
+        />
         <ServiceWorkerRegister />
         <WebVitals />
         <InstallPrompt />

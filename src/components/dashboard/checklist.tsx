@@ -23,7 +23,7 @@ export function ChecklistSection({
           <h2 className="text-base font-bold">متجرك جاهز لإستقبال الطلبات</h2>
           <Link
             href="/dashboard/pos"
-            className="mt-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-6 py-2 text-sm font-bold text-white transition-colors hover:opacity-90"
+            className="mt-2 inline-flex min-h-[44px] items-center rounded-[var(--radius-md)] bg-[var(--color-primary)] px-6 text-sm font-bold text-white transition-colors hover:opacity-90"
           >
             افتح POS
           </Link>

@@ -133,12 +133,13 @@ export function AppSidebar({
 
   return (
     <>
-      {/* Hamburger — mobile only */}
+      {/* Hamburger — mobile/tablet only. h-11 (44px), not h-9: a thumb needs 44px and
+          this is the only way into the nav on a phone, where it sits under the notch. */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
         className={cn(
-          'fixed end-3 top-3 z-[var(--z-drawer)] flex h-9 w-9 items-center justify-center rounded-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] backdrop-blur-sm',
+          'fixed end-3 top-3 z-[var(--z-drawer)] flex h-11 w-11 items-center justify-center rounded-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] backdrop-blur-sm',
           'lg:hidden',
           isOpen && 'hidden'
         )}
