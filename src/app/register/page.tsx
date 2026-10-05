@@ -16,7 +16,10 @@ export default function RegisterPage() {
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
 
   const emailErr = touched.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? 'الإيميل غير صحيح' : null;
-  const passErr = touched.password && password.length < 6 ? 'كلمة المرور أقل من 6 أحرف' : null;
+  // UX only — the authoritative check is the signup API (src/lib/password-policy.ts, whose
+  // MIN_PASSWORD_LENGTH is 10). Keep this in step with it: a drifted client rule is a
+  // confusing error, never a security hole.
+  const passErr = touched.password && password.length < 10 ? 'كلمة المرور أقل من 10 أحرف' : null;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -127,7 +130,7 @@ export default function RegisterPage() {
               type="password"
               autoComplete="new-password"
               required
-              minLength={6}
+              minLength={10}
               maxLength={72}
               value={password}
               onChange={(e) => setPassword(e.target.value)}

@@ -58,7 +58,8 @@ export default function UpdatePasswordPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (password.length < 6) {
+    // A NEW password must meet the current floor (audit T2 #2). Login deliberately does not.
+    if (password.length < 10) {
       setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
@@ -138,7 +139,7 @@ export default function UpdatePasswordPage() {
                 type={showPass ? 'text' : 'password'}
                 autoComplete="new-password"
                 required
-                minLength={6}
+                minLength={10}
                 maxLength={72}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -166,7 +167,7 @@ export default function UpdatePasswordPage() {
               type={showPass ? 'text' : 'password'}
               autoComplete="new-password"
               required
-              minLength={6}
+              minLength={10}
               maxLength={72}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
@@ -174,7 +175,7 @@ export default function UpdatePasswordPage() {
             />
           </div>
 
-          <Button type="submit" block disabled={loading || password.length < 6 || password !== confirm}>
+          <Button type="submit" block disabled={loading || password.length < 10 || password !== confirm}>
             {loading ? 'جاري الحفظ…' : 'حفظ كلمة المرور الجديدة'}
           </Button>
 

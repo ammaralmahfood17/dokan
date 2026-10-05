@@ -30,6 +30,9 @@ function LoginForm() {
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
 
   const emailErr = touched.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? 'الإيميل غير صحيح' : null;
+  // Deliberately 6, NOT the signup floor of 10 (audit T2 #2): accounts created before the
+  // floor existed still have shorter passwords and must be able to sign in. Raising this
+  // would lock real merchants out of their own store.
   const passErr = touched.password && password.length < 6 ? 'كلمة المرور أقل من 6 أحرف' : null;
 
   async function onSubmit(e: FormEvent) {

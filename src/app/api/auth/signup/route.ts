@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/ip';
+import { validateNewPassword } from '@/lib/password-policy';
 
 /**
  * Server-side signup endpoint.
@@ -39,11 +40,15 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // UX-report C4: admin.auth.admin.createUser BYPASSES GoTrue validation —
-    // without this, direct API calls could mint 1-char passwords. Mirrors the
-    // client rule (register/page.tsx: >=6) + bcrypt-safe 72 cap used by login.
-    if (typeof password !== 'string' || password.length < 6 || password.length > 72) {
-      return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 6-72 حرفًا' }, { status: 400 });
+    // Audit T2 #2: admin.auth.admin.createUser BYPASSES GoTrue validation entirely, so this
+    // check IS the password policy on this path (config.toml + the hosted Auth setting apply
+    // only to GoTrue's own endpoints). Shared with the forms via src/lib/password-policy.ts.
+    const pw = validateNewPassword(password);
+    if (!pw.ok) {
+      return NextResponse.json({ error: pw.error }, { status: 400 });
+    }
+    if (typeof fullName !== 'string' || fullName.trim().length < 2 || fullName.length > 80) {
+      return NextResponse.json({ error: 'الاسم مطلوب (حرفان على الأقل)' }, { status: 400 });
     }
     if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'بريد إلكتروني غير صالح' }, { status: 400 });
@@ -78,7 +83,7 @@ export async function POST(request: Request) {
       password: String(password),
       email_confirm: true, // confirmation is disabled in this project
       user_metadata: {
-        full_name: String(fullName?.trim?.() || ''),
+        full_name: fullName.trim(),
         from_api: 'true',       // safety trigger skips users from the main API
       },
     });
