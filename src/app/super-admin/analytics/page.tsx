@@ -204,7 +204,7 @@ export default async function SuperAdminAnalyticsPage({
                 style={{ height: `${Math.max(4, (t.revenue / maxTrend) * 100)}%` }}
                 title={`${t.label}: ${moneyFmt.format(t.revenue)} (${t.orders} طلب)`}
               />
-              <span className="text-[9px] text-[var(--color-text-muted)]">{t.label}</span>
+              <span className="text-[11px] text-[var(--color-text-muted)]">{t.label}</span>
             </div>
           ))}
         </div>
@@ -249,7 +249,7 @@ export default async function SuperAdminAnalyticsPage({
                   <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)]">
                     <span dir="ltr">{r.slug}</span>
                     {!r.is_active && (
-                      <span className="rounded-full bg-[var(--color-danger-tint)] px-1.5 py-px text-[9px] font-bold text-[var(--color-danger)]">
+                      <span className="rounded-full bg-[var(--color-danger-tint)] px-1.5 py-px text-[11px] font-bold text-[var(--color-danger)]">
                         موقوف
                       </span>
                     )}

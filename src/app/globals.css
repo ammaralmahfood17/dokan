@@ -25,9 +25,6 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
-  --space-20: 80px;
 }
 
 @theme {
@@ -70,7 +67,6 @@
   --font-mono: var(--font-cairo), "Cairo", ui-monospace, monospace;
 
   /* Radius — small by intent; full-round reads "consumer" */
-  --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 10px; /* v1.1 Calm Surface */
   --radius-lg: 14px; /* v1.1 Calm Surface */
@@ -91,8 +87,6 @@
 
   /* Shadow — border-first; shadow only for layering (dropdown/modal/popover) */
   --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.05), 0 2px 4px rgba(15, 23, 42, 0.04);
   --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.06), 0 4px 6px rgba(15, 23, 42, 0.04);
   --shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.15);
   /* v1.1 Calm Surface: THE only shadow — floating elements only
@@ -142,7 +136,10 @@
     color: var(--color-text);
   }
 
-  /* Typography — Cairo only; -0.01em on display-size headings (spec §2.1) */
+  /* Typography — Cairo only, for display and body alike (spec §2.1). Headings are
+     bold; the old comment claimed "-0.01em on display-size headings" but no such
+     letter-spacing rule was ever written here (the only -0.01em in this file is a
+     clamp() width in the marquee), so the note was describing code that did not exist. */
   h1, h2, h3, h4, h5, h6 {
     margin: 0;
     font-weight: 700;
@@ -413,30 +410,11 @@
 }
 .animate-slide-up { animation: slide-up 0.24s ease-out; }
 
-@keyframes scale-flash {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.25); }
-  100% { transform: scale(1); }
-}
-.animate-scale-flash { animation: scale-flash 0.4s ease-out; }
-
 @keyframes fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
 .animate-fade-in { animation: fade-in 0.2s ease-out; }
-
-@keyframes slide-in-right {
-  from { transform: translateX(20px); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
-}
-.animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.4; }
-}
-.animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
 
 /* Skeleton shimmer — lightweight sweep for loading placeholders */
 .skeleton-shimmer {
@@ -509,31 +487,6 @@
 }
 
 /* ==========================================================================
-   Dashboard table styles (spec §6.6) — 44px rows, sunken header, row-only borders
-   ========================================================================== */
-.data-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-.data-table th {
-  text-align: start;
-  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;
-  padding: 0.75rem 1rem;
-  color: var(--color-text-secondary);
-  background: var(--color-surface-sunken);
-  border-bottom: 1px solid var(--color-border);
-}
-.data-table td {
-  padding: 0.75rem 1rem;
-  height: 44px;
-  border-bottom: 1px solid var(--color-border);
-  vertical-align: middle;
-}
-.data-table tr:last-child td { border-bottom: none; }
-.data-table tbody tr:hover { background: var(--color-surface-sunken); }
-
-/* ==========================================================================
    Dashboard layout utilities
    ========================================================================== */
 .content-area {
@@ -548,7 +501,6 @@
    ========================================================================== */
 .chart-container { contain: layout style paint; }
 .product-grid { contain: layout; }
-.ticket-grid { contain: layout style; }
 
 /* FIX-O-002: exit animation للمودال — transition بدل framer-motion (لا اعتماد) */
 .modal-enter { animation: slide-up 0.24s ease-out; }
@@ -584,7 +536,6 @@
 .landing-title-accent { color: var(--color-primary); }
 .landing-feature { position: relative; overflow: hidden; padding: 1.4rem; }
 .landing-feature:hover { border-color: #C7D2FE; box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08); transform: translateY(-3px); }
-.landing-stat { border: 1px solid rgba(199, 210, 254, 0.72); border-radius: 1rem; background: rgba(255, 255, 255, 0.74); padding: 0.9rem 1.2rem; box-shadow: 0 8px 24px rgba(67, 56, 202, 0.06); }
 
 /* ==========================================================================
    Tabs

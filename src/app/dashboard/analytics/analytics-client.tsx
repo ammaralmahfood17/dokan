@@ -203,7 +203,7 @@ export function AnalyticsClient({
                 <div key={d.key} className="group relative flex flex-1 flex-col items-center gap-1" title={`${d.label} — ${formatMoney(d.revenue, currency)}`}>
                   {/* Value: only on the top bar (always) or on hover (desktop) */}
                   <span
-                    className={`whitespace-nowrap text-[9px] font-semibold text-[var(--color-text-muted)] ${
+                    className={`whitespace-nowrap text-[11px] font-semibold text-[var(--color-text-muted)] ${
                       d.revenue === maxDayRevenue
                         ? 'opacity-100'
                         : 'opacity-0 transition-opacity group-hover:opacity-100'

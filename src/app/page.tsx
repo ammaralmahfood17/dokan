@@ -94,8 +94,8 @@ export default function LandingPage() {
             </div>
             <div className="hidden shrink-0 lg:block">
               <div className="phone-mockup relative mx-auto" style={{ width: '240px' }}>
-                <div className="overflow-hidden rounded-[2.5rem] border-[6px] border-[#1E293B] bg-[var(--color-primary)] shadow-xl">
-                  <div className="mx-auto mt-2 h-5 w-28 rounded-full bg-[#1E293B]" />
+                <div className="overflow-hidden rounded-[2.5rem] border-[6px] border-[var(--color-text)] bg-[var(--color-primary)] shadow-xl">
+                  <div className="mx-auto mt-2 h-5 w-28 rounded-full bg-[var(--color-text)]" />
                   <div className="flex flex-col items-center justify-center px-4 pb-8 pt-6 text-center text-white">
                     <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-2xl font-bold">د</div>
                     <p className="text-sm font-bold">دكان</p>
