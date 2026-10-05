@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { rateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/ip';
 
 /**
  * GET /api/health — liveness + dependency probe.
@@ -49,6 +51,28 @@ async function timed<T>(
 
 export async function GET(request: Request) {
   const light = new URL(request.url).searchParams.get('light') === '1';
+
+  // Audit T2 #8: this endpoint is unauthenticated and used to report which alert channels
+  // were configured — i.e. whether anyone would be paged BEFORE an attacker abused the
+  // public order endpoints. Detail now needs a bearer token; without HEALTH_TOKEN configured
+  // the response degrades to a bare liveness probe (fail safe, never fail open).
+  const healthToken = process.env.HEALTH_TOKEN;
+  const privileged =
+    Boolean(healthToken) && request.headers.get('authorization') === `Bearer ${healthToken}`;
+
+  // Also unrate-limited before: each call ran a DB query, so it doubled as a cheap
+  // amplification target.
+  const rate = await rateLimit(`ip:${getClientIp(request)}`, {
+    limit: 30,
+    windowMs: 60 * 1000,
+    keyPrefix: 'health-ip',
+  });
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { status: 'degraded' },
+      { status: 429, headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' } }
+    );
+  }
 
   // 1. The app itself is running — that is implied by serving this response.
   const runtime: Check = { ok: true, ms: 0 };
@@ -108,9 +132,11 @@ export async function GET(request: Request) {
       // Per-dependency, not a boolean blob: the whole point is knowing WHICH
       // one broke.
       checks,
-      ...(light
-        ? {}
-        : { integrations, timestamp: new Date().toISOString() }),
+      // `integrations` names the alert channels that are live — recon for an attacker
+      // deciding whether anyone would notice. Token-gated (audit T2 #8).
+      ...(privileged && !light
+        ? { integrations, timestamp: new Date().toISOString() }
+        : {}),
     },
     {
       status: healthy ? 200 : 503,
