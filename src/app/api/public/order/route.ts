@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createSecureOrder } from '@/lib/order-pricing';
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/ip';
-import { requireTableToken } from '@/lib/public-write-guard';
+import { isTableTokenRequired, requireTableToken } from '@/lib/public-write-guard';
 import { sendPushToProject } from '@/lib/push';
 import { sendTelegramAlert } from '@/lib/telegram';
 import { formatMoney } from '@/lib/utils';
@@ -98,6 +98,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: tokenDecision.error }, { status: tokenDecision.status });
     }
     const tableToken = tokenDecision.token;
+
+    // A6 (rollout-window hardening): while enforcement is OFF a tokenless order is still
+    // accepted — the merchant's already-printed sheets have to keep working — so that window
+    // carries a TIGHT budget of its own on top of the general one. The general budget is sized
+    // for customers; a tokenless flood is not a customer pattern: 10/min and 60/h per project.
+    if (tableToken === '' && !isTableTokenRequired()) {
+      const [tokenlessMinute, tokenlessHour] = await Promise.all([
+        rateLimit(projectSlug, { limit: 10, windowMs: 60 * 1000, keyPrefix: 'public-order-notoken' }),
+        rateLimit(projectSlug, {
+          limit: 60,
+          windowMs: 60 * 60 * 1000,
+          keyPrefix: 'public-order-notoken-hour',
+        }),
+      ]);
+      if (!tokenlessMinute.allowed) {
+        const res = createRateLimitResponse(tokenlessMinute.resetIn);
+        return NextResponse.json({ error: res.error }, { status: res.status });
+      }
+      if (!tokenlessHour.allowed) {
+        const res = createRateLimitResponse(tokenlessHour.resetIn);
+        return NextResponse.json({ error: res.error }, { status: res.status });
+      }
+
+      // The flip to REQUIRE_TABLE_TOKEN=true is justified by token_present=false having been
+      // zero for 48h, so every acceptance has to be visible in ops and not only in SQL. The
+      // token itself is never logged — there is none on this path.
+      Sentry.captureMessage('public order accepted WITHOUT a table token (rollout window)', {
+        level: 'warning',
+        tags: { area: 'public-order', token_present: 'false' },
+        extra: { projectSlug },
+      });
+    }
 
     const supabase = createAdminClient();
 

@@ -12,6 +12,10 @@
  * accepted — but the route records `token_present: false` in the order audit log and emits a
  * Sentry warning, which is how the flip is justified with data instead of hope.
  *
+ * A supplied-but-wrong token is ALWAYS a 404, in the window as well (amendment A6): a caller
+ * that sends junk is not a customer holding an old sheet, and treating junk as "no token"
+ * would let an attacker duck the window's tight tokenless budget by padding the field.
+ *
  * Pure and dependency-free on purpose: this is the rule that closes a Critical, so it is
  * unit-tested (see public-write-guard.test.ts) rather than only exercised through the route.
  */
@@ -23,9 +27,20 @@ export const TOKEN_RE = /^[0-9a-f]{32}$/;
 export const MISSING_TOKEN_ERROR =
   'امسح رمز الطاولة (QR) لتأكيد طلبك — الرمز موجود على طاولتك';
 
+/** A token was sent but cannot be one: same 404 a non-matching token gets. */
+export const INVALID_TOKEN_ERROR = 'رمز الطاولة غير صالح';
+
 export type TokenDecision =
   | { ok: true; token: string }
-  | { ok: false; status: 403; error: string };
+  | { ok: false; status: 403 | 404; error: string };
+
+/**
+ * The rollout switch, read in ONE place so the guard and the route cannot disagree about
+ * whether enforcement is on (amendment A6 reads it for the tokenless budget).
+ */
+export function isTableTokenRequired(): boolean {
+  return process.env.REQUIRE_TABLE_TOKEN === 'true';
+}
 
 /**
  * Validate the caller-supplied table scan token.
@@ -36,15 +51,27 @@ export type TokenDecision =
  */
 export function requireTableToken(
   rawToken: unknown,
-  enforce: boolean = process.env.REQUIRE_TABLE_TOKEN === 'true'
+  enforce: boolean = isTableTokenRequired()
 ): TokenDecision {
+  // ── Nothing was supplied ──
+  if (rawToken === undefined || rawToken === null || rawToken === '') {
+    // Rollout window: accept the tokenless order, but return an EMPTY token (never the raw
+    // value), so the route records the absence instead of pretending it matched.
+    if (!enforce) return { ok: true, token: '' };
+    return { ok: false, status: 403, error: MISSING_TOKEN_ERROR };
+  }
+
   const token = typeof rawToken === 'string' ? rawToken.trim().toLowerCase() : '';
 
-  if (TOKEN_RE.test(token)) return { ok: true, token };
+  // ── A token WAS supplied ──
+  // Malformed (or not a string at all): 404, in the window too. Accepting it as "tokenless"
+  // would hand an attacker a way around the window's 10/min budget — and no real QR sheet
+  // produces a value that fails TOKEN_RE.
+  if (!TOKEN_RE.test(token)) {
+    return { ok: false, status: 404, error: INVALID_TOKEN_ERROR };
+  }
 
-  // Rollout window: accept a tokenless order, but return an EMPTY token (never the raw
-  // value), so the route records the absence instead of silently pretending it matched.
-  if (!enforce) return { ok: true, token: '' };
-
-  return { ok: false, status: 403, error: MISSING_TOKEN_ERROR };
+  // Well-formed: the route resolves it against the table via the RPC. Returning it as-is is
+  // what makes a wrong-but-well-formed token a 404 downstream instead of a tokenless accept.
+  return { ok: true, token };
 }

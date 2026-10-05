@@ -76,3 +76,51 @@ describe('requireTableToken()', () => {
     expect(TOKEN_RE.test('f'.repeat(33))).toBe(false);
   });
 });
+
+/**
+ * Amendment A6 (2026-10-06) — rollout-window hardening.
+ *
+ * While REQUIRE_TABLE_TOKEN is false the window accepts a TOKENLESS order (old sheets must
+ * keep working). It must NOT accept a SUPPLIED-BUT-WRONG one: treating junk as "no token"
+ * would let an attacker sidestep the window's 10/min tokenless budget by padding the field,
+ * and no real QR sheet produces a value that fails TOKEN_RE.
+ */
+describe('requireTableToken() — A6 supplied-but-wrong is always 404', () => {
+  const JUNK = ['table-1', 'junk', 'x', VALID.slice(0, 31), VALID + 'f', 'z'.repeat(32)];
+
+  it.each(JUNK)('rejects the malformed token %j with 404, even in the window', (junk) => {
+    const d = requireTableToken(junk, false);
+    expect(d).toMatchObject({ ok: false, status: 404 });
+    expect(d.ok === false && d.error).toContain('رمز');
+  });
+
+  it('treats a non-string as malformed, not as tokenless', () => {
+    for (const junk of [42, true, { token: VALID }, ['a'.repeat(32)]]) {
+      expect(requireTableToken(junk, false)).toMatchObject({ ok: false, status: 404 });
+    }
+  });
+
+  it('treats whitespace-only as supplied-but-unusable (404), not as absent', () => {
+    expect(requireTableToken('   ', false)).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it('still accepts a genuinely absent token in the window', () => {
+    for (const absent of [undefined, null, '']) {
+      expect(requireTableToken(absent, false)).toEqual({ ok: true, token: '' });
+    }
+  });
+
+  it('hands a well-formed token to the resolver in the window (the RPC decides)', () => {
+    // A well-formed token that matches no table is a 404 downstream, from the RPC — not here.
+    expect(requireTableToken(VALID, false)).toEqual({ ok: true, token: VALID });
+  });
+
+  it('the 404 copy is distinct from the 403 "scan the QR" copy', () => {
+    const missing = requireTableToken(undefined, true);
+    const malformed = requireTableToken('junk', true);
+    if (missing.ok || malformed.ok) throw new Error('expected both decisions to be rejections');
+    expect(missing.status).toBe(403);
+    expect(malformed.status).toBe(404);
+    expect(missing.error).not.toBe(malformed.error);
+  });
+});
