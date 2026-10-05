@@ -40,10 +40,45 @@ if (
   errors.push('Supabase anon and service-role keys must be different');
 }
 
+// Owner decision 8 (2026-10-06): these must exist on a production deployment, and the boot
+// must FAIL rather than run without them. Keyed on VERCEL_ENV (Vercel sets it to
+// 'production'/'preview'/'development') so CI — which has neither a Turnstile key nor an ops
+// token — is unaffected, while a real prod deploy that forgot them will not start.
+const isProductionDeploy = process.env.VERCEL_ENV === 'production';
+
+const productionRequired = [
+  // Without it /api/health answers anyone, briefing an attacker on the deployment.
+  ['HEALTH_TOKEN', 'the ops endpoints would be open to the public'],
+  // Without them signup is unprotected (Turnstile) — decision 7 turned it on.
+  ['NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'the signup widget would not render'],
+  ['TURNSTILE_SECRET', 'signup could not be verified'],
+  // Security flags: a deployment that forgets them silently runs in the wrong mode.
+  ['REQUIRE_TABLE_TOKEN', 'the table-token rollout mode would be implicit'],
+  ['ORDERS_TOKEN_TELEMETRY', 'the rollout telemetry would be implicit'],
+];
+
+if (isProductionDeploy) {
+  for (const [name, why] of productionRequired) {
+    if (!process.env[name] || !process.env[name].trim()) {
+      errors.push(`${name} is required in production — ${why}`);
+    }
+  }
+  const health = process.env.HEALTH_TOKEN?.trim();
+  if (health && !/^[0-9a-f]{64}$/i.test(health)) {
+    // Not fatal: any long random string works. A short one does not.
+    if (health.length < 32) {
+      errors.push('HEALTH_TOKEN is shorter than 32 chars — use `openssl rand -hex 32`');
+    }
+  }
+}
+
 const pairedGroups = [
   ['push notifications', ['NEXT_PUBLIC_VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY']],
   ['Telegram webhook', ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET']],
   ['Sentry source maps', ['SENTRY_ORG', 'SENTRY_PROJECT', 'SENTRY_AUTH_TOKEN']],
+  // Half a Turnstile config is worse than none: the widget renders but the server cannot
+  // verify it, so every signup would fail. Fail loudly instead.
+  ['Cloudflare Turnstile (signup)', ['NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET']],
 ];
 
 for (const [label, names] of pairedGroups) {
