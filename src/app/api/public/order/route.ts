@@ -123,19 +123,38 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Validate table belongs to project
-    const { data: table, error: tableErr } = await supabase
-      .from('tables')
-      .select('id, number, is_active, qrcode')
-      .eq('slug', tableSlug)
-      .eq('project_id', project.id)
-      .eq('is_active', true)
-      .maybeSingle();
+    // Audit T2 #1 + amendment A3: resolution goes through the SECURITY DEFINER RPC, so the
+    // 128-bit scan token is compared INSIDE the database and never enters this process's
+    // memory. Nothing here can leak the token into a log line, a Sentry event, a heap dump
+    // or an error message — there is no `select qrcode` and no local variable holding it.
+    const { data: resolved } = await supabase.rpc('resolve_table_by_token', {
+      p_project_slug: projectSlug,
+      p_table_token: tableToken,
+    });
+    const resolvedTable = resolved as { id: string; number: number } | null;
 
-    // The token must belong to THIS table of THIS project. A token from another store's
-    // table — or from another table in the same store — is a 404, not a silent pass.
-    // `tableToken === ''` is the rollout window (REQUIRE_TABLE_TOKEN unset/false): accepted
-    // and flagged, never treated as a match.
-    if (tableErr || !table || (tableToken !== '' && table.qrcode !== tableToken)) {
+    let tableId: string | null = resolvedTable?.id ?? null;
+    let tableNumber: number | null = resolvedTable?.number ?? null;
+
+    // Rollout window (REQUIRE_TABLE_TOKEN off → tableToken === ''): a tokenless order is
+    // still accepted, so identity falls back to the slug. That lookup involves no secret at
+    // all. When a token IS present the RPC above is the only path — a wrong or foreign token
+    // never reaches this fallback and 404s.
+    if (tableToken === '' && !tableId) {
+      const { data: bySlug } = await supabase
+        .from('tables')
+        .select('id, number')
+        .eq('slug', tableSlug)
+        .eq('project_id', project.id)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (bySlug) {
+        tableId = bySlug.id;
+        tableNumber = bySlug.number;
+      }
+    }
+
+    if (!tableId) {
       return NextResponse.json(
         { error: 'الطاولة غير موجودة أو رمز الطاولة غير صالح' },
         { status: 404 }
@@ -146,7 +165,7 @@ export async function POST(request: NextRequest) {
     const result = await createSecureOrder(supabase, {
       projectId: project.id,
       currency: project.currency,
-      tableId: table.id,
+      tableId,
       type: 'dinein',
       items,
       notes: body.notes,
@@ -223,7 +242,7 @@ export async function POST(request: NextRequest) {
         sendTelegramAlert(project.id, {
           orderNumber: result.order.orderNumber,
           totalText: formatMoney(result.order.totalAmount, project.currency),
-          tableNumber: table.number,
+          ...(tableNumber !== null ? { tableNumber } : {}),
         }).catch(() => {}),
       ]);
     });

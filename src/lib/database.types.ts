@@ -858,6 +858,14 @@ export type Database = {
         }
         Returns: string
       }
+      // Hand-added 2026-10-06 (audit remediation): `supabase gen types --db-url` also needs
+      // Docker, which is unavailable on this host, and the migration that created this
+      // function (20261006090000_table_scan_token.sql) post-dates the last generation.
+      // A `npm run db:types` run from a machine with Docker emits this same entry.
+      resolve_table_by_token: {
+        Args: { p_project_slug: string; p_table_token: string }
+        Returns: Json
+      }
       super_admin_archive_project: {
         Args: { p_caller_user_id?: string; p_project_id: string }
         Returns: boolean
