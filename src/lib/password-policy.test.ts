@@ -40,6 +40,25 @@ describe('validateNewPassword()', () => {
     expect(validateNewPassword('1234567890').ok).toBe(false);
   });
 
+  it('rejects an all-UPPERCASE password of sufficient length', () => {
+    expect(validateNewPassword('ABCDEFGHIJ').ok).toBe(false);
+  });
+
+  it('rejects a letters-only password with no digit', () => {
+    expect(validateNewPassword('Abcdefghij').ok).toBe(false);
+  });
+
+  it('rejects a password missing lowercase', () => {
+    expect(validateNewPassword('ABCDEFGHI1').ok).toBe(false);
+  });
+
+  it('the three classes are a CONJUNCTION — dropping any one fails', () => {
+    expect(validateNewPassword('Abcdefghi1').ok).toBe(true);
+    expect(validateNewPassword('abcdefghi1').ok).toBe(false); // no uppercase
+    expect(validateNewPassword('ABCDEFGHI1').ok).toBe(false); // no lowercase
+    expect(validateNewPassword('Abcdefghij').ok).toBe(false); // no digit
+  });
+
   it('rejects non-strings without throwing (JSON bodies can carry null/objects)', () => {
     for (const bad of [null, undefined, 12345678901, {}, ['Aa1abcdefgh']]) {
       expect(validateNewPassword(bad).ok).toBe(false);

@@ -410,3 +410,44 @@ export function RecordPaymentButton({
     </>
   );
 }
+
+/**
+ * Manual email confirmation — amendment A5 (owner decision 3).
+ *
+ * Confirmations are ON and the confirmation mail depends on SMTP, which is not wired up yet.
+ * This button is the escape hatch for a merchant who signed up but cannot sign in.
+ */
+export function ConfirmUserButton({ userId, email }: { userId: string; email: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function confirm() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/super-admin/confirm-user?userId=${encodeURIComponent(userId)}`,
+        { method: 'POST' }
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(data?.error || 'فشل تأكيد الحساب');
+        return;
+      }
+      toast.success(
+        data?.alreadyConfirmed ? 'الحساب مؤكد من قبل' : `أكّدنا ${email || 'الحساب'}`
+      );
+      router.refresh();
+    } catch {
+      toast.error('فشل تأكيد الحساب');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Button type="button" variant="secondary" size="sm" onClick={() => void confirm()} disabled={busy}>
+      {busy ? 'جاري…' : 'تأكيد الحساب'}
+    </Button>
+  );
+}

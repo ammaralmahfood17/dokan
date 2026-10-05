@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, Suspense, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { classifyAuthError } from '@/lib/auth-errors';
+import { ResendConfirmationButton } from '@/components/resend-confirmation-button';
 import { Button } from '@/components/ui/button';
 import { Eye, EyeOff } from 'lucide-react';
 
@@ -26,6 +28,8 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Only ONE error kind is actionable (amendment A5): an unconfirmed account.
+  const [canResend, setCanResend] = useState(false);
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
 
@@ -38,6 +42,7 @@ function LoginForm() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setCanResend(false);
     setLoading(true);
 
     const supabase = createClient();
@@ -48,7 +53,12 @@ function LoginForm() {
 
     if (authError || !data.user) {
       setLoading(false);
-      setError('بيانات الدخول غير صحيحة');
+      // Amendment A5 (decision 3): confirmations are ON, so "this account is not confirmed
+      // yet" is a NORMAL state that used to be reported as a wrong password — sending the
+      // merchant to hunt for a password they typed correctly.
+      const classified = classifyAuthError(authError);
+      setError(classified.message);
+      setCanResend(classified.canResend);
       return;
     }
 
@@ -140,6 +150,9 @@ function LoginForm() {
         )}
       </div>
       {error && <p className="error-text mb-3">{error}</p>}
+      {canResend && email.trim() !== '' && (
+        <ResendConfirmationButton email={email.trim()} className="mb-2 text-center" />
+      )}
       <Button type="submit" block disabled={loading || !!emailErr || !!passErr}>
         {loading ? 'جاري الدخول…' : 'دخول'}
       </Button>

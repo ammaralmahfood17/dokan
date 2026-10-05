@@ -44,7 +44,10 @@ export type SuperAdminAction =
   | 'project.hard_delete'
   | 'impersonation.start'
   | 'impersonation.end'
-  | 'audit.view';
+  | 'audit.view'
+  // Amendment A5 (owner decision 3): manually confirming an account whose confirmation mail
+  // cannot be delivered yet (SMTP pending).
+  | 'user.confirm';
 
 /** Returns the current user id if they are a super admin, else null. */
 export async function getSuperAdminUserId(): Promise<string | null> {

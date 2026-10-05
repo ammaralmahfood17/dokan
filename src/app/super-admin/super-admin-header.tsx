@@ -48,6 +48,12 @@ export function SuperAdminHeader() {
             الاشتراكات
           </Link>
           <Link
+            href="/super-admin/users"
+            className="rounded-[var(--radius-md)] px-2.5 py-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-sunken)] hover:text-[var(--color-text)]"
+          >
+            الحسابات
+          </Link>
+          <Link
             href="/super-admin/analytics"
             className="rounded-[var(--radius-md)] px-2.5 py-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-sunken)] hover:text-[var(--color-text)]"
           >

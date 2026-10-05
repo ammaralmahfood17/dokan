@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FormEvent, useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { TurnstileWidget } from '@/components/turnstile-widget';
+import { ResendConfirmationButton } from '@/components/resend-confirmation-button';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -79,6 +80,9 @@ export default function RegisterPage() {
           <Button block className="mt-4" onClick={() => router.push('/login')}>
             تسجيل الدخول
           </Button>
+          {/* Until SMTP is wired up (owner decision 3) the mail may simply never arrive; the
+              super-admin panel can confirm the account by hand. */}
+          <ResendConfirmationButton email={email.trim()} className="mt-3" />
         </div>
       </div>
     );
