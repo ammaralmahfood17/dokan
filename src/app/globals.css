@@ -157,6 +157,28 @@
 }
 
 /* ==========================================================================
+   Type tiers (2026-10-05) — the code shipped ONE 14px/1.5 baseline while
+   AGENTS.md required "Body 15–16px, lh 1.6". Two tiers, chosen by AUDIENCE:
+
+     · customer-facing + auth → 16px / 1.6 (below). 16px is the platform default
+       and Arabic needs the extra leading for its ascenders/descenders; this is
+       the surface a non-technical person reads at a glance on a phone.
+     · merchant dashboard     → keeps 14px / 1.5 "enterprise density" (base above),
+       where merchants scan dense lists and the tighter rhythm is deliberate.
+
+   Unlayered on purpose (unlayered CSS beats Tailwind layers, per the note above).
+   Applied structurally: src/app/[projectSlug]/layout.tsx wraps the customer
+   subtree, so a new customer page cannot forget it.
+   ========================================================================== */
+.storefront {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+/* Controls carry their own size classes, so lift them with the body copy or the
+   customer's buttons would read smaller than their own text. */
+.storefront .btn { font-size: 0.9375rem; }
+
+/* ==========================================================================
    Buttons — 4 styles × 3 sizes (spec §6.1)
    sm 32px / md 36px / lg 44px. Radius: sm for sm/md, md for lg.
    ========================================================================== */

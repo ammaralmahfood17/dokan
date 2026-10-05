@@ -96,7 +96,7 @@ export default function UpdatePasswordPage() {
 
   if (done) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-[var(--color-bg)] px-4 py-10">
+      <div className="storefront flex min-h-dvh items-center justify-center bg-[var(--color-bg)] px-4 py-10">
         <div className="w-full max-w-sm text-center">
           <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-[var(--color-success)]" />
           <h1 className="text-xl font-bold">تم تحديث كلمة المرور</h1>
@@ -109,7 +109,7 @@ export default function UpdatePasswordPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-[var(--color-bg)] px-4 py-10">
+    <div className="storefront flex min-h-dvh items-center justify-center bg-[var(--color-bg)] px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-base font-bold text-white">

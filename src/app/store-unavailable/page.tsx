@@ -3,7 +3,7 @@ import Link from 'next/link';
 /** Shown when a staff member's project has been archived (soft-deleted). */
 export default function StoreUnavailablePage() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-[var(--color-bg)] p-4">
+    <div className="storefront flex min-h-dvh items-center justify-center bg-[var(--color-bg)] p-4">
       <div className="w-full max-w-sm rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center">
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-danger)]/10 text-2xl">
           🚫

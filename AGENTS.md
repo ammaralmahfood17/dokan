@@ -58,7 +58,7 @@ toward caution over speed; for trivial tasks (typo fixes, one-liners) use judgme
 ### RTL & Arabic (non-negotiable)
 - Arabic-first, RTL. Use logical properties (`ms-*`/`me-*`/`start-*`/`end-*`),
   never `left-*`/`right-*`/`ml-*`/`mr-*` for directional layout.
-- Never negative `letter-spacing` on Arabic headings. Body 15–16px, lh 1.6.
+- Never negative `letter-spacing` on Arabic headings. **Two type tiers, chosen by AUDIENCE:** customer-facing surfaces (public menu, storefront root, landing, login/register/onboarding/reset, store-unavailable) read at **16px / lh 1.6** — applied via the `.storefront` class, which `src/app/[projectSlug]/layout.tsx` puts on the whole customer subtree; the **merchant dashboard** keeps **14px / lh 1.5** enterprise density. Never mix tiers within one screen.
 - Status badges: map DB enums to Arabic (pending → قيد الانتظار, preparing →
   قيد التحضير, ready → جاهز, delivered → تم التسليم, cancelled → ملغي).
 - Currency: use `Banknote` icon (never `DollarSign`); format via project's

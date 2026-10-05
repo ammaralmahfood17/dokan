@@ -114,7 +114,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-[var(--color-bg)] px-4 py-10">
+    <div className="storefront flex min-h-dvh items-center justify-center bg-[var(--color-bg)] px-4 py-10">
       <div className="w-full max-w-md">
         {/* Progress indicator */}
         <div className="mb-6">

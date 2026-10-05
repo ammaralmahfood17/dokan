@@ -52,7 +52,7 @@ const FEATURES = [
 
 export default function LandingPage() {
   return (
-    <div className="landing-shell min-h-dvh">
+    <div className="storefront landing-shell min-h-dvh">
       <header className="landing-nav sticky top-0 z-[var(--z-sticky)] border-b border-white/70">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
