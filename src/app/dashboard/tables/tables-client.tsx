@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { PullToRefresh } from '@/components/ui/pull-to-refresh';
+import { QrReprintBanner } from '@/components/dashboard/qr-reprint-banner';
 import type { Table } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -23,15 +24,37 @@ export function TablesClient({
   siteUrl,
   initialTables,
   occupiedTableIds,
+  qrReprintedAt,
 }: {
   projectId: string;
   projectSlug: string;
   siteUrl: string;
   initialTables: Table[];
   occupiedTableIds: Set<string>;
+  /** projects.qr_reprinted_at — NULL means the merchant has not dealt with the reprint yet. */
+  qrReprintedAt: string | null;
 }) {
   const router = useRouter();
   const [tables, setTables] = useState(initialTables);
+  // Owner decision 1: the reprint banner persists per project. Set on print (the real act)
+  // and on dismiss (the escape hatch), so it never comes back on another device.
+  const [reprinted, setReprinted] = useState(Boolean(qrReprintedAt));
+
+  const markReprinted = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('projects')
+      .update({ qr_reprinted_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .select('id');
+    if (error || !data?.length) {
+      // RLS on projects is owner-only; a manager's update matches zero rows. Say so instead
+      // of pretending the reminder was acknowledged.
+      toast.error('ما قدرنا نحفظ — اطلب من صاحب المتجر يفتح هذي الصفحة');
+      return;
+    }
+    setReprinted(true);
+  }, [projectId]);
   const [showTable, setShowTable] = useState(false);
   const [qrPreview, setQrPreview] = useState<{
     url: string;
@@ -127,6 +150,9 @@ export function TablesClient({
   }
 
   async function printAllQrs() {
+    // Printing IS the act the banner asks for — record it before the dialog even opens, so a
+    // cancelled print dialog still counts as "dealt with" (the merchant has the sheet).
+    void markReprinted();
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       toast.error('الرجاء السماح للنوافذ المنبثقة (popups)');
@@ -235,6 +261,8 @@ export function TablesClient({
           </Button>
         </div>
       </div>
+
+      {!reprinted && <QrReprintBanner onDismiss={() => void markReprinted()} />}
 
       {/* D2: رابط المتجر — يشاركه التاجر مع زبائنه (يفتح صفحة المتجر العامة) */}
       <section className="mb-6">

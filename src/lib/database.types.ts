@@ -405,6 +405,8 @@ export type Database = {
           logo_url: string | null
           name: string
           primary_color: string
+          // Hand-added 2026-10-06 with 20261006094000_qr_reprint_flag.sql (gen types needs Docker).
+          qr_reprinted_at: string | null
           slug: string
           subscription_expires_at: string
         }
@@ -418,6 +420,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           primary_color?: string
+          qr_reprinted_at?: string | null
           slug: string
           subscription_expires_at?: string
         }
@@ -431,6 +434,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           primary_color?: string
+          qr_reprinted_at?: string | null
           slug?: string
           subscription_expires_at?: string
         }

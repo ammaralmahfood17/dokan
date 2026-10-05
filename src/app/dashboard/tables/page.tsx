@@ -36,6 +36,7 @@ export default async function TablesPage() {
       siteUrl={siteUrl}
       initialTables={(tables ?? []) as Table[]}
       occupiedTableIds={occupiedTableIds}
+      qrReprintedAt={ctx.project.qr_reprinted_at ?? null}
     />
   );
 }

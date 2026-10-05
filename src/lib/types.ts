@@ -30,6 +30,8 @@ export interface Project {
   subscription_expires_at: string | null;
   deleted_at: string | null;
   created_at: string;
+  /** When the merchant reprinted the table QR sheets (owner decision 1). NULL = pending. */
+  qr_reprinted_at: string | null;
 }
 
 export interface Table {
