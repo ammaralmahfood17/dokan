@@ -78,10 +78,13 @@ export async function generateMetadata({
 
 export default async function PublicMenuPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectSlug: string; tableSlug: string }>;
+  searchParams: Promise<{ k?: string }>;
 }) {
   const { projectSlug, tableSlug } = await params;
+  const { k } = await searchParams;
   // anon client (no user cookies) → RLS anon role → public menu data,
   // so signed-in users see other restaurants' menus too
   const supabase = createAnonClient();
@@ -99,6 +102,22 @@ export default async function PublicMenuPage({
     .maybeSingle();
 
   if (!table) notFound();
+
+  // Audit 2026-10-05 (T2 #1): ordering requires the table's scan token. `anon` cannot read
+  // tables.qrcode (column-level REVOKE), so the check goes through the SECURITY DEFINER
+  // resolver — which returns nothing unless slug AND token match the same live table.
+  const tableToken = typeof k === 'string' ? k : '';
+  const { data: resolved } = await supabase.rpc('resolve_table_by_token', {
+    p_project_slug: projectSlug,
+    p_table_token: tableToken,
+  });
+  const tokenResolved = Boolean(resolved);
+
+  // The UI must gate exactly when the server enforces, never earlier: while the rollout
+  // window is open (REQUIRE_TABLE_TOKEN unset/false) already-printed QR sheets still work,
+  // and every tokenless order is recorded so the flip can be justified with data.
+  const orderingEnabled =
+    tokenResolved || process.env.REQUIRE_TABLE_TOKEN !== 'true';
 
   // M5: cached + project-tagged — see getMenuData above.
   const { categories, products } = await getMenuData(project.id, table.id);
@@ -123,6 +142,8 @@ export default async function PublicMenuPage({
       <MenuClient
         project={project as Project}
         table={table as Table}
+        tableToken={tableToken}
+        orderingEnabled={orderingEnabled}
         categories={categories}
         products={products}
       />

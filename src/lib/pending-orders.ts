@@ -5,6 +5,8 @@ const DB_VERSION = 1;
 export type PendingOrderPayload = {
   projectSlug: string;
   tableSlug: string;
+  /** Table scan token (audit T2 #1) — the replayed payload must prove the scanned table. */
+  tableToken: string;
   clientRequestId: string;
   notes?: string;
   items: Array<{

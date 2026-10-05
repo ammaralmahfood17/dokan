@@ -97,7 +97,9 @@ export function TablesClient({
   }
 
   async function showQr(table: Table) {
-    const path = menuPath(projectSlug, table.slug);
+    // Audit T2 #1: the printed QR must carry the scan token, otherwise ordering by
+    // slug alone is what let anyone inject orders into this store.
+    const path = menuPath(projectSlug, table.slug, table.qrcode);
     const url = `${siteUrl}${path}`;
     try {
       // Lazy-load qrcode lib — keeps the tables page chunk small
@@ -131,7 +133,7 @@ export function TablesClient({
       return;
     }
     const qrPromises = tables.map(async (t) => {
-      const path = menuPath(projectSlug, t.slug);
+      const path = menuPath(projectSlug, t.slug, t.qrcode);
       const url = `${siteUrl}${path}`;
       try {
         // Lazy-load qrcode lib (shared chunk with showQr)
@@ -265,7 +267,9 @@ export function TablesClient({
         ) : (
           <div className="space-y-2">
             {tables.map((t) => {
-              const path = menuPath(projectSlug, t.slug);
+              // Audit T2 #1: the copyable link must carry the scan token too, otherwise the
+              // merchant copies a link that cannot complete an order once enforcement is on.
+              const path = menuPath(projectSlug, t.slug, t.qrcode);
               const url = `${siteUrl}${path}`;
               return (
                 <div

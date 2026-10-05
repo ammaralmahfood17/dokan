@@ -123,9 +123,14 @@ export function formatMoney(value: number, currency = 'BHD'): string {
   return `${formatted} ${currency}`;
 }
 
-/** Build public menu URL path */
-export function menuPath(projectSlug: string, tableSlug: string): string {
-  return `/${projectSlug}/menu/${tableSlug}`;
+/**
+ * Public menu URL. `tableToken` is the table's 128-bit scan token (tables.qrcode) and is
+ * what the printed QR encodes — it is REQUIRED for ordering (audit 2026-10-05, T2 #1).
+ * Omitting it yields a browse-only link, which the storefront's table picker still uses.
+ */
+export function menuPath(projectSlug: string, tableSlug: string, tableToken?: string): string {
+  const path = `/${projectSlug}/menu/${tableSlug}`;
+  return tableToken ? `${path}?k=${encodeURIComponent(tableToken)}` : path;
 }
 
 /** Default table slug from table number */

@@ -11,6 +11,7 @@ import { Sheet } from '@/components/menu/sheet';
 export function CartSheet({
   open,
   lines,
+  orderingEnabled = true,
   currency,
   orderNotes,
   onOrderNotesChange,
@@ -22,6 +23,12 @@ export function CartSheet({
   onClose,
 }: {
   open: boolean;
+  /**
+   * False when the customer's URL carries no valid table scan token and the server is
+   * enforcing it (audit T2 #1). Browsing the cart stays allowed; only checkout is gated,
+   * and the gate explains what to do instead of showing a dead button.
+   */
+  orderingEnabled?: boolean;
   lines: CartLine[];
   currency: string;
   orderNotes: string;
@@ -99,22 +106,34 @@ export function CartSheet({
         <span className="text-base font-bold tabular-nums" dir="ltr">{formatMoney(total, currency)}</span>
       </div>
 
-      <Button
-        block
-        disabled={submitting || !lines.length}
-        onClick={onPlaceOrder}
-        style={{ background: 'var(--color-primary)' }}
-        className="min-h-[48px]"
-      >
-        {submitting ? (
-          <span className="flex items-center gap-2">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent motion-reduce:hidden" />
-            جاري الإرسال…
-          </span>
-        ) : (
-          'تأكيد الطلب'
-        )}
-      </Button>
+      {orderingEnabled ? (
+        <Button
+          block
+          disabled={submitting || !lines.length}
+          onClick={onPlaceOrder}
+          style={{ background: 'var(--color-primary)' }}
+          className="min-h-[48px]"
+        >
+          {submitting ? (
+            <span className="flex items-center gap-2">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent motion-reduce:hidden" />
+              جاري الإرسال…
+            </span>
+          ) : (
+            'تأكيد الطلب'
+          )}
+        </Button>
+      ) : (
+        /* Audit T2 #1: ordering requires the table's scan token. The customer reached this
+           menu without scanning (or with a stale link), so tell them exactly what to do
+           rather than failing at the server with a 403. */
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 text-center">
+          <p className="text-[14px] font-bold">امسح رمز QR الموجود على طاولتك</p>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-text-secondary)]">
+            تقدر تتصفّح القائمة وتجهّز سلتك الآن — ولإتمام الطلب امسح الرمز الموجود على طاولتك.
+          </p>
+        </div>
+      )}
 
       {/* D10: retry — persistent error with a one-tap retry button */}
       {orderError && (

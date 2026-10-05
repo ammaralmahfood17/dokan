@@ -186,6 +186,9 @@ describe('isReservedSlug()', () => {
 describe('menuPath() / tableSlugFromNumber()', () => {
   it('builds the public menu path', () => {
     expect(menuPath('starbucks', 'table-4')).toBe('/starbucks/menu/table-4');
+    // The QR encodes the scan token; without it the link is browse-only.
+    expect(menuPath('starbucks', 'table-4', 'a1b2')).toBe('/starbucks/menu/table-4?k=a1b2');
+    expect(menuPath('s', 't', 'a&b=c')).toBe('/s/menu/t?k=a%26b%3Dc');
   });
 
   it('derives a table slug from its number', () => {

@@ -52,11 +52,22 @@ const QUICK_NOTE_CHIPS = ['بدون سكر', 'بدون ثلج', 'ثلج على �
 export function MenuClient({
   project,
   table,
+  tableToken,
+  orderingEnabled,
   categories,
   products,
 }: {
   project: Project;
   table: Table;
+  /** Table scan token from the QR URL (?k=…) — empty on a link that carries none. */
+  tableToken: string;
+  /**
+   * Server-computed (audit T2 #1): true while ordering is allowed — either the URL's token
+   * resolved to this table, or the server is still in the rollout window
+   * (REQUIRE_TABLE_TOKEN unset). The client never reads the flag itself, so the UI and the
+   * server enforcement can never disagree.
+   */
+  orderingEnabled: boolean;
   categories: Category[];
   products: ProductWithAddons[];
 }) {
@@ -351,6 +362,7 @@ export function MenuClient({
         body: JSON.stringify({
           projectSlug: project.slug,
           tableSlug: table.slug,
+          tableToken,
           clientRequestId: idempotencyKey,
           notes: orderNotes.trim() || undefined,
           items: cart.map((l) => ({
@@ -403,6 +415,9 @@ export function MenuClient({
         const payload: PendingOrderPayload = {
           projectSlug: project.slug,
           tableSlug: table.slug,
+          // The queued payload is replayed verbatim by the service worker, so the token
+          // has to travel with it — otherwise the replay would be rejected on enforcement.
+          tableToken,
           // SAME key as the attempt that just failed. The service worker
           // replays this payload verbatim, so the server recognises it as a
           // retry of one checkout and returns the original order if the
@@ -442,6 +457,7 @@ export function MenuClient({
         body: JSON.stringify({
           projectSlug: project.slug,
           tableSlug: table.slug,
+          tableToken,
         }),
       });
       if (!res.ok) {
@@ -740,7 +756,7 @@ export function MenuClient({
                   {formatMoney(total, currency)}
                 </span>
                 <span className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-2.5 text-[13px] font-bold text-white">
-                  إتمام الطلب
+                  {orderingEnabled ? 'إتمام الطلب' : 'مسح الرمز'}
                 </span>
               </span>
             </button>
@@ -838,6 +854,7 @@ export function MenuClient({
       {cartOpen && (
         <CartSheet
           open={cartOpen}
+          orderingEnabled={orderingEnabled}
           lines={cart}
           currency={currency}
           orderNotes={orderNotes}
