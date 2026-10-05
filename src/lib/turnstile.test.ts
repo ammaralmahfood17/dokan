@@ -90,9 +90,25 @@ describe('configured Turnstile', () => {
     });
   });
 
-  it('treats a non-2xx siteverify response as a refusal, never a pass', async () => {
+  it('reads a 400 body: invalid-input-secret is a MISCONFIGURATION, not an outage', async () => {
+    // Verified against the live endpoint: a wrong secret returns HTTP 400 with
+    // {"success":false,"error-codes":["invalid-input-secret"]}. Reporting that as
+    // "unreachable" would send an operator hunting a network problem that does not exist.
+    vi.stubEnv('TURNSTILE_SECRET', 'wrong');
+    const fetchSpy = vi.fn(() =>
+      jsonResponse({ success: false, 'error-codes': ['invalid-input-secret'] }, 400)
+    );
+    expect(await verifyTurnstile(TOKEN, null, fetchSpy as unknown as typeof fetch)).toEqual({
+      ok: false,
+      reason: 'misconfigured',
+    });
+  });
+
+  it('treats an unreadable/non-2xx body as a refusal, never a pass', async () => {
     vi.stubEnv('TURNSTILE_SECRET', 'secret');
-    const fetchSpy = vi.fn(() => jsonResponse({}, 500));
+    const fetchSpy = vi.fn(() =>
+      Promise.resolve(new Response('<html>502 Bad Gateway</html>', { status: 502 }))
+    );
     expect(await verifyTurnstile(TOKEN, null, fetchSpy as unknown as typeof fetch)).toEqual({
       ok: false,
       reason: 'unreachable',
@@ -118,7 +134,13 @@ describe('configured Turnstile', () => {
 
 describe('turnstileErrorMessage()', () => {
   it('has Arabic copy for every refusal reason, with no Latin text', () => {
-    for (const reason of ['not-configured', 'missing-token', 'rejected', 'unreachable'] as const) {
+    for (const reason of [
+      'not-configured',
+      'misconfigured',
+      'missing-token',
+      'rejected',
+      'unreachable',
+    ] as const) {
       const msg = turnstileErrorMessage(reason);
       expect(msg.length).toBeGreaterThan(0);
       expect(msg).not.toMatch(/[A-Za-z]/);

@@ -29,7 +29,13 @@ export function turnstileConfigured(): boolean {
 
 export type TurnstileResult =
   | { ok: true; skipped: boolean }
-  | { ok: false; reason: 'not-configured' | 'missing-token' | 'rejected' | 'unreachable' };
+  | {
+      ok: false;
+      reason: 'not-configured' | 'missing-token' | 'rejected' | 'unreachable' | 'misconfigured';
+    };
+
+/** Every refusal reason, in one place so the message map cannot drift from the union. */
+export type TurnstileFailureReason = Extract<TurnstileResult, { ok: false }>['reason'];
 
 /**
  * Verify a Turnstile token. `fetchImpl` is injectable so the tests never touch the network.
@@ -62,16 +68,32 @@ export async function verifyTurnstile(
       // A hung Cloudflare must not hold a signup request open indefinitely.
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) {
-      Sentry.captureMessage(`turnstile: siteverify returned ${res.status}`, 'warning');
+    // The BODY is authoritative, not the status: Cloudflare answers 400 with
+    // {"success":false,"error-codes":["invalid-input-secret"]} when TURNSTILE_SECRET is wrong.
+    // Classifying on the status alone reported a misconfiguration as a network outage — an
+    // ops-time confusion with no security benefit (both fail closed).
+    let data: { success?: boolean; 'error-codes'?: string[] } | null = null;
+    try {
+      data = (await res.json()) as { success?: boolean; 'error-codes'?: string[] };
+    } catch {
+      data = null;
+    }
+    if (!data || typeof data !== 'object') {
+      Sentry.captureMessage(`turnstile: unreadable siteverify body (HTTP ${res.status})`, 'warning');
       return { ok: false, reason: 'unreachable' };
     }
-    const data = (await res.json()) as { success?: boolean; 'error-codes'?: string[] };
     if (data.success === true) return { ok: true, skipped: false };
-    Sentry.captureMessage(
-      `turnstile: rejected (${(data['error-codes'] ?? []).join(',') || 'no codes'})`,
-      'info'
-    );
+
+    const codes = data['error-codes'] ?? [];
+    if (codes.includes('invalid-input-secret')) {
+      // Loud, because in production this refuses EVERY signup until the secret is fixed.
+      Sentry.captureMessage(
+        'turnstile: TURNSTILE_SECRET is invalid — signup is refusing all attempts',
+        'error'
+      );
+      return { ok: false, reason: 'misconfigured' };
+    }
+    Sentry.captureMessage(`turnstile: rejected (${codes.join(',') || 'no codes'})`, 'info');
     return { ok: false, reason: 'rejected' };
   } catch {
     // Network failure / timeout: fail closed, but leave a trace — a Cloudflare outage
@@ -82,10 +104,12 @@ export async function verifyTurnstile(
 }
 
 /** The Arabic message a merchant sees for each refusal reason. */
-export function turnstileErrorMessage(reason: 'not-configured' | 'missing-token' | 'rejected' | 'unreachable'): string {
+export function turnstileErrorMessage(reason: TurnstileFailureReason): string {
   switch (reason) {
     case 'not-configured':
       return 'التحقق الأمني غير مهيّأ على هذا الخادم. تواصل مع الدعم.';
+    case 'misconfigured':
+      return 'إعدادات التحقق الأمني غير صحيحة على هذا الخادم. تواصل مع الدعم.';
     case 'missing-token':
       return 'أكمل التحقق الأمني أولاً.';
     case 'rejected':
