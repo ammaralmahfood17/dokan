@@ -6,6 +6,7 @@
  * Sentry — a leaked event would be a live Supabase session.
  */
 import * as Sentry from '@sentry/nextjs';
+import { scrubSentryBreadcrumb, scrubSentryEvent } from '@/lib/sentry-scrub';
 
 const dsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -23,7 +24,13 @@ if (dsn) {
         delete event.request.headers['apikey'];
       }
       if (event.user) delete event.user.ip_address;
-      return event;
+      // A2: the table scan token travels in ?k= on the customer menu URL, and a request URL
+      // is exactly what a server/edge event carries. Scrub before it leaves the process.
+      return scrubSentryEvent(event);
+    },
+    // A2: breadcrumbs are the other surface (fetch/xhr breadcrumbs hold data.url).
+    beforeBreadcrumb(breadcrumb) {
+      return scrubSentryBreadcrumb(breadcrumb);
     },
   });
 }

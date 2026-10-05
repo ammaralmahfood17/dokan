@@ -23,6 +23,7 @@
  * policy stays identical (sendDefaultPii off, ip_address stripped).
  */
 import * as Sentry from '@sentry/nextjs';
+import { scrubSentryBreadcrumb, scrubSentryEvent } from '@/lib/sentry-scrub';
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
 
@@ -43,7 +44,14 @@ if (clientDsn) {
       // Browser events have no `request` object (that's server/edge); the only
       // PII that can appear here is user.ip_address via the Replay integration.
       if (event.user) delete event.user.ip_address;
-      return event;
+      // A2: in the browser the token shows up in the event's own URL, in the transaction
+      // name (the route path) and in fetch breadcrumbs — this is the runtime where a
+      // customer's menu URL is most likely to be reported.
+      return scrubSentryEvent(event);
+    },
+    // A2: every fetch to /api/public/order carries ?k=… in the breadcrumb trail.
+    beforeBreadcrumb(breadcrumb) {
+      return scrubSentryBreadcrumb(breadcrumb);
     },
   });
 }

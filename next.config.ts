@@ -118,6 +118,14 @@ const nextConfig: NextConfig = {
         has: [{ type: 'host', value: '(?<host>.+)\\.vercel\\.app' }],
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
       },
+      // A2: the customer menu URL carries the table's scan token in `?k=`. A Referer header
+      // would hand that credential to every third party the page later talks to (a font CDN,
+      // an outbound link the customer taps). The whole customer-facing subtree therefore
+      // opts out of referrers. Declared LAST so it overrides the global policy above.
+      {
+        source: '/:projectSlug/menu/:path*',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
     ];
   },
 };
