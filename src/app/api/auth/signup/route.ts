@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/ip';
 import { validateNewPassword } from '@/lib/password-policy';
+import { createAnonClient } from '@/lib/supabase/anon';
+import { turnstileErrorMessage, verifyTurnstile } from '@/lib/turnstile';
 
 /**
  * Server-side signup endpoint.
@@ -32,7 +34,7 @@ export async function POST(request: Request) {
     if (body === null || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
     }
-    const { email, password, fullName } = body;
+    const { email, password, fullName, turnstileToken } = body;
 
     if (!email || !password) {
       return NextResponse.json({ 
@@ -54,6 +56,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'بريد إلكتروني غير صالح' }, { status: 400 });
     }
 
+    const ip = getClientIp(request);
+
+    // Owner decisions 7 + 8: the CAPTCHA is verified BEFORE the rate limits, so a bot farm
+    // cannot spend a real merchant's per-IP budget. An unconfigured Turnstile in production
+    // is a REFUSAL (503), never a bypass — the boot-time validator refuses to start such a
+    // deployment too, so a missing secret cannot go unnoticed.
+    const turnstile = await verifyTurnstile(turnstileToken, ip);
+    if (!turnstile.ok) {
+      return NextResponse.json(
+        { error: turnstileErrorMessage(turnstile.reason) },
+        { status: turnstile.reason === 'not-configured' ? 503 : 400 }
+      );
+    }
+
     // Rate limit: 3 signups per email per minute
     const rateKey = `signup:${email.trim().toLowerCase()}`;
     const limitResult = await rateLimit(rateKey, { limit: 3, windowMs: 60 * 1000, keyPrefix: 'auth-signup' });
@@ -64,7 +80,6 @@ export async function POST(request: Request) {
 
     // IP cap too — mass account creation across many emails from one IP
     // (spam / email bombing) bypasses the per-email limit entirely.
-    const ip = getClientIp(request);
     const ipLimit = await rateLimit(`signup-ip:${ip}`, {
       limit: 10,
       windowMs: 60 * 60 * 1000,
@@ -81,7 +96,9 @@ export async function POST(request: Request) {
     const { data: createData, error: createError } = await admin.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password: String(password),
-      email_confirm: true, // confirmation is disabled in this project
+      email_confirm: false,
+      // Owner decision 7: confirmations are ON, so the account starts UNCONFIRMED and the
+      // merchant proves the inbox before it can be used.
       user_metadata: {
         full_name: fullName.trim(),
         from_api: 'true',       // safety trigger skips users from the main API
@@ -105,13 +122,26 @@ export async function POST(request: Request) {
       }, { status: 500 });
     }
 
+    // admin.createUser does NOT send mail, so the confirmation is triggered explicitly with
+    // the anon client (the endpoint GoTrue exposes for exactly this). If it fails, the account
+    // exists but is unreachable — report that honestly instead of a cheerful "check your inbox".
+    const { error: sendError } = await createAnonClient().auth.resend({
+      type: 'signup',
+      email: email.trim().toLowerCase(),
+    });
+    if (sendError) Sentry.captureException(sendError);
+
     return NextResponse.json({
       success: true,
+      needsConfirmation: true,
+      emailSent: !sendError,
       user: {
         id: userId,
         email: createData.user?.email,
       },
-      message: 'تم إنشاء الحساب بنجاح',
+      message: sendError
+        ? 'تم إنشاء الحساب، لكن تعذّر إرسال رسالة التأكيد. جرّب تسجيل الدخول ثم «نسيت كلمة المرور».'
+        : 'تم إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيده ثم سجّل الدخول.',
     });
   } catch (err: unknown) {
     console.error(

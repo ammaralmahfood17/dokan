@@ -230,12 +230,13 @@ enable_signup = true
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
 #
-# ACCEPTED RISK — owner decision 2026-10-06 (audit T2 #2): email confirmation and CAPTCHA
-# are deliberately OFF, to keep merchant signup frictionless (they are often onboarded at
-# the counter). Residual exposure: account/email squatting and free-trial farming bounded
-# only by the app's own limits (3/min per email, 10/h per IP in /api/auth/signup) plus IP
-# rotation. Re-open this finding only with a product decision that changes signup UX.
-enable_confirmations = false
+# SUPERSEDED — owner decisions 7/8 (2026-10-06 audit remediation). The earlier "no email
+# confirmation, no CAPTCHA" accepted risk is REVERSED: confirmation is ON and signup is gated
+# by Cloudflare Turnstile (src/lib/turnstile.ts + src/components/turnstile-widget.tsx), so
+# squatting and free-trial farming need a working inbox and a solved challenge. The HOSTED
+# project's Auth settings govern production; the owner verifies them there and records the
+# screenshot in docs/audit-2026-10/OPS-VERIFICATION.md.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.

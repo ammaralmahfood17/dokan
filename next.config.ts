@@ -36,7 +36,8 @@ const securityHeaders = [
       // (deferred: a nonce makes previously-static pages uncacheable, which costs the
       // landing page's LCP). 'unsafe-eval' is only needed by the DEV bundler's eval
       // sourcemaps, so production does not ship it any more.
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://*.sentry.io`,
+      // challenges.cloudflare.com serves the Turnstile widget script (owner decision 7).
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://*.sentry.io https://challenges.cloudflare.com`,
       // next/font self-hosts Cairo — the old fonts.googleapis.com allowance was dead.
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' blob: data: https://*.supabase.co",
@@ -47,7 +48,7 @@ const securityHeaders = [
       // refused by our own policy (server events were unaffected, which is why the
       // health check's browserMonitoring flag looked fine). "*.sentry.io" covers all
       // regions.
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://challenges.cloudflare.com",
       // No third-party font origin: fonts.gstatic.com was dead too.
       "font-src 'self'",
       // Coverage the policy never declared: these fell back to default-src, which
@@ -56,7 +57,10 @@ const securityHeaders = [
       "object-src 'none'",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
-      "frame-src 'none'",
+      // Turnstile renders an iframe on this origin. Narrowest allowance that still works —
+      // 'none' silently broke the widget (the challenge never appeared, and the server then
+      // refused signup for a missing token).
+      "frame-src https://challenges.cloudflare.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { FormEvent, useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { TurnstileWidget } from '@/components/turnstile-widget';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -13,7 +13,13 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Owner decisions 7 + 8: confirmations are ON, so a successful signup means "go confirm
+  // your email", not "you are logged in".
+  const [sent, setSent] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
+
+  const handleTurnstileExpire = useCallback(() => setTurnstileToken(''), []);
 
   const emailErr = touched.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? 'الإيميل غير صحيح' : null;
   // UX only — the authoritative check is the signup API (src/lib/password-policy.ts, whose
@@ -26,8 +32,6 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
 
-    const supabase = createClient();
-
     try {
       const apiRes = await fetch('/api/auth/signup', {
         method: 'POST',
@@ -36,6 +40,7 @@ export default function RegisterPage() {
           email: email.trim(),
           password,
           fullName: fullName.trim(),
+          turnstileToken,
         }),
       });
 
@@ -48,26 +53,35 @@ export default function RegisterPage() {
         return;
       }
 
-      // Server created the user. Now sign in client-side to get session
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
+      // Owner decision 7: with confirmations ON there is no session to create here — the
+      // merchant confirms by email first. Pushing to /onboarding would bounce them straight
+      // back to /login, which is exactly the confusing dead end this replaces.
       setLoading(false);
-
-      if (signInErr) {
-        setError('تم إنشاء الحساب بنجاح، لكن فشل تسجيل الدخول التلقائي. جرب تسجيل الدخول يدوياً.');
-        router.push('/login');
-        return;
-      }
-
-      router.push('/onboarding');
-      router.refresh();
+      setSent(true);
     } catch {
       setError('حدث خطأ غير متوقع أثناء إنشاء الحساب.');
       setLoading(false);
     }
+  }
+
+  if (sent) {
+    return (
+      <div className="storefront flex min-h-dvh items-center justify-center bg-[var(--color-bg)] px-4 py-10">
+        <div className="card card-body w-full max-w-sm text-center">
+          <h1 className="text-xl font-bold">تأكيد البريد الإلكتروني</h1>
+          <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+            أرسلنا رابط تأكيد إلى{' '}
+            <span dir="ltr" className="font-semibold text-[var(--color-text)]">
+              {email.trim()}
+            </span>
+            . افتح الرابط لتأكيد حسابك، بعدها سجّل الدخول وابدأ بإعداد متجرك.
+          </p>
+          <Button block className="mt-4" onClick={() => router.push('/login')}>
+            تسجيل الدخول
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -140,8 +154,11 @@ export default function RegisterPage() {
               aria-describedby={passErr ? 'password-error' : 'password-hint'}
             />
             {passErr && <p id="password-error" className="error-text" role="alert">{passErr}</p>}
-            {!passErr && <p id="password-hint" className="hint">6 أحرف على الأقل</p>}
+            {!passErr && <p id="password-hint" className="hint">10 أحرف على الأقل</p>}
           </div>
+          {/* Renders only when NEXT_PUBLIC_TURNSTILE_SITE_KEY is set; the server makes the
+              same decision on its own (src/lib/turnstile.ts). */}
+          <TurnstileWidget onToken={setTurnstileToken} onExpire={handleTurnstileExpire} />
           {error && <p className="error-text mb-3">{error}</p>}
           <Button type="submit" block disabled={loading || !!emailErr || !!passErr}>
             {loading ? 'جاري الإنشاء…' : 'إنشاء الحساب'}
