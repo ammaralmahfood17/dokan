@@ -78,6 +78,13 @@ is why the fix was scoped to the unauthenticated set. Same one-line shape when i
 run 37385404716 was the first head, the pushed W1 head is the one recorded here.
 Permanent fix in OPS-VERIFICATION §1.
 
+## Declined / deferred by owner (recorded so they are not re-raised)
+
+| Item | Decision | Date | Consequence (accepted) |
+|---|---|---|---|
+| **Table-token rotation** (a “regenerate QR” action so a leaked photographed token can be revoked) | **DECLINED** — not to be added to the plan | 2026-10-06 | `tables.qrcode` never changes after creation, so a printed/pictured QR stays valid indefinitely and revoking one requires regenerating the token for that table plus a reprint by hand (no UI for it). Offset by: a valid token is now REQUIRED, the tokenless window is budgeted at 10/min + 60/h per project, and every tokenless acceptance is flagged. |
+| **Branches cleanup** (drop the unused `tables.branch_id` + `idx_tables_branch`, and fix the README's “Branches + tables” claim) | **DECLINED** | 2026-10-06 | The dead column and the stale README line stay. Note for whoever reads the schema next: `tables.branch_id` is written by NOTHING in the app and there is no `branches` table in production. |
+
 ## Waves 2–6 — not started
 
 | Wave | Findings | Status |
