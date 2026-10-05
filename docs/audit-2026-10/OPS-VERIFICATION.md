@@ -188,3 +188,43 @@ and no mail arrives, the SMTP configuration (above) is the problem - not this ro
 | A6 guardrail | the new guard tests were run **RED** against the previous guard (9 failures) → GREEN 24/24 |
 | A5 unconfirmed login | 10 unit tests: only ONE error kind offers a resend; unknown errors never surface a raw provider string |
 | A5 signup contract | 19 route-level tests (DB + network mocked): payload shape, fullName TYPE and 2..80 length, password classes, Turnstile refusal creating nothing, account created with `email_confirm:false` |
+
+---
+
+## 7. Realtime isolation probe (audit T2 #5, amendment A7)
+
+The dashboard (`live-refresh.tsx`) and the kitchen board (`use-kitchen-orders.ts`) subscribe to
+`orders` with **no project filter** — a filter combined with RLS made Realtime drop every event,
+so the filter was removed and the entire cross-tenant guarantee now rests on the assumption
+"Supabase Realtime honours RLS for `postgres_changes`". That assumption had never been tested.
+
+`scripts/realtime-probe.ts` tests it. It creates its **own throwaway tenants** (two projects +
+one confirmed user, membership in one of them), mirrors the app's subscription exactly, and
+deletes every fixture afterwards. Your live stores are never touched.
+
+```bash
+cd ~/dokan-v3
+node scripts/realtime-probe.ts --dry-run        # prints the plan, creates nothing
+node scripts/realtime-probe.ts                  # production (keys from .env.local)
+node scripts/realtime-probe.ts --url http://127.0.0.1:54321 \
+  --anon-key <local anon key> --service-key <local service_role key>   # local Supabase stack
+```
+
+Exit codes: `0` isolation proven · `1` **LEAK — stop** · `2` bad args/env, or fixtures survived
+cleanup · `3` INCONCLUSIVE (the own-tenant event never arrived, so the absence of a foreign
+event proves nothing — check Realtime before trusting anything).
+
+Record the run here:
+
+```
+date: __________  target: ______________________  exit: ____
+own-tenant order arrives        [ ]
+foreign-tenant order absent     [ ]
+anonymous client receives none  [ ]
+cleanup: probe projects=0  staff=0  probe orders=0
+```
+
+**If it returns 1 (a leak):** do NOT ship the runtime alarm. Add
+`filter: 'project_id=eq.<id>'` to both subscriptions and re-run the probe; if the filter also
+suppresses the own-tenant event (the reason it was removed the first time), the correct fix is a
+Realtime **private** channel with `realtime.messages` RLS — not `postgres_changes`.
