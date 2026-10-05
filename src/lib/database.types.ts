@@ -114,6 +114,35 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_events: {
+        Row: {
+          created_at: string
+          id: number
+          project_id: string
+          step: string
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          project_id: string
+          step: string
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          project_id?: string
+          step?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_audit_logs: {
         Row: {
           actor_user_id: string | null

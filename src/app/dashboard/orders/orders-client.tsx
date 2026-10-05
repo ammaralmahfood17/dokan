@@ -36,21 +36,42 @@ type OrderRow = Order & {
   order_items?: OrderItem[];
 };
 
-/** YYYY-MM-DD بالتوقيت المحلي للمتصفح */
+/**
+ * يوم البحرين (UTC+3) — نفس حد اليوم المستخدم في السيرفر (`orders/page.tsx`)، وفي
+ * تجميع التحليلات، وفي العدّاد اليومي لأرقام الطلبات (migration 0017).
+ *
+ * كان هذا يستخرج سنة/شهر/يوم **الجهاز**: السيرفر يشتغل بـUTC والمتصفح بمنطقة التاجر،
+ * فنفس اللحظة تعطي يومين مختلفين → عدم تطابق hydration (React #418) ويوم خاطئ للتاجر
+ * خارج +03 (طلبات 21:00–24:00 UTC أي 00:00–03:00 بتوقيت البحرين تظهر في اليوم السابق).
+ * البحرين بلا توقيت صيفي، فالإزاحة +3 ساعات ثابتة.
+ */
+const BAHRAIN_TZ = 'Asia/Bahrain';
+
+const dateKeyFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: BAHRAIN_TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** YYYY-MM-DD بيوم البحرين — نفس الناتج على السيرفر والمتصفح (en-CA يعطي هذا الشكل). */
 function toDateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return dateKeyFmt.format(d);
 }
 
-/** نطاق [بداية اليوم المختار, بداية اليوم التالي) */
+/** إزاحة أيام على مفتاح اليوم نفسه (لا على منطقة الجهاز). */
+function shiftDateKey(key: string, offsetDays: number): string {
+  const d = new Date(`${key}T00:00:00+03:00`);
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return toDateKey(d);
+}
+
+/** نطاق [بداية اليوم المختار بتوقيت البحرين, بداية اليوم التالي) */
 function dayRange(dateKey: string): { start: Date; end: Date } {
-  const [y, m, d] = dateKey.split('-').map(Number);
-  const start = new Date(y, m - 1, d);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+  // منتصف ليل البحرين = 21:00 UTC لليوم السابق — نثبّته صراحةً بدل ما نستخدم
+  // منتصف ليل الجهاز، وإلا اختلفت حدود الاستعلام عن اليوم المعروض.
+  const start = new Date(`${dateKey}T00:00:00+03:00`);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   return { start, end };
 }
 
@@ -237,9 +258,9 @@ export function OrdersClient({
   // اليوم / أمس — إزاحة من اليوم الحالي
   const selectDayOffset = useCallback(
     (offsetDays: number) => {
-      const d = new Date();
-      d.setDate(d.getDate() + offsetDays);
-      const key = toDateKey(d);
+      // إزاحة على مفتاح يوم البحرين نفسه، لا على تاريخ الجهاز: `new Date()` +
+      // setDate يحسب على يوم المتصفح، فجهاز خارج +03 يعطي مفتاحًا مزحزحًا.
+      const key = shiftDateKey(toDateKey(new Date()), offsetDays);
       setDateKey(key);
       void refresh(key);
     },
@@ -501,7 +522,7 @@ export function OrdersClient({
                     {order.tables
                       ? `طاولة ${order.tables.number}`
                       : 'بدون طاولة'}{' '}
-                    · {new Date(order.created_at).toLocaleString('ar-BH-u-nu-latn')}
+                    · {new Date(order.created_at).toLocaleString('ar-BH-u-nu-latn', { timeZone: BAHRAIN_TZ })}
                   </p>
                 </div>
                 <p className="text-sm font-bold tabular-nums">

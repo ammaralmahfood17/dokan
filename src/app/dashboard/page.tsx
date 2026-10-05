@@ -2,6 +2,7 @@
 // UI sections live in src/components/dashboard/* (extracted from the old
 // ~590-line god component). Data aggregation helpers in src/lib/dashboard-data.ts.
 import { getCurrentProject, buildChecklist } from '@/lib/project';
+import { recordOnboardingProgress } from '@/lib/onboarding-funnel';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import {
@@ -26,6 +27,11 @@ export default async function DashboardPage() {
   const checklist = await buildChecklist(ctx.project.id);
   const doneCount = checklist.filter((c) => c.done).length;
   const allDone = doneCount === checklist.length;
+
+  // T13 funnel: record which onboarding steps this project has reached, once each.
+  // The write is scheduled with after() inside the helper, so it lands after the
+  // response and never adds to this page's latency. Best-effort — it cannot throw.
+  recordOnboardingProgress(ctx.project.id, checklist);
 
   const supabase = await createClient();
   // "Today" = Bahrain midnight (UTC+3). The server clock is UTC, so naive
