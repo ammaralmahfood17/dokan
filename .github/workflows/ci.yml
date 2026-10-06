@@ -93,6 +93,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Audit T2 #1/#3 (W2-T8): the two worst backend findings were the SAME class - a public
+      # route using createAdminClient() (RLS bypassed) with a guessable authorisation. Nothing
+      # in the build could have noticed a new one. This fails on a service-role route without a
+      # documented gate, and on an allow-list entry that has gone stale.
+      - name: Assert every service-role route has a documented gate
+        run: node scripts/check-public-write-gates.mjs
+
       # Unit tests, BEFORE the build: a logic regression should fail in seconds
       # here rather than after a full Next build. `vitest run` exits non-zero on
       # a single failure, so there is no "expected failures" escape hatch here.
