@@ -67,6 +67,9 @@
   --color-info-tint: #F0F9FF;
 
   /* Typography — Cairo ONLY (no secondary faces, no display face) */
+  /* Self-hosted: the family name the package declares is "Cairo Variable". The quoted "Cairo"
+     stays in the chain for any locally installed copy, and the generic is last. */
+  --font-cairo: "Cairo Variable";
   --font-sans: var(--font-cairo), "Cairo", ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-cairo), "Cairo", ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-cairo), "Cairo", ui-monospace, monospace;

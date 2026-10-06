@@ -1,5 +1,12 @@
 import type { Metadata, Viewport } from 'next';
-import { Cairo } from 'next/font/google';
+// Self-hosted Cairo (2026-10 CI follow-up). The build used to fetch this font from Google at
+// BUILD time via next/font/google; a runner that cannot reach fonts.googleapis.com fails the
+// whole build with "Module not found: @vercel/turbopack-next/internal/font/google/font" - seen
+// twice on CI for the same code, which is a broken build for a reason nothing in the repo
+// controls. @fontsource-variable/cairo ships the woff2 in the npm package (build touches no
+// network), and its CSS carries per-subset unicode-range (arabic + latin-ext + latin) which
+// next/font/local cannot express per file.
+import '@fontsource-variable/cairo';
 import { Toaster } from 'sonner';
 import { ServiceWorkerRegister } from '@/components/service-worker-register';
 import { WebVitals } from '@/components/web-vitals';
@@ -7,15 +14,6 @@ import { getSiteUrl } from '@/lib/site-url';
 // D15: install-to-homescreen prompt (beforeinstallprompt on Android/Chrome).
 import { InstallPrompt } from '@/components/ui/install-prompt';
 import './globals.css';
-
-// "دكان" — Enterprise identity v1.0
-// Cairo only (400/500/600/700/800) — واجهة + أرقام + عناوين بخط واحد
-const cairo = Cairo({
-  subsets: ['arabic', 'latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-cairo',
-  display: 'swap',
-});
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseOrigin = supabaseUrl ? new URL(supabaseUrl).origin : '';
@@ -85,7 +83,8 @@ export default function RootLayout({
       lang="ar"
       dir="rtl"
       suppressHydrationWarning
-      className={`${cairo.variable}`}
+      /* The family is applied through --font-sans (globals.css); the font-face rules come from
+         the imported @fontsource-variable/cairo package, so no variable class is needed. */
     >
       <head>
         {/* Supabase: early connect */}
