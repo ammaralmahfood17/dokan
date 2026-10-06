@@ -9,6 +9,7 @@
 import Image from 'next/image';
 import { Check, Minus, Plus, X } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
+import { langOfText } from '@/lib/i18n';
 import { isSoldOut, lowStockLabel, maxOrderableQty } from '@/lib/product-stock';
 import type { Product, ProductAddon } from '@/lib/types';
 
@@ -91,7 +92,11 @@ export function MenuProductRow({
           </div>
         )}
         <div className={`flex min-w-0 flex-1 flex-col gap-1 px-3 pt-2.5 ${soldOut ? 'opacity-60' : ''}`}>
-          <h3 className="line-clamp-2 text-[14.5px] font-bold leading-[1.4]">{displayName}</h3>
+          {/* audit T1 #8: `displayName` is the English `name_en` when the toggle is EN, so an
+              Arabic page can hold English text. Marked per element by the text's own script. */}
+          <h3 lang={langOfText(displayName)} className="line-clamp-2 text-[14.5px] font-bold leading-[1.4]">
+            {displayName}
+          </h3>
           {product.description && (
             <p className="line-clamp-2 text-[12.5px] leading-[1.55] text-[var(--color-text-secondary)]">
               {product.description}

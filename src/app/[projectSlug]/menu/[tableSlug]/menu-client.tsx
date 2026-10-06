@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ShoppingBag, X, Check, Bell, FileText, Search, Languages } from 'lucide-react';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
 import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
+import { langOfText } from '@/lib/i18n';
 import type {
   CartLine,
   Category,
@@ -546,7 +547,9 @@ export function MenuClient({
               {project.name.slice(0, 1)}
             </div>
             <div className="min-w-0">
-              <h1 className="truncate font-display text-[17px] font-bold">{project.name}</h1>
+              <h1 lang={langOfText(project.name)} className="truncate font-display text-[17px] font-bold">
+                {project.name}
+              </h1>
               <p className="text-[11px] text-[var(--color-text-secondary)]">
                 امسح واطلب من طاولتك
               </p>
@@ -651,7 +654,15 @@ export function MenuClient({
           {products.some((p) => p.name_en) && (
             <button
               type="button"
-              onClick={() => setLang((l) => (l === 'ar' ? 'en' : 'ar'))}
+              // audit T1 #8 (WCAG 3.1.2): the visible content switches language, so the document
+              // has to say which one it is. dir stays rtl - the layout is RTL-first by design.
+              onClick={() =>
+                setLang((l) => {
+                  const next = l === 'ar' ? 'en' : 'ar';
+                  document.documentElement.lang = next;
+                  return next;
+                })
+              }
               aria-label={lang === 'ar' ? 'التبديل إلى الإنجليزية' : 'Switch to Arabic'}
               aria-pressed={lang === 'en'}
               className="flex h-[44px] shrink-0 items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-bold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)]"
