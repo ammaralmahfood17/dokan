@@ -6,6 +6,7 @@ import { getSiteUrl } from '@/lib/site-url';
 import { getPublicProject } from '@/lib/public-project';
 import { MenuClient } from './menu-client';
 import type { Category, Product, ProductAddon, Project, Table } from '@/lib/types';
+import { buildRestaurantJsonLd } from '@/lib/jsonld';
 
 // The page itself is DYNAMIC (no `export const revalidate`): the subscription
 // cutoff flips projects.is_active=false and that must cut the public menu
@@ -124,20 +125,23 @@ export default async function PublicMenuPage({
 
   return (
     <>
-      {/* FIX-M-006: JSON-LD structured data (Restaurant) — خاصية jsonLd مدعومة
-          في React 19 runtime لكن @types/react لا يعرّفها بعد — cast محلي فقط.
-          بدون dangerouslySetInnerHTML: يبقى المشروع صفر استخدام له. */}
+      {/* audit T1 #5: a real JSON-LD body. The old `jsonLd` PROP is not a React DOM API - React 19
+          renders it as the attribute jsonLd="[object Object]" (its own warning, captured by
+          src/lib/jsonld.test.ts: "React does not recognize the `jsonLd` prop on a DOM element"), so
+          the page carried no structured data at all. This is the ONE legitimate
+          dangerouslySetInnerHTML in this codebase: the payload is JSON.stringify'd from server-side
+          values, never user HTML. Do not add a second one. */}
       <script
         type="application/ld+json"
-        {...({
-          jsonLd: {
-            '@context': 'https://schema.org',
-            '@type': 'Restaurant',
-            name: project.name,
-            url: `${getSiteUrl()}/${projectSlug}`,
-            servesCuisine: 'Gulf',
-          },
-        } as object)}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(
+            buildRestaurantJsonLd({
+              name: project.name,
+              url: `${getSiteUrl()}/${projectSlug}`,
+              image: project.logo_url,
+            })
+          ),
+        }}
       />
       <MenuClient
         project={project as Project}
