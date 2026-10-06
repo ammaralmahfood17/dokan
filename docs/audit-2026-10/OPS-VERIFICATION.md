@@ -363,3 +363,57 @@ graphql* 44. Record the hosted setting here:
 ```
 date: __________  "Automatically expose new tables": off/on ____  owner: __________
 ```
+
+---
+
+## 12. Secrets, backups and the advisors (Wave 6 T4 — owner-run, no repo change)
+
+The audits cannot see the hosted project. Nothing here is a code change; it is the list of things
+that must be true outside the repository, each with how to check it.
+
+**1. Rotate anything that has ever been in a chat, a log or a screenshot.**
+The platform's tokens have been pasted into conversations during this work, and a pasted secret is a
+disclosed secret. Rotate, then update the environment:
+
+- `SUPABASE_SERVICE_ROLE_KEY` (Dashboard → Settings → API → rotate; update Vercel + `.env.local`)
+- `TELEGRAM_BOT_TOKEN` (BotFather → `/revoke`; then re-set the webhook — the secret is part of the URL)
+- `TELEGRAM_WEBHOOK_SECRET` (`openssl rand -hex 32`, update Vercel + re-set the webhook)
+- `VAPID_PRIVATE_KEY` (regenerate; existing push subscriptions must be re-created)
+- `SENTRY_AUTH_TOKEN`, `TURNSTILE_SECRET`, `HEALTH_TOKEN` (`openssl rand -hex 32`)
+- The database password (Dashboard → Settings → Database → reset), then update `DATABASE_URL`
+  everywhere it is used (Vercel, `.env.local`, CI secrets if any)
+
+After rotating: `/api/health` with the new `HEALTH_TOKEN` must answer 200, a signup must reach
+Turnstile, and the Telegram webhook must still receive an update.
+
+    date: __________  rotated: ______________________________________________
+
+**2. Backups, PITR and a RESTORE DRILL (not a backup check — a restore).**
+Confirm the plan tier's backup window (Dashboard → Database → Backups), then prove a restore:
+create a scratch project, restore the latest backup into it, and count rows:
+
+```sql
+SELECT (SELECT count(*) FROM orders)          AS orders,
+       (SELECT count(*) FROM order_items)     AS order_items,
+       (SELECT count(*) FROM projects)        AS projects,
+       (SELECT count(*) FROM products)        AS products;
+```
+
+Record the numbers next to production's, and delete the scratch project afterwards.
+
+```
+date: __________  backup window: ____  production: orders __ projects __  restored: orders __ projects __
+```
+
+**3. Vercel deployment protection on preview URLs.** Preview deployments carry
+`X-Robots-Tag: noindex` but are publicly reachable, and they run against the production database.
+Settings → Deployment Protection → enable for Preview (Vercel Authentication or a password).
+
+    date: __________  protection: on/off ____  verified by opening a preview URL signed out: ____
+
+**4. Supabase Security + Performance Advisors, re-run AFTER the Wave 6 migrations.** Paste the output
+here — including the accepted/ignored warnings and why — so the next audit does not re-report them.
+The Wave 6 migrations add: a dropped dead table (`service_requests`) and its enum, a revoked default
+privilege, and three constraints on `impersonation_sessions`.
+
+    date: __________  security advisor findings: ____  performance advisor findings: ____
