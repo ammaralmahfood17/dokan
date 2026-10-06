@@ -61,13 +61,19 @@ reprint.** Until then the fix ships dark: tokenless orders are accepted, recorde
 10/min + 60/h tokenless budget of their own. A supplied-but-wrong token is a 404 in the window
 too, so the window cannot be used as a bypass.
 
-**Dated follow-up (2026-10-06):** 14 `await request.json()` call sites remain without
-`.catch(() => null)` — all behind a session: `pos/order:40`, `pos/cancel:34`,
-`onboarding/project:60`, `push/subscribe:21`, `push/unsubscribe:20`, `staff/notification-prefs:48`,
-`revalidate-menu:25`, `super-admin/{archive-project:38, create-project:39,
-hard-delete-project:35, impersonate:40}`, `telegram/webhook:30`. There, malformed JSON is a
-cosmetic 500 + Sentry noise from an authenticated caller rather than an anonymous lever, which
-is why the fix was scoped to the unauthenticated set. Same one-line shape when it is done.
+**DONE 2026-10-06 (`49719bd`) — the body guard, all 12 remaining sites.** `await request.json()`
+throws on a non-JSON body and on an empty one, so those routes answered 500 + a Sentry event for
+input nobody validated: `onboarding/project`, `pos/order`, `pos/cancel`, `push/subscribe`,
+`push/unsubscribe`, `revalidate-menu`, `staff/notification-prefs`,
+`super-admin/{archive-project,create-project,hard-delete-project,impersonate}`,
+`telegram/webhook`. Each now reads with `.catch(() => null)` and rejects a non-object body - the
+shape the verified public order path shipped in W1, which also covers the literal JSON `null`
+(it parses fine and only fails later on destructuring). `telegram/webhook` keeps its ack-and-ignore
+contract because Telegram retries non-2xx. Guardrail `scripts/check-json-body-guard.mjs` (CI) was
+run RED first: it printed all twelve `file:line` sites, and passes now. Behaviour proven on three
+handlers with different dependencies — `src/app/api/body-guard.test.ts`, 15 tests, junk bodies give
+400 and never 500, with the auth layer mocked to throw if touched, so a junk body cannot reach a
+table. The other nine share the identical shape and are held by the gate.
 
 **Wave 1 gates:** `tsc` 0 · `lint` 0 · **vitest 187/187 (16 files)** · `build` 0 · `env:check` 0 ·
 `env:validate` 0 (dev) / exit 1 (production simulation).
@@ -156,13 +162,16 @@ from is SKIPPED with a named reason, and a route that did not RENDER fails with 
   `package-lock.json` predated the install. `npm ci` does not resolve - that is its value - so the
   branch was broken in CI while green locally. Fixed by committing the lockfile (`d4225ba`).
   Lesson: `git add -A <dirs>` is not a substitute for checking what a dependency install touched.
-- `next build` failed once in CI with `Module not found: Can't resolve
-  '@vercel/turbopack-next/internal/font/google/font'`. `src/app/layout.tsx` imports
-  `Cairo` from `next/font/google`, so **every build fetches the font from Google at build time**;
-  when the runner cannot reach fonts.googleapis.com the build fails. It is unrelated to the audit
-  changes (the same head rebuilt green minutes later) and it is a **known robustness gap, dated
-  follow-up: self-host Cairo via `next/font/local`, or pin the font fetch**. Not one of the 37
-  findings, so it is recorded here rather than silently absorbed.
+- ~~`next build` failed in CI with `Module not found: Can't resolve
+  '@vercel/turbopack-next/internal/font/google/font'`~~ — **FIXED (`ae866b6`).** The build fetched
+  Cairo from Google Fonts at build time; it failed twice on CI for identical code, which is a red
+  pipeline for a reason nothing in the repository controlled. Cairo is self-hosted now
+  (`@fontsource-variable/cairo`, woff2 in the package, per-subset `unicode-range`) and
+  `scripts/check-hermetic-build.mjs` fails CI on any `next/font/google` import or Google font URL.
+  Proven: a build through a **dead proxy** succeeds, a browser run shows **0** requests to Google
+  with **2** woff2 from our own origin, and `font-family` still resolves to `"Cairo Variable"`.
+  (`scripts/check-font-delivery.mjs` asserts exactly that, so "self-hosted" cannot quietly come to
+  mean "no typeface at all".)
 
 **Wave 3 gates:** `tsc` 0 - `lint` 0 (was 26 errors) - **vitest 209/209 (17 files)** - `build` 0 -
 `check-touch-targets` 0 - `check-public-write-gates` 0 - `env:check` 0.
