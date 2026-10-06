@@ -1,0 +1,45 @@
+-- W6-T1 (audit T2 #13): drop DEAD schema.
+--
+-- `service_requests` is dead: 0 rows in production (verified 2026-10-06), no application code reads
+-- or writes it (the only references left are the generated types and this repo's own tests), nothing
+-- references it by foreign key, and `orders.service_type` already models the same two values
+-- ('waiter', 'bill') on the live path. It also carries INSERT/UPDATE/DELETE grants for the
+-- `authenticated` web role - write access to a table nothing uses is surface with no product value.
+--
+-- `order_sequences` is NOT here: the plan named it, but it was already dropped before this branch
+-- (the earlier retraction recorded that). `DROP TABLE IF EXISTS` would be a lie about what happened.
+--
+-- ROLLBACK (exact pointers; every statement is still in the repo, so this cannot drift):
+--   CREATE TYPE public.service_request_type AS ENUM ('waiter', 'bill');   -- 0000_init.sql, values live-verified
+--   CREATE TABLE public.service_requests (                                -- 0000_init.sql:622
+--     id uuid DEFAULT gen_random_uuid() NOT NULL,
+--     project_id uuid NOT NULL,
+--     table_id uuid NOT NULL,
+--     type public.service_request_type NOT NULL,
+--     is_resolved boolean DEFAULT false NOT NULL,
+--     created_at timestamp with time zone DEFAULT now() NOT NULL
+--   );
+--   ALTER TABLE ONLY public.service_requests
+--     ADD CONSTRAINT service_requests_pkey PRIMARY KEY (id);              -- 0000_init.sql:796
+--   ALTER TABLE ONLY public.service_requests
+--     ADD CONSTRAINT service_requests_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+--   ALTER TABLE ONLY public.service_requests
+--     ADD CONSTRAINT service_requests_table_id_fkey FOREIGN KEY (table_id) REFERENCES public.tables(id) ON DELETE CASCADE;
+--   CREATE INDEX idx_service_requests_open ON public.service_requests(project_id, is_resolved, created_at DESC);  -- 0000_init.sql:1021
+--   CREATE INDEX idx_service_requests_table_id ON public.service_requests(table_id);                               -- 20260928111000:9
+--   ALTER TABLE public.service_requests ENABLE ROW LEVEL SECURITY;
+--   CREATE POLICY service_requests_staff ON public.service_requests
+--     FOR ALL USING (is_project_member(project_id));                      -- 0006 (live-verified: one policy, ALL)
+--   GRANT INSERT, SELECT, UPDATE, DELETE ON public.service_requests TO authenticated;
+--   GRANT ALL ON public.service_requests TO service_role;
+--   -- and re-remove `'idx_service_requests_table_id'` from the index list in
+--   -- supabase/tests/phase4_5_advisor_hardening.sql, restoring the expected count 3 -> 4.
+--
+-- After applying this anywhere, regenerate the types: `npm run db:types`
+-- (src/lib/database.types.ts was hand-edited in the same commit so the repo stays consistent until
+-- the DDL is applied where the types are generated).
+
+DROP TABLE IF EXISTS public.service_requests;
+-- The enum is used by nothing else (live-verified: no other column has this udt_name), so dropping
+-- the table would otherwise leave an orphan type behind.
+DROP TYPE IF EXISTS public.service_request_type;
