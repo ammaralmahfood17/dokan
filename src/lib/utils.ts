@@ -150,6 +150,15 @@ export function generateQrToken(): string {
   return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Telegram link code (audit T2 #7). Was 32 bits, valid for 15 minutes, and a correct guess
+ * bound a chat to a store so it would receive every future order alert. Same 128-bit shape as
+ * the table scan token, upper-cased because the merchant retypes it into Telegram.
+ */
+export function generateLinkCode(): string {
+  return generateQrToken().toUpperCase();
+}
+
 /** Reserved slugs that cannot be used as project slugs */
 export const RESERVED_SLUGS = new Set([
   'api',

@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Expect "/start <CODE>" (Telegram may send "/start@botname <CODE>")
-    const match = text.match(/^\/start(?:@\w+)?\s*([A-Za-z0-9]{6,12})$/);
+    // {6,32}: the code is 128 bits (32 hex chars) since audit T2 #7.
+    const match = text.match(/^\/start(?:@\w+)?\s*([A-Za-z0-9]{6,32})$/);
     if (!match) {
       await replyToChat(String(chat.id), 'أرسل رمز الربط من لوحة تحكم دكان: /start <الرمز>');
       return NextResponse.json({ ok: true });

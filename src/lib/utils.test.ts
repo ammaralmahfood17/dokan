@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   generateSlug,
@@ -7,6 +9,7 @@ import {
   menuPath,
   tableSlugFromNumber,
   generateQrToken,
+  generateLinkCode,
   isReservedSlug,
   CURRENCY_DECIMALS,
 } from './utils';
@@ -213,5 +216,35 @@ describe('generateQrToken()', () => {
     const tokens = Array.from({ length: 500 }, () => generateQrToken());
     const uniqueBytes = new Set(tokens.join('').split(''));
     expect(uniqueBytes.size).toBeGreaterThan(10);
+  });
+});
+
+describe('generateLinkCode() — audit T2 #7', () => {
+  it('is 32 hex characters (128 bits), the same size as the table scan token', () => {
+    const code = generateLinkCode();
+    expect(code).toHaveLength(32);
+    expect(code).toMatch(/^[0-9A-F]{32}$/);
+  });
+
+  it('is upper-case so a merchant can retype it from Telegram', () => {
+    // One code, compared with itself: calling it twice compares two different randoms.
+    const code = generateLinkCode();
+    expect(code).toBe(code.toUpperCase());
+  });
+
+  it('does not repeat across calls', () => {
+    const set = new Set(Array.from({ length: 50 }, () => generateLinkCode()));
+    expect(set.size).toBe(50);
+  });
+
+  it('the link route no longer uses a 32-bit code', () => {
+    const route = readFileSync(resolve(process.cwd(), 'src/app/api/telegram/link/route.ts'), 'utf8');
+    expect(route).not.toMatch(/randomBytes\(\s*4\s*\)/);
+    expect(route).toContain('generateLinkCode');
+  });
+
+  it('the webhook accepts a 32-char code', () => {
+    const webhook = readFileSync(resolve(process.cwd(), 'src/app/api/telegram/webhook/route.ts'), 'utf8');
+    expect(webhook).toMatch(/\{6,32\}/);
   });
 });

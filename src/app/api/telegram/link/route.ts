@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { TELEGRAM_BOT_USERNAME } from '@/lib/telegram';
-import { randomBytes } from 'crypto';
+import { generateLinkCode } from '@/lib/utils';
 
 const CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -46,7 +46,9 @@ export async function POST(request: NextRequest) {
     // Clear expired codes for this project, then generate a fresh one
     await supabase.from('telegram_link_codes').delete().lt('expires_at', new Date().toISOString());
 
-    const code = randomBytes(4).toString('hex').toUpperCase();
+    // 128 bits, not 32 (audit T2 #7): a 32-bit code in a 15-minute window is brute-forceable,
+    // and guessing one binds a chat to a store's order alerts.
+    const code = generateLinkCode();
     const { error } = await supabase.from('telegram_link_codes').insert({
       project_id: body.projectId,
       code,
