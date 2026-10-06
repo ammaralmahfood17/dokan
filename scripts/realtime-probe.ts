@@ -32,13 +32,18 @@
  *   node scripts/realtime-probe.ts --keep
  */
 
-// @next/env is CommonJS: a named import fails under Node's ESM loader. Same default-import
-// dance as scripts/validate-env.mjs.
-import nextEnv from '@next/env';
-const { loadEnvConfig } = nextEnv;
+// @next/env is CommonJS, and how it surfaces depends on the LOADER: under Node's ESM loader the
+// default import works, under tsx `import_env.default` is undefined (which is how this script died
+// with "Cannot destructure property 'loadEnvConfig'"). Resolve it from whichever shape is present,
+// and if neither is, do not fail - the env vars may already be exported by the caller, which is
+// exactly how the CI/agent runs this script.
+import * as nextEnvNs from '@next/env';
+const loadEnvConfig: ((dir: string, dev?: boolean) => void) | undefined =
+  (nextEnvNs as { loadEnvConfig?: (dir: string, dev?: boolean) => void }).loadEnvConfig ??
+  (nextEnvNs as { default?: { loadEnvConfig?: (dir: string, dev?: boolean) => void } }).default?.loadEnvConfig;
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-loadEnvConfig(process.cwd(), true);
+if (loadEnvConfig) loadEnvConfig(process.cwd(), true);
 
 type Args = {
   url?: string;
