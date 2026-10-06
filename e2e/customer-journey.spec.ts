@@ -450,24 +450,29 @@ test('4. the order moves pending → preparing → ready → delivered, and orde
     });
 
   // OWNER REPORT 2026-10-06: the customer's status screen lagged the kitchen.
-  // Measure it end to end: the success screen polls every 3s in this window, so
-  // the visible line must change well inside 8s (cadence + render + network).
-  // Before the fix this screen polled every 12s and the same assertion fails.
-  const t0 = Date.now();
+  // Measured from the instant the staff write COMMITS to the moment the customer
+  // can read the new stage — nothing else is allowed inside the window, so the
+  // number is the real customer-visible lag. The screen polls every 2.5s here, so
+  // the worst case is one full tick plus one fetch and one render; before the fix
+  // the tick was 12s, which is why this same assertion used to fail.
   const r1 = await advance('pending', 'preparing');
   expect(r1.error, `pending→preparing: ${r1.error?.message}`).toBeNull();
-  await expect
-    .poll(async () => ((await orderStatusOf(orderId, slug)).body as { status: string }).status, { timeout: 20_000 })
-    .toBe('preparing');
 
+  const t0 = Date.now();
   await expect(cust.getByText('طلبك قيد التحضير — يتم تحديث الحالة تلقائيًا')).toBeVisible({
     timeout: 15_000,
   });
   const lagMs = Date.now() - t0;
+  // Printed on success too: the owner's bar is a measured number, not a green tick.
+  console.log(`[latency] customer saw «قيد التحضير» ${lagMs}ms after the kitchen advanced the order`);
   expect(
     lagMs,
-    `the customer saw «قيد التحضير» ${lagMs}ms after the kitchen advanced the order`
-  ).toBeLessThan(8000);
+    `the customer saw «قيد التحضير» ${lagMs}ms after the kitchen advanced the order (3s cadence)`
+  ).toBeLessThan(5000);
+
+  await expect
+    .poll(async () => ((await orderStatusOf(orderId, slug)).body as { status: string }).status, { timeout: 20_000 })
+    .toBe('preparing');
 
   const r2 = await advance('preparing', 'ready');
   expect(r2.error, `preparing→ready: ${r2.error?.message}`).toBeNull();

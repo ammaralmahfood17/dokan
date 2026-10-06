@@ -81,11 +81,11 @@ export function OrderSuccessState({
     let timer: ReturnType<typeof setTimeout> | null = null;
     let attempts = 0;
 
-    /** Fast window: ~2 minutes at 3s, then a slower watch for ~10 more minutes. */
-    const FAST_MS = 3000;
+    /** Fast window: ~2 minutes at 2.5s, then a slower watch for ~10 more minutes. */
+    const FAST_MS = 2500;
     const SLOW_MS = 10000;
-    const FAST_ATTEMPTS = 40;
-    const MAX_ATTEMPTS = 100;
+    const FAST_ATTEMPTS = 48;
+    const MAX_ATTEMPTS = 108;
 
     const schedule = () => {
       if (stopped) return;

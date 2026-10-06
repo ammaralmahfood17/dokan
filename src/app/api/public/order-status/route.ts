@@ -10,13 +10,13 @@ import { getClientIp } from '@/lib/ip';
 //  - rate limit: لكل ORDER (الأدق) + لكل IP + لكل مشروع
 //
 // Cadence (2026-10-06, owner report: the customer saw a stale status for up to
-// 12s after the kitchen acted): the client polls every 3s for the first ~2
+// 12s after the kitchen acted): the client polls every 2.5s for the first ~2
 // minutes, then every 10s. The budgets below are sized for that, and for a
 // café where every customer shares ONE carrier-NAT IP:
-//   orderId  45/min  — a 3s poll spends 20; the headroom absorbs retries. This
+//   orderId  45/min  — a 2.5s poll spends 24; the headroom absorbs retries. This
 //                      is the key that actually bounds abuse per order.
-//   ip       600/min — ~10 customers polling at 3s behind one NAT IP.
-//   project 2000/min — a 30-table rush at 20/min is 600.
+//   ip       600/min — ~20 customers polling at 2.5s behind one NAT IP.
+//   project 2000/min — a 30-table rush at 24/min is 720.
 // Each poll is two indexed reads (project by slug, order by PK), so the ceiling
 // is ~33 queries/s per project — cheap for Postgres and far below the previous
 // effective load, which was a 12s poll repeated by every open tab.
