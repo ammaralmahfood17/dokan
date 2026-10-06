@@ -218,7 +218,7 @@ floor has no numeric-badge exception (a guard cannot see what a className is wri
 **Wave 5 gates:** `tsc` 0 · `lint` 0 · **vitest (the suite plus the 4 new jsonld tests)** · `build` 0 ·
 the four `check-*.mjs` gates 0 · `env:check` 0.
 
-**One real defect found while verifying, NOT in the 37 — FIXED (`5e0f3b`).** The public menu route
+**One real defect found while verifying, NOT in the 37 — FIXED (`6febfa8`).** The public menu route
 declared `generateStaticParams()` returning `[]` (classifying it SSG, `●`) while the page awaits
 `searchParams` for the table token, so a LOCAL production-mode build answered
 `DYNAMIC_SERVER_USAGE` (500) on every menu URL — from Wave 3 onward, and the reason the T1 #5
