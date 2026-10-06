@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { OrderRow } from '@/lib/kitchen-tickets';
+import { isForeignProjectRow, reportRealtimeLeak } from '@/lib/realtime-guard';
 
 export function useKitchenOrders({
   projectId,
@@ -153,6 +154,12 @@ export function useKitchenOrders({
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'orders' },
         async (payload) => {
+          // Audit T2 #5: never render another tenant's row. Unreachable while Realtime honours
+          // RLS (proven by scripts/realtime-probe.ts on 2026-10-06) - hence the alarm.
+          if (isForeignProjectRow(payload, projectId)) {
+            reportRealtimeLeak('kitchen board (insert)');
+            return;
+          }
           const newOrder = payload.new as Partial<OrderRow>;
           const newId = newOrder.id as string;
           if (!newId || knownIds.current.has(newId)) return;
@@ -176,6 +183,10 @@ export function useKitchenOrders({
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'orders' },
         (payload) => {
+          if (isForeignProjectRow(payload, projectId)) {
+            reportRealtimeLeak('kitchen board (update)');
+            return;
+          }
           const updated = payload.new as Partial<OrderRow>;
           if (updated.id) realtimeTouchedRef.current.add(updated.id);
           setOrders((prev) => {
@@ -190,6 +201,13 @@ export function useKitchenOrders({
         'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'orders' },
         (payload) => {
+          // A DELETE payload carries only the key unless REPLICA IDENTITY is FULL, so this can
+          // only judge when project_id is present - and dropping a foreign id from a local
+          // list is harmless either way.
+          if (isForeignProjectRow({ new: payload.old }, projectId)) {
+            reportRealtimeLeak('kitchen board (delete)');
+            return;
+          }
           const deletedId = payload.old?.id as string;
           setOrders((prev) => prev.filter((o) => o.id !== deletedId));
         }

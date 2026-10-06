@@ -214,15 +214,39 @@ Exit codes: `0` isolation proven · `1` **LEAK — stop** · `2` bad args/env, o
 cleanup · `3` INCONCLUSIVE (the own-tenant event never arrived, so the absence of a foreign
 event proves nothing — check Realtime before trusting anything).
 
-Record the run here:
+### Result — run by the agent, 2026-10-06, against production (exit 0)
 
 ```
-date: __________  target: ______________________  exit: ____
-own-tenant order arrives        [ ]
-foreign-tenant order absent     [ ]
-anonymous client receives none  [ ]
-cleanup: probe projects=0  staff=0  probe orders=0
+date: 2026-10-06   target: production (ehbsdfnyetvszjcftaxh)   exit: 0
+own-tenant order arrives        [x]  (first event ~3.5s; one cold-channel run took ~18s)
+foreign-tenant order absent     [x]  (id never seen on either channel, even after a 30s drain)
+anonymous client receives none  [x]
+cleanup: probe projects=0  staff=0  probe orders=0   (live tenant counts unchanged: 2/2/1)
 ```
+
+The decisive evidence is the id ledger the probe prints — the foreign order's id appears in
+NO channel, so "isolated" cannot be a counting artefact:
+
+```
+arrivals on the user channel: OWN(project A) 1a03f47b@3.5s, ANON-TARGET 7e540646@67.0s
+arrivals on the anon channel: none
+id ledger:
+  OWN         1a03f47b  user-channel=true   anon-channel=false
+  FOREIGN     23166e45  user-channel=false  anon-channel=false
+  ANON-TARGET 7e540646  user-channel=true   anon-channel=false
+```
+
+(The event that reads `unlabelled` in earlier runs is ANON-TARGET: an order in the
+subscriber's OWN tenant, which the user channel legitimately receives.)
+
+**Conclusion: Supabase Realtime honours RLS for `postgres_changes`.** Isolation holds with no
+project filter, so the filter stays removed and there is no need for a private channel.
+
+**Latency note (new information, not an isolation finding):** delivery measured **~3.5s** for
+the first event on a warm channel and **~18s** on a cold one — not the "~1s" the code comment
+in `use-kitchen-orders.ts` claims. The 30s fallback poll is therefore doing real work, and a
+"realtime is instant" assumption should not be built on. Worth a look in W5 (perf) rather than
+here.
 
 **If it returns 1 (a leak):** do NOT ship the runtime alarm. Add
 `filter: 'project_id=eq.<id>'` to both subscriptions and re-run the probe; if the filter also

@@ -26,6 +26,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { isForeignProjectRow, reportRealtimeLeak } from '@/lib/realtime-guard';
 
 /** Heartbeat period. Slow by design: realtime normally beats it by ~1s. */
 const HEARTBEAT_MS = 60_000;
@@ -40,7 +41,14 @@ export function LiveRefresh({ projectId }: { projectId: string }) {
     // `orders` and `order_items` — several events can land in one burst and
     // each refresh() is a full server render, so collapse them.
     let debounce: ReturnType<typeof setTimeout> | null = null;
-    const ping = () => {
+    const ping = (payload?: { new?: unknown }) => {
+      // Defence in depth (audit T2 #5). The production probe proved Realtime honours RLS, so
+      // this branch is unreachable - and if it ever runs, another tenant's order row is on
+      // screen: that is an ERROR-level signal, never a redraw, and never rendered.
+      if (isForeignProjectRow(payload, projectId)) {
+        reportRealtimeLeak('dashboard live-refresh');
+        return;
+      }
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(() => router.refresh(), 500);
     };

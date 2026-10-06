@@ -50,7 +50,9 @@ type Args = {
 };
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { timeoutMs: 8000, dryRun: false, keep: false };
+  // Measured on production 2026-10-06: a postgres_changes event took ~18s to arrive, so an
+  // 8s window reported a delivery FAILURE that was really just latency.
+  const args: Args = { timeoutMs: 30000, dryRun: false, keep: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--url') args.url = argv[++i];
@@ -102,17 +104,18 @@ async function waitForSubscribed(
 function subscribeToOrders(
   client: SupabaseClient,
   channelName: string,
-  seen: Set<string>
+  seen: Set<string>,
+  labels: Map<string, string>,
+  arrivals: { label: string; at: number }[]
 ) {
   return client.channel(channelName).on(
     'postgres_changes',
     { event: '*', schema: 'public', table: 'orders' },
     (payload: { new?: Record<string, unknown> }) => {
       const id = payload.new?.id;
-      if (typeof id === 'string') {
-        seen.add(id);
-        log(`  <- realtime event for order ${id.slice(0, 8)}…`);
-      }
+      if (typeof id !== 'string') return;
+      seen.add(id);
+      arrivals.push({ label: `${labels.get(id) ?? 'unlabelled'} ${id.slice(0, 8)}`, at: Date.now() - t0 });
     }
   );
 }
@@ -213,7 +216,9 @@ async function main(): Promise<number> {
     log('signed in as the probe user (member of A only)');
 
     const seen = new Set<string>();
-    const channel = subscribeToOrders(asUser, `probe-${projA.id}`, seen);
+    const labels = new Map<string, string>();
+    const arrivals: { label: string; at: number }[] = [];
+    const channel = subscribeToOrders(asUser, `probe-${projA.id}`, seen, labels, arrivals);
     const subscribed = await waitForSubscribed(channel, args.timeoutMs);
     if (!subscribed) throw new Error('channel never reached SUBSCRIBED');
     log('channel SUBSCRIBED (no filter — same as the dashboard/KDS)');
@@ -221,12 +226,14 @@ async function main(): Promise<number> {
 
     // ── check 1: own tenant MUST arrive ────────────────────────────────────────
     const ownId = await insertOrder(projA.id, 'own project A');
+    labels.set(ownId, 'OWN(project A)');
     await sleep(args.timeoutMs);
     record('own-tenant order arrives', seen.has(ownId), `inserted into A, event received: ${seen.has(ownId)}`);
 
     // ── check 2: foreign tenant MUST NOT arrive ────────────────────────────────
     const before = seen.size;
     const foreignId = await insertOrder(projB.id, 'foreign project B');
+    labels.set(foreignId, 'FOREIGN(project B)');
     await sleep(args.timeoutMs);
     const leaked = seen.has(foreignId);
     record(
@@ -240,10 +247,13 @@ async function main(): Promise<number> {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const anonSeen = new Set<string>();
-    const anonChannel = subscribeToOrders(anon, `probe-anon-${suffix}`, anonSeen);
+    const anonLabels = new Map<string, string>();
+    const anonArrivals: { label: string; at: number }[] = [];
+    const anonChannel = subscribeToOrders(anon, `probe-anon-${suffix}`, anonSeen, anonLabels, anonArrivals);
     const anonSubscribed = await waitForSubscribed(anonChannel, args.timeoutMs);
     await sleep(500);
     const anonTarget = await insertOrder(projA.id, 'project A (anon subscriber watching)');
+    anonLabels.set(anonTarget, 'ANON-TARGET(project A)');
     await sleep(args.timeoutMs);
     record(
       'anonymous subscriber receives nothing',
@@ -251,21 +261,57 @@ async function main(): Promise<number> {
       anonSubscribed ? `no event for an unauthenticated client` : 'anon channel failed to subscribe (inconclusive)'
     );
 
+    // Delivery here is slow, so wait once more and judge on EVERYTHING that arrived, late
+    // included. A late foreign row is a leak, not a rounding error.
+    log(`draining a further ${args.timeoutMs}ms (late deliveries are judged too)...`);
+    await sleep(args.timeoutMs);
     await asUser.removeChannel(channel);
     await anon.removeChannel(anonChannel);
 
     // ── verdict ────────────────────────────────────────────────────────────────
-    const deliveries = checks[0]?.pass === true;
-    const isolated = checks[1]?.pass === true && checks[2]?.pass === true;
-    if (!deliveries) {
-      log('VERDICT: INCONCLUSIVE — the own-tenant event never arrived, so the absence of a');
-      log('  foreign event proves nothing. Investigate Realtime before trusting isolation.');
-      verdict = 3;
-    } else if (!isolated) {
-      log('VERDICT: LEAK — another tenant\'s order row was delivered. STOP.');
+    const ownEver = seen.has(ownId);
+    const foreignEver = seen.has(foreignId);
+    const anonEver = anonSeen.has(anonTarget);
+    log(`late-arrival audit: own=${ownEver} foreign=${foreignEver} anon=${anonEver}`);
+    log(
+      `  arrivals on the user channel: ${
+        arrivals.map((a) => `${a.label}@${(a.at / 1000).toFixed(1)}s`).join(', ') || 'none'
+      }`
+    );
+    log(
+      `  arrivals on the anon channel: ${
+        anonArrivals.map((a) => `${a.label}@${(a.at / 1000).toFixed(1)}s`).join(', ') || 'none'
+      }`
+    );
+    // The id ledger: every id this run inserted, its role, and whether each channel saw it.
+    // Without it an unexpected event shows up as "unlabelled" and cannot be attributed.
+    log('  id ledger:');
+    for (const [role, id] of [
+      ['OWN', ownId],
+      ['FOREIGN', foreignId],
+      ['ANON-TARGET', anonTarget],
+    ] as const) {
+      log(
+        `    ${role.padEnd(11)} ${id.slice(0, 8)}  user-channel=${seen.has(id)}  anon-channel=${anonSeen.has(id)}`
+      );
+    }
+
+    if (foreignEver) {
+      log("VERDICT: LEAK - a FOREIGN tenant's order row reached this subscriber. STOP.");
       verdict = 1;
+    } else if (anonEver) {
+      log('VERDICT: LEAK - an unauthenticated subscriber received an order row. STOP.');
+      verdict = 1;
+    } else if (!ownEver) {
+      log('VERDICT: INCONCLUSIVE - the own-tenant event never arrived, even after the drain,');
+      log('  so the absence of a foreign event proves nothing.');
+      verdict = 3;
     } else {
-      log('VERDICT: ISOLATION PROVEN — Realtime honours RLS for postgres_changes on orders.');
+      log('VERDICT: ISOLATION PROVEN - Realtime honours RLS for postgres_changes on orders.');
+      if (!checks[0]?.pass) {
+        log(`  (delivery was LATE: the own event missed the ${args.timeoutMs}ms window -`);
+        log('   a latency note for the dashboard/KDS, not an isolation failure)');
+      }
       verdict = 0;
     }
   } catch (err) {
