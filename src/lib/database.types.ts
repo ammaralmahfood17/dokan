@@ -499,48 +499,6 @@ export type Database = {
         }
         Relationships: []
       }
-      service_requests: {
-        Row: {
-          created_at: string
-          id: string
-          is_resolved: boolean
-          project_id: string
-          table_id: string
-          type: Database["public"]["Enums"]["service_request_type"]
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          is_resolved?: boolean
-          project_id: string
-          table_id: string
-          type: Database["public"]["Enums"]["service_request_type"]
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          is_resolved?: boolean
-          project_id?: string
-          table_id?: string
-          type?: Database["public"]["Enums"]["service_request_type"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "service_requests_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "service_requests_table_id_fkey"
-            columns: ["table_id"]
-            isOneToOne: false
-            referencedRelation: "tables"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       staff_members: {
         Row: {
           created_at: string
@@ -899,7 +857,6 @@ export type Database = {
         | "delivered"
         | "cancelled"
       order_type: "dinein" | "walkin" | "drivethru"
-      service_request_type: "waiter" | "bill"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1031,7 +988,6 @@ export const Constants = {
       notification_type: ["call_staff", "bill_request", "new_order", "system"],
       order_status: ["pending", "preparing", "ready", "delivered", "cancelled"],
       order_type: ["dinein", "walkin", "drivethru"],
-      service_request_type: ["waiter", "bill"],
     },
   },
 } as const

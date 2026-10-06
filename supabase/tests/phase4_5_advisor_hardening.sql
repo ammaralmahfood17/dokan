@@ -45,10 +45,12 @@ SELECT is(
       AND indexname IN (
         'idx_orders_table_id',
         'idx_products_category_id',
-        'idx_service_requests_table_id',
         'idx_telegram_links_user_id'
       )),
-  4,
+  -- W6-T1: was 4 with 'idx_service_requests_table_id' - that table is dropped as dead schema, so
+  -- the assertion follows it. The count is part of the test, not decoration: leaving 4 here would
+  -- make the suite fail the moment the migration lands, which is the gate working.
+  3,
   'all foreign-key indexes exist'
 );
 SELECT is(
