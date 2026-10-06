@@ -206,11 +206,29 @@ because it cannot BE a button - the hidden file input lives inside it.
 text's script rather than the toggle (the plan's premise was false in the code), and the legibility
 floor has no numeric-badge exception (a guard cannot see what a className is written on).
 
-## Waves 5–6 — not started
+## Wave 5 — SEO, headers and performance budgets
+
+| # | Finding | Sev | Status | Evidence |
+|---|---|---|---|---|
+| T1 #5 | Structured data is not structured data | **Major** | **DONE** | `8ac9c09`. The menu emitted the JSON-LD as a React PROP (`{...({ jsonLd } as object)}`), which React 19 renders as an attribute. **Verified on production before the fix:** `jsonLd="[object Object]"` in the DOM and `schema.org` appearing ONLY inside the React Flight payload, i.e. no `<script>` body at all — the finding, live. React agrees in its own words ("does not recognize the `jsonLd` prop on a DOM element"), and the test asserts the BUG so the old shape cannot be copied back. The fix uses `dangerouslySetInnerHTML` with `JSON.stringify` and the file's now-false "zero uses in this codebase" comment was corrected in the same commit. Verified in a SERVED page: a real body `{"@type":"Restaurant","name":"estikana",…}` and 0 occurrences of the old attribute. Production re-check is OPS §9 |
+| T1 #22 | Deprecated `X-XSS-Protection` | Minor | **DONE** | `d81802d`. Production sent `x-xss-protection: 1; mode=block` (captured before the change). Removed; the CI assertion that reads `.next/routes-manifest.json` now also requires `referrer-policy` and FAILS on the presence of the deprecated header — exercised against a manifest containing it (exit 1), while the real manifest reports `has x-xss-protection: false`. Live on the built server: 0 occurrences, all five required headers present. A stale CSP comment crediting `next/font` with needing Google Fonts was corrected in the same file |
+| W5-T3 | CWV table → a real budget | — | **DONE** | `scripts/cwv-report.mjs` (p75 per path over 7 days, budgets LCP ≤ 2500ms on `/<slug>/menu/*`, ≤ 1800ms on `/`, INP ≤ 200ms; exit 1 on a breach) + cron job `010c04282d5d` "CWV budget report (weekly)", Mondays 09:00, delivery `local`. **Baseline (2026-10-06):** 18 rows reported, **0 budgeted rows judged** — the public menu has < 20 LCP samples, so the script prints "a green run here means 'not measured', not 'fast'". Slowest rows are the dashboard routes (LCP p75 4261ms `/dashboard`, 3440ms `/dashboard/kitchen`, 2819ms `/dashboard/pos`), which have no agreed budget — recorded as an observation, not a breach |
+| W5-T4 | Headers + metadata verification | — | **DONE** | The five headers present and `x-xss-protection` absent on the built server. Production canonical = `https://dokanstore.xyz/estikana/menu/table-1` — the apex domain and **no `?k=`**, so the table token never reaches a crawler (`Referrer-Policy: no-referrer` on the menu subtree is the other half). `robots.txt` disallows `/dashboard`, `/api/` and `/super-admin` (production lists 3 rules; the branch's generated file lists 5, adding `/kitchen` and `/admin`) |
+
+**Wave 5 gates:** `tsc` 0 · `lint` 0 · **vitest (the suite plus the 4 new jsonld tests)** · `build` 0 ·
+the four `check-*.mjs` gates 0 · `env:check` 0.
+
+**One real defect found while verifying, NOT in the 37:** the public menu route is classified SSG
+(`●`) with `generateStaticParams()` returning `[]` while the page awaits `searchParams` — so a
+LOCAL production-mode server answers `DYNAMIC_SERVER_USAGE` (500) for every menu URL. Production is
+unaffected (verified: an unknown slug returns 200 there) and the behaviour predates this branch (seen
+in Wave 3), but it is why the Wave 5 verification of T1 #5 ran against `next dev`. Recorded as a
+dated follow-up rather than absorbed.
+
+## Wave 6 — not started
 
 | Wave | Findings | Status |
 |---|---|---|
-| W5 SEO/headers/perf | T1 #5, #22 + CWV budget | TODO |
 | W6 hardening | T2 #13 (remainder), #14, #15 | TODO |
 
 ## Live production verification (2026-10-06, read-only unless stated)

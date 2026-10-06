@@ -283,3 +283,46 @@ date: __________  target: ______________________  result: ______
 /login [ ]  /register [ ]  /dashboard/pos [ ]  /dashboard/orders [ ]  menu URL [ ]
 violations (serious+critical): ____   (must be 0)
 ```
+
+---
+
+## 9. Structured data after deploy (audit T1 #5)
+
+The fix is on the branch. Production TODAY still serves the old shape — the finding, captured live:
+
+    jsonLd="[object Object]"                     <- the attribute, no JSON-LD body
+    schema.org appears ONLY inside the React Flight payload (the prop, for hydration)
+
+After the deploy, verify:
+
+```bash
+curl -s https://dokanstore.xyz/<slug>/menu/table-1 | grep -o 'application/ld+json.{0,200}'
+#   expect a real body: {"@context":"https://schema.org","@type":"Restaurant","name":…
+curl -s https://dokanstore.xyz/<slug>/menu/table-1 | grep -c 'jsonLd="\[object Object\]"'   # must be 0
+```
+
+Then Google's Rich Results Test on the URL → "Restaurant" detected.
+
+```
+date: __________  ld+json body: yes/no ____  old attribute count: ____  Rich Results: __________
+```
+
+## 10. Weekly Core Web Vitals budget report (Wave 5 T3)
+
+Cron job `010c04282d5d` — "CWV budget report (weekly)" — runs **every Monday 09:00 (+03)** from
+`/home/ammar/dokan-v3`, delivery `local` (saved under `~/.hermes/cron/output/`). A breach opens a
+task, not a page.
+
+```bash
+cd ~/dokan-v3 && node scripts/cwv-report.mjs            # exit 1 on a budget breach
+CWV_WINDOW_DAYS=30 node scripts/cwv-report.mjs          # a different window
+```
+
+Budgets: LCP p75 <= 2500ms on `/<slug>/menu/*`, <= 1800ms on `/`, INP p75 <= 200ms.
+
+**Baseline 2026-10-06** (last 7 days, paths with > 20 samples): 18 rows reported, **0 budgeted rows
+judged** — the public menu has fewer than 20 LCP samples, so the budgeted paths are NOT MEASURED yet
+and a green run must not be read as "fast" (the script says so itself). The slowest rows are the
+dashboard routes, which have no agreed budget: LCP p75 **4261ms** `/dashboard`, **3440ms**
+`/dashboard/kitchen`, **2819ms** `/dashboard/pos`; FCP p75 up to 2748ms. Recorded as an observation
+for the owner, not as a breach.
