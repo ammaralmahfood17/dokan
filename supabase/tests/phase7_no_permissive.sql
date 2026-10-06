@@ -11,7 +11,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(5);
+SELECT plan(6);
 
 -- 1. No permissive policy anywhere in public. `USING (true)` on a tenant table is the whole
 --    cross-tenant leak in one line.
@@ -85,3 +85,29 @@ SELECT is(
 SELECT * FROM finish();
 
 ROLLBACK;
+
+-- W6-T2 (audit T2 #14): no FUTURE table or sequence in `public` may be handed to a web role.
+--
+-- This assertion is the permanent guard for the drift described in
+-- 20261006150000_default_acl_hardening.sql: the platform bootstrap granted these defaults and nothing
+-- in the repository revoked them, so a FRESH database (`supabase db reset`, this CI job) auto-exposed
+-- every new table while production - cleaned outside the repository - measured 0. This test is what
+-- makes the two agree from now on.
+--
+-- Scoped to `public` and to objects owned by `postgres`: the platform-owned defaults live in
+-- `storage` / `graphql` / `graphql_public` and cannot be changed by the migration runner anyway
+-- ("permission denied to change default privileges", verified). Functions are excluded because
+-- `anon` needs EXECUTE on the SECURITY DEFINER resolvers the public menu calls.
+SELECT is(
+  (SELECT count(*)::integer
+     FROM pg_default_acl d
+     JOIN pg_roles r ON r.oid = d.defaclrole
+     JOIN pg_namespace n ON n.oid = d.defaclnamespace,
+     LATERAL aclexplode(d.defaclacl) a
+    WHERE r.rolname = 'postgres'
+      AND n.nspname = 'public'
+      AND d.defaclobjtype IN ('r', 'S')
+      AND a.grantee IN ('anon'::regrole, 'authenticated'::regrole)),
+  0,
+  'no default privilege grants future tables/sequences in public to anon or authenticated'
+);

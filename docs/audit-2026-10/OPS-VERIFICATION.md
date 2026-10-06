@@ -326,3 +326,40 @@ and a green run must not be read as "fast" (the script says so itself). The slow
 dashboard routes, which have no agreed budget: LCP p75 **4261ms** `/dashboard`, **3440ms**
 `/dashboard/kitchen`, **2819ms** `/dashboard/pos`; FCP p75 up to 2748ms. Recorded as an observation
 for the owner, not as a breach.
+
+---
+
+## 11. Default privileges for future tables (audit T2 #14)
+
+The repository's `0000_init.sql:2019-2020` grants `anon` and `authenticated` ALL on FUTURE tables in
+`public` (the platform bootstrap). No migration ever revoked it, yet production measures **0** such
+grants — so the live database was cleaned outside this repository and a fresh one (`supabase db
+reset`, the CI job) rebuilds the exposed version. `20261006150000_default_acl_hardening.sql` now
+revokes the `postgres`-owned defaults so the repository produces what production runs.
+
+**Owner action on the hosted project** (this is the part the repository cannot do — the platform-owned
+`supabase_admin` grants answer "permission denied to change default privileges"):
+
+1. Supabase dashboard → **Settings → API → "Automatically expose new tables"** → **off**
+   (the `auto_expose_new_tables = false` this repo sets for the local stack).
+2. Verify with this query in the SQL editor:
+
+```sql
+SELECT r.rolname AS owner, n.nspname AS schema, d.defaclobjtype, a.grantee::regrole::text, a.privilege_type
+  FROM pg_default_acl d
+  JOIN pg_roles r ON r.oid = d.defaclrole
+  JOIN pg_namespace n ON n.oid = d.defaclnamespace,
+  LATERAL aclexplode(d.defaclacl) a
+ WHERE d.defaclobjtype IN ('r','S')
+   AND a.grantee IN ('anon'::regrole, 'authenticated'::regrole);
+-- Expect: no row with nspname = 'public'.
+```
+
+**Do NOT revoke the `storage` (22 entries, owned by `postgres`) or `graphql` / `graphql_public` (44,
+owned by `supabase_admin`) defaults.** Those belong to platform services, not to this application's
+data; production's count for them is recorded here as the baseline (2026-10-06): storage 22,
+graphql* 44. Record the hosted setting here:
+
+```
+date: __________  "Automatically expose new tables": off/on ____  owner: __________
+```

@@ -21,7 +21,11 @@ max_rows = 1000
 # without explicit GRANTs. Leave unset today to preserve local behaviour. The implicit default
 # flips to `false` on 2026-05-30 to match the new cloud default, and the field is removed in
 # 2026-10-30 once the always-revoked behaviour is permanent. Set to `false` to opt in early.
-# auto_expose_new_tables = false
+# audit T2 #14: be explicit rather than inheriting the platform default. The migration runner's
+# ALTER DEFAULT PRIVILEGES only covers objects created by the `postgres` role; anything created by
+# the platform (or in Studio) is governed here. On the hosted project the same setting lives in the
+# dashboard (Settings -> API), which is where the supabase_admin-owned defaults are handled.
+auto_expose_new_tables = false
 
 [api.tls]
 # Enable HTTPS endpoints locally using a self-signed certificate.
