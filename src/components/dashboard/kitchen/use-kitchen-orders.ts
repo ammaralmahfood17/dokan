@@ -6,10 +6,11 @@
 // poll, and the merge rules that keep realtime/poll snapshots from clobbering
 // fresher rows. All explanatory notes below travel with the code unchanged.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { OrderRow } from '@/lib/kitchen-tickets';
 import { isForeignProjectRow, reportRealtimeLeak } from '@/lib/realtime-guard';
+import { usePostgresSubscription } from '@/lib/realtime/use-postgres-subscription';
 
 export function useKitchenOrders({
   projectId,
@@ -28,6 +29,8 @@ export function useKitchenOrders({
   // Ids touched by a realtime UPDATE since the last poll — fullRefresh must
   // keep the fresher local row instead of letting an older snapshot win.
   const realtimeTouchedRef = useRef<Set<string>>(new Set());
+  // Per-order debounce for order_items bursts (survives re-renders, cleared on unmount)
+  const itemRefetchTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   // M3: ids currently on our board. order_items has no project_id column and
   // Supabase realtime can't filter by a joined orders.project_id, so we
   // filter incoming order_items events client-side against this set — other
@@ -137,52 +140,37 @@ export function useKitchenOrders({
     knownOrderIdsRef.current = new Set(orders.map((o) => o.id));
   }, [orders]);
 
-  // Realtime
-  useEffect(() => {
-    const supabase = createClient();
-
-    // NOTE: no project_id filter on these channels. RLS (orders_staff_*
-    // policies) already isolates events per tenant — verified live with a
-    // probe: filter+RLS on the same column made realtime drop EVERY event,
-    // so orders took up to 30s to appear (30s fallback poll). Without the
-    // filter, events arrive in ~1s and cross-tenant events are still
-    // blocked by RLS. See migration 0018 note.
-    const itemRefetchTimers = new Map<string, ReturnType<typeof setTimeout>>();
-    const channel = supabase
-      .channel(`kds-${projectId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'orders' },
-        async (payload) => {
-          // Audit T2 #5: never render another tenant's row. Unreachable while Realtime honours
-          // RLS (proven by scripts/realtime-probe.ts on 2026-10-06) - hence the alarm.
+  // Realtime. The channel opens only after the session token is on the socket — see
+  // usePostgresSubscription for the measurement that made this necessary.
+  const bindings = useMemo(
+    () => [
+      {
+        table: 'orders',
+        event: 'INSERT' as const,
+        handler: async (payload: { new?: unknown }) => {
           if (isForeignProjectRow(payload, projectId)) {
             reportRealtimeLeak('kitchen board (insert)');
             return;
           }
-          const newOrder = payload.new as Partial<OrderRow>;
-          const newId = newOrder.id as string;
+          const newId = (payload.new as Partial<OrderRow>)?.id as string;
           if (!newId || knownIds.current.has(newId)) return;
-          if (newOrder.service_type) return;
-
+          if ((payload.new as Partial<OrderRow>).service_type) return;
           try {
             const fullOrder = await fetchSingleOrder(newId);
             if (!fullOrder) return;
-
             knownIds.current.add(newId);
             realtimeAddedRef.current.add(newId);
             notifyNewOrder(fullOrder.order_number);
             setOrders((prev) => [fullOrder, ...prev]);
           } catch (err) {
-            // Keep the board as-is; the next poll will pick the order up.
             console.error('fetchSingleOrder failed', err);
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'orders' },
-        (payload) => {
+        },
+      },
+      {
+        table: 'orders',
+        event: 'UPDATE' as const,
+        handler: (payload: { new?: unknown }) => {
           if (isForeignProjectRow(payload, projectId)) {
             reportRealtimeLeak('kitchen board (update)');
             return;
@@ -195,59 +183,60 @@ export function useKitchenOrders({
             }
             return prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o));
           });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'orders' },
-        (payload) => {
-          // A DELETE payload carries only the key unless REPLICA IDENTITY is FULL, so this can
-          // only judge when project_id is present - and dropping a foreign id from a local
-          // list is harmless either way.
-          if (isForeignProjectRow({ new: payload.old }, projectId)) {
+        },
+      },
+      {
+        table: 'orders',
+        event: 'DELETE' as const,
+        handler: (payload: { old?: unknown }) => {
+          if (isForeignProjectRow({ new: (payload as { old?: unknown }).old }, projectId)) {
             reportRealtimeLeak('kitchen board (delete)');
             return;
           }
-          const deletedId = payload.old?.id as string;
+          const deletedId = (payload as { old?: { id?: string } }).old?.id;
           setOrders((prev) => prev.filter((o) => o.id !== deletedId));
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'order_items' },
-        (payload) => {
-          // Item moved by another screen — refetch that order to keep the
-          // board correct. M3: order_items has no project_id and realtime
-          // can't join-filter, so drop events for orders not on our board
-          // before fetching — other tenants' updates are pure noise.
-          const itemOrderId = (payload.new as { order_id: string }).order_id;
-          if (!knownOrderIdsRef.current.has(itemOrderId)) return;
-          // Trailing-debounce per order (500ms, orders-client pattern): a
-          // burst of order_items UPDATEs (POS editing several lines) must
-          // collapse into ONE refetch of that order.
-          const pending = itemRefetchTimers.get(itemOrderId);
+        },
+      },
+      {
+        table: 'order_items',
+        event: 'UPDATE' as const,
+        handler: (payload: { new?: unknown }) => {
+          // order_items has no project_id: drop events for orders not on this board before fetching,
+          // and collapse a burst of line updates into one refetch per order (500ms trailing).
+          const itemOrderId = (payload.new as { order_id?: string })?.order_id;
+          if (!itemOrderId || !knownOrderIdsRef.current.has(itemOrderId)) return;
+          const pending = itemRefetchTimers.current.get(itemOrderId);
           if (pending) clearTimeout(pending);
-          itemRefetchTimers.set(
+          itemRefetchTimers.current.set(
             itemOrderId,
             setTimeout(() => {
-              itemRefetchTimers.delete(itemOrderId);
+              itemRefetchTimers.current.delete(itemOrderId);
               void refetchOrder(itemOrderId);
             }, 500)
           );
-        }
-      )
-      .subscribe();
+        },
+      },
+    ],
+    [projectId, fetchSingleOrder, notifyNewOrder, refetchOrder]
+  );
 
-    // Fallback polling every 30s
-    const interval = setInterval(() => void fullRefresh(), 30000);
+  const status = usePostgresSubscription(`kds-${projectId}`, bindings, true);
 
+  useEffect(() => {
+    const timers = itemRefetchTimers.current;
     return () => {
-      itemRefetchTimers.forEach((t) => clearTimeout(t));
-      itemRefetchTimers.clear();
-      void supabase.removeChannel(channel);
-      clearInterval(interval);
+      timers.forEach((t) => clearTimeout(t));
+      timers.clear();
     };
-  }, [projectId, fullRefresh, fetchSingleOrder, notifyNewOrder, refetchOrder]);
+  }, []);
+
+  // Fallback poll: fast while the socket is not live, slow once it is (a live channel makes it
+  // insurance, not the path).
+  useEffect(() => {
+    const period = status === 'live' ? 120_000 : 15_000;
+    const interval = setInterval(() => void fullRefresh(), period);
+    return () => clearInterval(interval);
+  }, [fullRefresh, status]);
 
   return { orders, setOrders, fullRefresh };
 }

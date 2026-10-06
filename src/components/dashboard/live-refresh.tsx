@@ -1,84 +1,65 @@
 'use client';
 
-// LiveRefresh — keeps a server-rendered dashboard page fresh WITHOUT a manual
-// browser refresh.
+// LiveRefresh — keeps a server-rendered dashboard page fresh WITHOUT a manual browser refresh.
 //
-// ROOT CAUSE this fixes (2026-09-25): src/app/dashboard/page.tsx is a pure
-// server component with no realtime channel and no interval, so the home
-// screen froze at whatever the DB held at page load — the merchant's only way
-// to see a new order was to hit refresh. The Orders page has a channel, but
-// its only fallback (30s poll) starts ONLY after a CHANNEL_ERROR/CLOSED
-// callback: a socket that connects and then silently stalls leaves the page
-// stale forever.
+// Measured 2026-10-06 (this is why the file looks like this):
+//   * Realtime itself is fine: a subscriber that signs in BEFORE subscribing receives an order in
+//     137-365 ms, and RLS isolates tenants (0 rows for a project the user is not in).
+//   * The app was not: every subscription site opened its channel on mount without pushing the
+//     session to the Realtime socket, so the subscription was authorized as `anon`, RLS matched
+//     nothing, and no event arrived - while the channel still reported SUBSCRIBED. Measured on the
+//     kitchen board: a new order appeared after 27,295 ms, i.e. the fallback poll.
+//     The commentary that used to live here claimed realtime "beats the heartbeat by ~1s": it did
+//     not, and a comment that contradicts the measurement is worse than no comment.
 //
-// Two independent safety nets, so neither can leave the screen stale:
-//   1. Realtime postgres_changes on the orders table (no project_id filter —
-//      the same proven pattern as use-kitchen-orders.ts: filter+RLS on one
-//      column made realtime drop every event, RLS alone isolates tenants).
-//   2. A slow heartbeat that refreshes REGARDLESS of socket health, so a
-//      silently-hung connection can never freeze the page. 60s keeps it
-//      cheap; the RSC render is the cost, and the dashboard is a small page.
-//
-// router.refresh() re-runs the server components and swaps the RSC payload,
-// so every number on the page (KPIs, charts, recent orders, table occupancy)
-// updates in one shot — no per-widget state duplication.
+// So the contract is now: `usePostgresSubscription` resolves the session, pushes the token, and only
+// then opens the channel. This component adds the one thing a socket can never promise - a
+// heartbeat that refreshes regardless of socket health, so a silent stall cannot freeze the page.
+// Once the channel reports `live`, that heartbeat can be slow (60s); while it is not, it is 15s.
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { isForeignProjectRow, reportRealtimeLeak } from '@/lib/realtime-guard';
+import { usePostgresSubscription } from '@/lib/realtime/use-postgres-subscription';
 
-/** Heartbeat period. Slow by design: realtime normally beats it by ~1s. */
-const HEARTBEAT_MS = 60_000;
+const HEARTBEAT_LIVE_MS = 60_000;
+const HEARTBEAT_DEGRADED_MS = 15_000;
 
 export function LiveRefresh({ projectId }: { projectId: string }) {
   const router = useRouter();
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const supabase = createClient();
-
-    // Trailing 500ms debounce: order creation is a transaction that touches
-    // `orders` and `order_items` — several events can land in one burst and
-    // each refresh() is a full server render, so collapse them.
-    let debounce: ReturnType<typeof setTimeout> | null = null;
-    const ping = (payload?: { new?: unknown }) => {
-      // Defence in depth (audit T2 #5). The production probe proved Realtime honours RLS, so
-      // this branch is unreachable - and if it ever runs, another tenant's order row is on
-      // screen: that is an ERROR-level signal, never a redraw, and never rendered.
+  // Trailing 500ms debounce: order creation touches `orders` and `order_items`, so several events
+  // land in one burst and each refresh() is a full server render.
+  const ping = useCallback(
+    (payload?: { new?: unknown }) => {
       if (isForeignProjectRow(payload, projectId)) {
         reportRealtimeLeak('dashboard live-refresh');
         return;
       }
-      if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(() => router.refresh(), 500);
-    };
+      if (debounce.current) clearTimeout(debounce.current);
+      debounce.current = setTimeout(() => router.refresh(), 500);
+    },
+    [router, projectId]
+  );
 
-    const channel = supabase
-      .channel(`dashboard-${projectId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        ping
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'order_items' },
-        ping
-      )
-      .subscribe();
+  const status = usePostgresSubscription(
+    `dashboard-${projectId}`,
+    [
+      { table: 'orders', handler: ping },
+      { table: 'order_items', handler: ping },
+    ],
+    true
+  );
 
-    // Safety net: runs even when the socket is fine. This is what guarantees
-    // the "must refresh" symptom cannot come back via a silent stall.
-    const heartbeat = setInterval(() => router.refresh(), HEARTBEAT_MS);
-
+  useEffect(() => {
+    const period = status === 'live' ? HEARTBEAT_LIVE_MS : HEARTBEAT_DEGRADED_MS;
+    const id = setInterval(() => router.refresh(), period);
     return () => {
-      if (debounce) clearTimeout(debounce);
-      clearInterval(heartbeat);
-      void supabase.removeChannel(channel);
+      clearInterval(id);
+      if (debounce.current) clearTimeout(debounce.current);
     };
-    // router is stable; re-subscribing on its identity would churn the channel.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+  }, [router, status]);
 
   return null;
 }

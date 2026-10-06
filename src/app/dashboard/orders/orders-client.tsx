@@ -15,6 +15,7 @@ import {
 import { EmptyState } from '@/components/ui/empty-state';
 import { PullToRefresh } from '@/components/ui/pull-to-refresh';
 import { countStatuses, sumDaySales, type StatusCounts } from '@/lib/order-stats';
+import { usePostgresSubscription } from '@/lib/realtime/use-postgres-subscription';
 
 const FILTERS: { value: OrderStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'الكل' },
@@ -269,74 +270,50 @@ export function OrdersClient({
 
   // Realtime — تحديث تلقائي لطلبات اليوم فقط (الأيام السابقة ثابتة:
   // ما يجي أحد يغيّر طلبات أمس أثناء عرضها)
-  // M1: status callback + 30s poll fallback (same interval as KDS) so a
-  // dropped realtime connection never leaves the page silently stale.
-  const [realtimeOffline, setRealtimeOffline] = useState(false);
+  // The offline banner is DERIVED from the channel status, not mirrored into state: a setState in an
+  // effect is a cascading render (this repo's lint rule) and a second source of truth.
+
+  // Realtime through the shared hook: the session token is attached to the socket BEFORE the
+  // channel opens (see use-postgres-subscription.ts for the 27s end-to-end measurement that made
+  // this necessary). The old version here stopped its fallback poll on SUBSCRIBED and only
+  // restarted it on CHANNEL_ERROR/CLOSED — and a subscription authorized as `anon` reports
+  // SUBSCRIBED while delivering nothing, so the page could sit stale with the poll switched off.
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onOrdersEvent = useCallback(() => {
+    if (!isToday) return;
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => void refresh(), 500);
+  }, [isToday, refresh]);
+
+  const realtimeStatus = usePostgresSubscription(
+    `orders-${projectId}`,
+    [{ table: 'orders', handler: onOrdersEvent }],
+    true
+  );
+
+  // The poll now follows the hook's status: fast while the channel is not live, gone once it is.
+  const realtimeOffline = realtimeStatus === 'error';
 
   useEffect(() => {
-    const supabase = createClient();
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    let pollInterval: ReturnType<typeof setInterval> | null = null;
-    let channelActive = true;
+    if (realtimeStatus === 'live') return;
+    const poll = setInterval(() => {
+      if (isToday) void refresh();
+    }, 15_000);
+    return () => clearInterval(poll);
+  }, [realtimeStatus, isToday, refresh]);
 
-    const stopPoll = () => {
-      if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-      }
-    };
-
-    // Safety net (2026-09-25): the 30s poll below only STARTS on a
-    // CHANNEL_ERROR/CLOSED callback. A socket that connects and then stalls
-    // silently fires neither, so the page stayed stale until a manual
-    // refresh. This heartbeat runs regardless of socket health — realtime
-    // normally wins the race by ~1s, so this is just insurance.
+  // A slow heartbeat regardless of socket health: a socket that connects and then stalls fires
+  // neither CHANNEL_ERROR nor CLOSED, and this is what keeps the page from freezing in that case.
+  useEffect(() => {
     const heartbeat = setInterval(() => {
       if (isToday) void refresh();
     }, 60_000);
-
-    const channel = supabase
-      .channel(`orders-${projectId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'orders',
-          // NOTE: no project_id filter here. RLS (orders_staff_* policies)
-          // already isolates events to the caller's projects — verified
-          // live. Combining filter+RLS on the same column made realtime
-          // drop ALL events (kitchen orders took up to 30s to appear).
-        },
-        () => {
-          if (!isToday) return;
-          if (refreshTimer) clearTimeout(refreshTimer);
-          refreshTimer = setTimeout(() => void refresh(), 500);
-        }
-      )
-      .subscribe((status) => {
-        if (!channelActive) return;
-        if (status === 'SUBSCRIBED') {
-          // Reconnected — clear the banner and stop the fallback poll.
-          setRealtimeOffline(false);
-          stopPoll();
-        } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-          setRealtimeOffline(true);
-          // Poll fallback: only while realtime is down (no double-fetching).
-          if (!pollInterval) {
-            pollInterval = setInterval(() => void refresh(), 30000);
-          }
-        }
-      });
-
     return () => {
-      channelActive = false;
-      if (refreshTimer) clearTimeout(refreshTimer);
       clearInterval(heartbeat);
-      stopPoll();
-      void supabase.removeChannel(channel);
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
-  }, [projectId, refresh, isToday]);
+  }, [isToday, refresh]);
 
   const filtered = useMemo(() => {
     let list = orders;

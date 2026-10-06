@@ -218,7 +218,14 @@ async function main(): Promise<number> {
       password,
     });
     if (errSignIn || !signIn?.session) throw new Error(`probe sign-in failed: ${errSignIn?.message}`);
-    log('signed in as the probe user (member of A only)');
+    // THE FIX for this probe's false negative. Signing in is not enough: supabase-js pushes the
+    // token to the Realtime socket asynchronously, and this probe (like the app before 2026-10-06)
+    // subscribed in that gap. The channel then reported SUBSCRIBED while being authorized as `anon`,
+    // so RLS matched nothing and NOT ONE event arrived - the probe's own-tenant control failed and
+    // its verdict ("INCONCLUSIVE") looked like a Realtime outage. Measured: with the token attached
+    // first, the same event lands in 137-365 ms; the app's end-to-end latency went 27,295 ms -> 754 ms.
+    await asUser.realtime.setAuth(signIn.session.access_token);
+    log('signed in as the probe user (member of A only) + token attached to Realtime');
 
     const seen = new Set<string>();
     const labels = new Map<string, string>();
