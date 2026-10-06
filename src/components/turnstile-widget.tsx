@@ -96,6 +96,10 @@ export function TurnstileWidget({
       ref={containerRef}
       className="flex min-h-[65px] justify-center"
       // The widget is a third-party iframe; the label is what a screen reader announces.
+      // audit: axe flagged `aria-prohibited-attr` on this div - an aria-label with NO role is
+      // prohibited, so the label was silently dropped and the challenge was announced as an
+      // unlabelled group. role="group" is what makes the label legal.
+      role="group"
       aria-label="التحقق الأمني"
     />
   );
