@@ -230,46 +230,28 @@ Trade-off recorded: no full-page ISR cache for the menu; the menu QUERY is still
 `revalidate: 60`, and restoring the HTML cache means moving the token out of `searchParams` — a
 design change for the owner, not a silent refactor.
 
-## Wave 6 — readiness VERIFIED against the live DB and the code, not started
+## Wave 6 — hardening and hygiene (COMPLETE)
 
-Every premise checked before writing a line, because the plan's premises are two revisions old.
+| # | Finding | Sev | Status | Evidence |
+|---|---|---|---|---|
+| T2 #13 | Dead schema | Minor | **DONE (re-scoped)** | `9135bdc`. The plan named `order_sequences` (already gone - the migration would have failed) and `service_requests`. The real remainder: 0 rows, no inbound FKs, no application reader or writer, and INSERT/UPDATE/DELETE granted to `authenticated` for nothing. Dropped with its `service_request_type` enum (used by no other column). The pgTAP index assertion followed 4 → 3, and the generated types were cleaned in the same commit. The migration was proven by running it inside a transaction against the real schema and rolling back. **Not applied to production: a table drop is the owner's call** |
+| T2 #14 | Default privileges | Minor | **DONE (drift, not a live hole)** | `a9f4855` + `18a6ad8`. The repository's `0000_init.sql:2019-2020` grants `anon` and `authenticated` ALL on FUTURE tables in `public` and nothing ever revoked it - yet production measures 0, so the live DB was cleaned OUTSIDE the repository and `supabase db reset` rebuilds the exposed version. **Environment clean, source dirty, invisible.** Fixed by revoking the `postgres`-owned defaults + asserting it permanently (`plan(5)` → `plan(6)`). CI proved it on a fresh DB. The first CI run FAILED with `planned 6 tests but ran 5` because the assertion landed after `finish()` - fixed (`18a6ad8`), which is the database job doing its job |
+| T2 #15 | Impersonation at rest | Minor | **DONE** | `628a6b0`. The super admin's own session was stored verbatim, refresh token included - a refreshable credential for the highest-privileged account, in a plaintext column. Option A: access token only (`impersonation_super_admin_session_no_refresh`, mirroring the target side's existing CHECK), TTL 30 → **15 minutes in the constraint too** (the schema must not accept what the code refuses), `used_at` making the marker single-use for real, and the END path restoring without a stored refresh token. Red/green proven in one transaction with savepoints. **Must ship WITH the deploy**: the old code inserts the token the new CHECK rejects |
+| W6-T4 | Secrets, backups, advisors | — | **DONE (documented, owner-run)** | `11d6102` → OPS §12: rotation list (with the reason: the tokens have been pasted into conversations during this work), a restore **drill** with the row-count comparison, Vercel preview protection, and the Advisor re-run to be pasted in after these migrations |
 
-**W6-T1 (T2 #13 remainder) — READY, with one correction to the plan.**
-`order_sequences` **no longer exists** (`pg_tables`); the plan's migration that drops it would fail.
-The real remainder is `service_requests`: exists, **0 rows**, and no application code reads or writes
-it (references are only `database.types.ts`, `0000_init.sql`, two older migrations and a pgTAP test).
-So the work is: a migration that drops it, the pgTAP test updated, and `database.types.ts` regenerated.
-The dead routes part of this task was already done in W1 (decision 2).
+**Wave 6 gates:** `tsc` 0 · `lint` 0 · **vitest 237/237 (20 files)** · `build` 0 · the four
+`check-*.mjs` gates 0 · `env:check` 0 · **CI 3/3 on every head**, including
+`Fresh database · Security assertions`, which is the only place the migrations and pgTAP are
+exercised on this host.
 
-**W6-T2 (T2 #14) — READY.** `supabase/config.toml` has `[api]` with `# auto_expose_new_tables = false`
-commented out, so it is one line plus the `pg_default_acl` assertion. `supabase/tests/phase7_no_permissive.sql`
-currently has `plan(5)`; the new assertion makes it `plan(6)`. Verification is CI-only on this host
-(no Docker) - the same substitute already in `OPS-VERIFICATION` §1.
-
-**W6-T3 (T2 #15) — READY with Option A, and TWO gaps in the plan found while checking.**
-- `impersonation_sessions` holds **0 rows** → the plan's "delete existing active rows" step is a no-op.
-- `IMPERSONATION_TTL_MS` is 30 min in `src/lib/super-admin.ts`; → 15 min per A8.
-- Line 202 stores `super_admin_session: input.actorSession` — the actor's session INCLUDING its
-  `refresh_token`, which is the plaintext-at-rest problem. The target side already avoids this and the
-  DB proves the intended pattern: `impersonation_target_session_no_refresh CHECK (NOT (target_session ? 'refresh_token'))`
-  — mirror it for `super_admin_session`.
-- **Gap 1 (plan does not mention it):** `impersonation_max_duration CHECK (expires_at <= created_at + '00:30:05')`
-  caps the lifetime at 30 minutes. Shortening the TTL to 15 without updating this constraint leaves the
-  database still accepting a 30-minute row — the code would be stricter than the schema, which is exactly
-  the kind of gap this audit exists to close.
-- **Gap 2 (plan calls it "acceptable", and it is a behaviour change):** `endImpersonation()` returns the
-  stored `super_admin_session` "for cookie restoration". Option A removes the refresh token from that
-  payload, so the END path must be checked and updated to restore the admin's session without it (the
-  admin's own browser still holds its cookie; a re-login on expiry is the accepted cost).
-- `used_at` is not a column yet → the A8 single-use marker needs it added.
-- Only `src/lib/super-admin.ts` (and the generated types) touch this table, so the blast radius is known.
-
-**W6-T4 — owner-run, no repo work.** Checklist already written in `OPS-VERIFICATION` §5 and §?; the
-secret-rotation item explicitly covers anything pasted into a chat or a log.
-
-**Blocker that stays a blocker:** `npm run test:db` cannot run on this host (no docker group, `sudo`
-needs a password). The substitute is the CI `Fresh database · Security assertions` job, which is green
-on every head so far and runs the pgTAP files this wave adds to.
+**One self-inflicted incident, recorded because it is the kind of thing that must not be silent:** the
+first attempt at the T2 #15 transactional proof embedded `psql -c "insert …"` calls inside a generated
+`.sql` file. Each nested call runs in AUTOCOMMIT on its own connection, so its writes COMMIT while the
+outer transaction is still open and the final `rollback` never touches them. It left **4 rows in the
+production `impersonation_sessions` table**. They were found by counting rows afterwards (baseline 0),
+deleted by primary key (`DELETE 4`), and the table is verified back to 0 with no fake-token row left.
+The trap is recorded in the repo skill. **No other table was touched, and every other proof in this
+project ran inside a single psql session with savepoints.**
 
 ## Live production verification (2026-10-06, read-only unless stated)
 
