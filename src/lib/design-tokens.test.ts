@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, globSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -216,5 +216,25 @@ describe('the radius scale is ascending (audit T1 #9)', () => {
     expect(px.every(Number.isFinite), `tokens not found: ${JSON.stringify(px)}`).toBe(true);
     expect(px, `radius scale must ascend: ${JSON.stringify(px)}`).toEqual([...px].sort((a, b) => a - b));
     expect(new Set(px).size, 'a duplicate radius is not a scale').toBe(px.length);
+  });
+});
+
+describe('Arabic legibility floor (audit T1 #19)', () => {
+  it('no UI text below 11.5px', () => {
+    // Arabic at 10px loses its dots and diacritic spacing - the finding counted 63 uses of 10px/11px
+    // in one UI. The floor is 11.5px for everything rather than "11px for numeric badges", because a
+    // guard cannot see what a className is written on, and a rule with an exception it cannot check
+    // is a rule that will be broken.
+    const px = (v: string) => (v.endsWith('rem') ? parseFloat(v) * 16 : parseFloat(v));
+    const offenders: string[] = [];
+    for (const f of globSync('src/**/*.{ts,tsx}').filter((f) => !/\.test\./.test(f))) {
+      readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+        for (const m of line.matchAll(/text-\[(\d*\.?\d+)(px|rem)\]/g)) {
+          const size = px(m[1] + m[2]);
+          if (size < 11.5) offenders.push(`${f}:${i + 1} ${m[0]} (${size}px)`);
+        }
+      });
+    }
+    expect(offenders, 'text below the Arabic floor: raise it to text-[11.5px]').toEqual([]);
   });
 });

@@ -400,7 +400,7 @@ export function RecordPaymentButton({
                 placeholder="أي ملاحظات إضافية"
               />
             </label>
-            <p className="text-[11px] text-[var(--color-text-tertiary)]">
+            <p className="text-[11.5px] text-[var(--color-text-tertiary)]">
               التسجيل يُجدّد الاشتراك تلقائياً 30 يوم من الآن
             </p>
             <div className="flex gap-2">

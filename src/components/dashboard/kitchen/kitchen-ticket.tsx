@@ -111,11 +111,11 @@ export function KitchenTicket({
 
       {/* Timing badge — warn ≥5min, danger 3-layer when overdue */}
       {overdue ? (
-        <span className="mb-2.5 inline-block rounded-full bg-[var(--color-danger-tint)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--color-danger)]">
+        <span className="mb-2.5 inline-block rounded-full bg-[var(--color-danger-tint)] px-2.5 py-0.5 text-[11.5px] font-bold text-[var(--color-danger)]">
           ⏱ متأخر — {mins} د
         </span>
       ) : mins >= 5 ? (
-        <span className="mb-2.5 inline-block rounded-full bg-[var(--color-warn-tint)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--color-warn)]">
+        <span className="mb-2.5 inline-block rounded-full bg-[var(--color-warn-tint)] px-2.5 py-0.5 text-[11.5px] font-bold text-[var(--color-warn)]">
           ⏱ {mins} د
         </span>
       ) : null}

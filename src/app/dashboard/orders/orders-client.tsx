@@ -377,7 +377,7 @@ export function OrdersClient({
           <p>متابعة فقط · الحالة تتحدث من شاشة المطبخ</p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <p className="text-[11px] text-[var(--color-text-secondary)]">مبيعات اليوم</p>
+          <p className="text-[11.5px] text-[var(--color-text-secondary)]">مبيعات اليوم</p>
           <p className="font-mono text-lg font-bold tabular-nums text-[var(--color-text)]" dir="ltr">
             {formatMoney(dayTotal, currency)}
           </p>
@@ -486,7 +486,7 @@ export function OrdersClient({
           >
             {f.label}
             <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${
+              className={`rounded-full px-1.5 py-0.5 text-[11.5px] tabular-nums ${
                 filter === f.value
                   ? 'bg-white/20 text-white'
                   : 'bg-[var(--color-bg)] text-[var(--color-text-muted)]'
@@ -560,12 +560,12 @@ export function OrdersClient({
                       );
                     })}
                   </div>
-                  <p className="mt-1 text-[10px] text-[var(--color-text-muted)]" dir="rtl">
+                  <p className="mt-1 text-[11.5px] text-[var(--color-text-muted)]" dir="rtl">
                     {ORDER_STATUS_LABELS[order.status]}
                   </p>
                 </div>
               ) : (
-                <p className="border-b border-[var(--color-border)] px-4 py-2 text-[10px] font-bold text-[var(--color-danger)]">
+                <p className="border-b border-[var(--color-border)] px-4 py-2 text-[11.5px] font-bold text-[var(--color-danger)]">
                   {ORDER_STATUS_LABELS.cancelled}
                 </p>
               )}

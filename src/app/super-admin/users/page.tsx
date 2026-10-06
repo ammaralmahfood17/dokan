@@ -52,7 +52,7 @@ export default async function SuperAdminUsersPage() {
                 <p dir="ltr" className="truncate text-sm font-semibold">
                   {u.email ?? '—'}
                 </p>
-                <p className="text-[11px] text-[var(--color-text-tertiary)]">
+                <p className="text-[11.5px] text-[var(--color-text-tertiary)]">
                   أُنشئ: {dateFmt.format(new Date(u.created_at))}
                 </p>
               </div>
@@ -63,7 +63,7 @@ export default async function SuperAdminUsersPage() {
       )}
 
       {users.length >= 200 && (
-        <p className="mt-3 text-[11px] text-[var(--color-text-tertiary)]">
+        <p className="mt-3 text-[11.5px] text-[var(--color-text-tertiary)]">
           نعرض أول 200 حساب فقط — إذا العدد أكبر، نضيف ترقيم صفحات.
         </p>
       )}

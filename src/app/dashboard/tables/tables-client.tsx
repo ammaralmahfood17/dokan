@@ -308,11 +308,11 @@ export function TablesClient({
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold">طاولة {t.number}</p>
                       {occupiedTableIds.has(t.id) ? (
-                        <span className="rounded-full bg-[var(--color-warn-tint)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-warn)]">
+                        <span className="rounded-full bg-[var(--color-warn-tint)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-warn)]">
                           مشغولة
                         </span>
                       ) : (
-                        <span className="rounded-full bg-[var(--color-success-tint)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-success)]">
+                        <span className="rounded-full bg-[var(--color-success-tint)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-success)]">
                           متاحة
                         </span>
                       )}

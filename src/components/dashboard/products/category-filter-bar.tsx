@@ -66,7 +66,7 @@ export function CategoryFilterBar({
           >
             <span>الكل</span>
             <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${
+              className={`rounded-full px-1.5 py-0.5 text-[11.5px] tabular-nums ${
                 !activeCat ? 'bg-white/20' : 'bg-[var(--color-bg)]'
               }`}
             >
@@ -90,7 +90,7 @@ export function CategoryFilterBar({
               >
                 {c.name}
                 <span
-                  className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${
+                  className={`rounded-full px-1.5 py-0.5 text-[11.5px] tabular-nums ${
                     activeCat === c.id ? 'bg-white/20' : 'bg-[var(--color-bg)]'
                   }`}
                 >

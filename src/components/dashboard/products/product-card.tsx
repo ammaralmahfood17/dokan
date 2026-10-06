@@ -83,15 +83,15 @@ export function ProductCard({
             <Check className="h-5 w-5" />
           </button>
         ) : !p.is_available ? (
-          <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-surface)]">
+          <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-surface)]">
             متوقف
           </span>
         ) : left === 0 ? (
-          <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-surface)]">
+          <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-surface)]">
             خلص
           </span>
         ) : left !== null ? (
-          <span className="absolute end-2 top-2 rounded-[4px] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-text-secondary)]">
+          <span className="absolute end-2 top-2 rounded-[4px] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-text-secondary)]">
             باقي <span dir="ltr">{left}</span>
           </span>
         ) : null}
@@ -100,7 +100,7 @@ export function ProductCard({
       <div className="p-3">
         <h3 className="line-clamp-1 text-sm font-bold">{p.name}</h3>
         {p.description && (
-          <p className="mt-0.5 line-clamp-1 text-[11px] text-[var(--color-text-secondary)]">
+          <p className="mt-0.5 line-clamp-1 text-[11.5px] text-[var(--color-text-secondary)]">
             {p.description}
           </p>
         )}
@@ -113,13 +113,13 @@ export function ProductCard({
             {p.product_addons.slice(0, 2).map((a) => (
               <span
                 key={a.id}
-                className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]"
+                className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-[11.5px] font-semibold text-[var(--color-text-secondary)]"
               >
                 {a.name}
               </span>
             ))}
             {p.product_addons.length > 2 && (
-              <span className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-[10px] font-bold tabular-nums text-[var(--color-primary)]">
+              <span className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-[11.5px] font-bold tabular-nums text-[var(--color-primary)]">
                 +{p.product_addons.length - 2}
               </span>
             )}

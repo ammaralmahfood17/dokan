@@ -43,7 +43,7 @@ export function KpiCards({
           <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">— لا مبيعات أمس</p>
         )}
         {peakHour && peakHour.revenue > 0 && (
-          <p className="mt-1.5 text-[11px] text-[var(--color-text-secondary)]">
+          <p className="mt-1.5 text-[11.5px] text-[var(--color-text-secondary)]">
             ⏰ وقت الذروة: {peakHour.label} — {formatMoney(peakHour.revenue, currency)}
           </p>
         )}

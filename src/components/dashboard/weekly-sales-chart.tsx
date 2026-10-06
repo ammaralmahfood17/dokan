@@ -41,7 +41,7 @@ export function WeeklySalesChart({
                   height: `${Math.max((d.revenue / maxDayRevenue) * 100, d.revenue > 0 ? 4 : 2)}%`,
                 }}
               />
-              <span className="text-[10px] text-[var(--color-text-secondary)]">
+              <span className="text-[11.5px] text-[var(--color-text-secondary)]">
                 {d.label}
               </span>
             </div>

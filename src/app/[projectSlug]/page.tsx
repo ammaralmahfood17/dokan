@@ -118,7 +118,7 @@ export default async function StorefrontPage({
 
       {/* Footer */}
       <div className="mt-auto pb-8 pt-6 text-center">
-        <p className="text-[11px] text-[var(--color-text-tertiary)]" dir="ltr">
+        <p className="text-[11.5px] text-[var(--color-text-tertiary)]" dir="ltr">
           Powered by Dokan
         </p>
       </div>

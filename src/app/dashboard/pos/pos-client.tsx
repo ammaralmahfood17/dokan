@@ -515,7 +515,7 @@ export function PosClient({
               </span>
               <div className="min-w-0">
                 <p className="text-sm font-bold leading-tight">وصل الطلب للمطبخ</p>
-                <p className="truncate text-[11px] leading-tight opacity-90" dir="ltr">
+                <p className="truncate text-[11.5px] leading-tight opacity-90" dir="ltr">
                   order-{lastConfirmed.orderNumber} · {formatMoney(lastConfirmed.totalAmount, currency)}
                 </p>
               </div>

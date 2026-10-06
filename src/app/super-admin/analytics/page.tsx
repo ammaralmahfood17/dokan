@@ -204,11 +204,11 @@ export default async function SuperAdminAnalyticsPage({
                 style={{ height: `${Math.max(4, (t.revenue / maxTrend) * 100)}%` }}
                 title={`${t.label}: ${moneyFmt.format(t.revenue)} (${t.orders} طلب)`}
               />
-              <span className="text-[11px] text-[var(--color-text-muted)]">{t.label}</span>
+              <span className="text-[11.5px] text-[var(--color-text-muted)]">{t.label}</span>
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">
+        <p className="mt-2 text-[11.5px] text-[var(--color-text-muted)]">
           الإجمالي الكلي: {moneyFmt.format(totalRevenue)} · {numFmt.format(totalOrders)} طلب مكتمل
         </p>
       </div>
@@ -246,10 +246,10 @@ export default async function SuperAdminAnalyticsPage({
               <tr key={r.id} className="border-b border-[var(--color-border)]/60 last:border-0">
                 <td className="px-3 py-2.5">
                   <div className="font-bold">{r.name}</div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)]">
+                  <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-text-muted)]">
                     <span dir="ltr">{r.slug}</span>
                     {!r.is_active && (
-                      <span className="rounded-full bg-[var(--color-danger-tint)] px-1.5 py-px text-[11px] font-bold text-[var(--color-danger)]">
+                      <span className="rounded-full bg-[var(--color-danger-tint)] px-1.5 py-px text-[11.5px] font-bold text-[var(--color-danger)]">
                         موقوف
                       </span>
                     )}
@@ -267,7 +267,7 @@ export default async function SuperAdminAnalyticsPage({
         </table>
       </div>
 
-      <p className="mt-4 text-[11px] text-[var(--color-text-muted)]">
+      <p className="mt-4 text-[11.5px] text-[var(--color-text-muted)]">
         قرار الأداء الموثق: عند ~30 مشروعًا الاستعلام المباشر كافٍ. عند نمو الحجم لمئات
         المشاريع/آلاف الطلبات، تُستبدل هذه الصفحة بجدول تجميع مجدول (rollup) دون إعادة كتابة.
       </p>

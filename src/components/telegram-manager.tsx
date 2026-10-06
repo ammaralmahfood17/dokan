@@ -118,7 +118,7 @@ export function TelegramManager({ projectId }: { projectId: string }) {
                 <span className="truncate font-semibold" dir="auto">
                   {l.label || (l.kind === 'group' ? 'مجموعة' : 'حساب تيليجرام')}
                 </span>
-                <span className="shrink-0 rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)]">
+                <span className="shrink-0 rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-[11.5px] text-[var(--color-text-secondary)]">
                   {l.kind === 'group' ? 'مجموعة' : 'حساب'}
                 </span>
               </span>

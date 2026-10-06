@@ -141,7 +141,7 @@ export default async function SuperAdminAuditPage({
                   <td className="px-3 py-2.5 text-[var(--color-text-secondary)]">
                     {l.target_project_id ? projectNameById.get(l.target_project_id as string) ?? '—' : '—'}
                   </td>
-                  <td className="px-3 py-2.5 text-[11px] text-[var(--color-text-muted)]" dir="ltr">
+                  <td className="px-3 py-2.5 text-[11.5px] text-[var(--color-text-muted)]" dir="ltr">
                     {detail}
                   </td>
                 </tr>

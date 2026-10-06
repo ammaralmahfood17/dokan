@@ -151,7 +151,7 @@ export function CartSheet({
         </div>
       )}
 
-      <p className="mt-2 text-center text-[11px] text-[var(--color-text-muted)]">
+      <p className="mt-2 text-center text-[11.5px] text-[var(--color-text-muted)]">
         الأسعار تُحسب من الخادم
       </p>
     </Sheet>

@@ -179,7 +179,7 @@ export function AppSidebar({
               <div className="truncate text-sm font-bold text-[var(--color-text)]">
                 {projectName}
               </div>
-              <div className="flex items-center gap-1 text-[11px] text-[var(--color-text-muted)]">
+              <div className="flex items-center gap-1 text-[11.5px] text-[var(--color-text-muted)]">
                 <span>دكان</span>
                 <span className="h-1 w-1 rounded-full bg-[var(--color-text-muted)]" />
                 <span>المطعم</span>

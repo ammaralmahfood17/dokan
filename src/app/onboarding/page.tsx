@@ -187,13 +187,13 @@ export default function OnboardingPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold">{name.trim() || 'اسم المتجر'}</p>
-                      <p className="text-[11px] text-white/80">طاولة 1</p>
+                      <p className="text-[11.5px] text-white/80">طاولة 1</p>
                     </div>
                   </div>
                   <div className="flex gap-1 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-                    <span className="rounded-full bg-[var(--color-primary-tint)] px-3 py-1 text-[10px] font-bold text-[var(--color-primary)]">الكل</span>
-                    <span className="rounded-full border border-[var(--color-border)] px-3 py-1 text-[10px] font-bold text-[var(--color-text-secondary)]">مشروبات</span>
-                    <span className="rounded-full border border-[var(--color-border)] px-3 py-1 text-[10px] font-bold text-[var(--color-text-secondary)]">طعام</span>
+                    <span className="rounded-full bg-[var(--color-primary-tint)] px-3 py-1 text-[11.5px] font-bold text-[var(--color-primary)]">الكل</span>
+                    <span className="rounded-full border border-[var(--color-border)] px-3 py-1 text-[11.5px] font-bold text-[var(--color-text-secondary)]">مشروبات</span>
+                    <span className="rounded-full border border-[var(--color-border)] px-3 py-1 text-[11.5px] font-bold text-[var(--color-text-secondary)]">طعام</span>
                   </div>
                   <div className="space-y-2 bg-[var(--color-surface)] p-3">
                     <div className="flex items-center gap-2">
@@ -211,7 +211,7 @@ export default function OnboardingPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="border-t border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-2 text-center text-[11px] font-semibold" style={{ color: primaryColor }}>
+                  <div className="border-t border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-2 text-center text-[11.5px] font-semibold" style={{ color: primaryColor }}>
                     معاينة حية — القائمة العامة
                   </div>
                 </div>

@@ -550,7 +550,7 @@ export function MenuClient({
               <h1 lang={langOfText(project.name)} className="truncate font-display text-[17px] font-bold">
                 {project.name}
               </h1>
-              <p className="text-[11px] text-[var(--color-text-secondary)]">
+              <p className="text-[11.5px] text-[var(--color-text-secondary)]">
                 امسح واطلب من طاولتك
               </p>
             </div>

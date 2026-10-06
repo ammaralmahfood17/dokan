@@ -52,12 +52,12 @@ export function MenuProductRow({
   return (
     <div className="relative flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors duration-150 hover:border-[var(--color-border-strong)]">
       {soldOut && (
-        <span className="absolute start-2 top-2 z-10 rounded-full bg-[var(--color-text)] px-2.5 py-1 text-[11px] font-bold text-white">
+        <span className="absolute start-2 top-2 z-10 rounded-full bg-[var(--color-text)] px-2.5 py-1 text-[11.5px] font-bold text-white">
           غير متوفر
         </span>
       )}
       {!soldOut && remaining !== null && (
-        <span className="absolute end-2 top-2 z-10 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--color-text-secondary)]">
+        <span className="absolute end-2 top-2 z-10 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-text-secondary)]">
           باقي <span dir="ltr">{remaining}</span>
         </span>
       )}

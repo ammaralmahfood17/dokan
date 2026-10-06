@@ -17,7 +17,7 @@ export function HourlySalesChart({
     <div className="chart-container rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <h2 className="mb-3.5 flex items-center justify-between font-display text-[14.5px] font-bold">
         المبيعات بالساعة
-        <span className="text-[11px] font-normal text-[var(--color-text-secondary)]">
+        <span className="text-[11.5px] font-normal text-[var(--color-text-secondary)]">
           آخر 7 ساعات
         </span>
       </h2>
@@ -44,7 +44,7 @@ export function HourlySalesChart({
                   background: 'linear-gradient(to top, var(--color-primary), var(--color-primary-tint-strong))',
                 }}
               />
-              <span className="absolute -bottom-5 text-[10px] text-[var(--color-text-secondary)]">
+              <span className="absolute -bottom-5 text-[11.5px] text-[var(--color-text-secondary)]">
                 {b.label}
               </span>
             </div>

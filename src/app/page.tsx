@@ -99,11 +99,11 @@ export default function LandingPage() {
                   <div className="flex flex-col items-center justify-center px-4 pb-8 pt-6 text-center text-white">
                     <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-2xl font-bold">د</div>
                     <p className="text-sm font-bold">دكان</p>
-                    <p className="mt-1 text-[11px] text-white/60">قائمة طعامك في جوال الزبون</p>
+                    <p className="mt-1 text-[11.5px] text-white/60">قائمة طعامك في جوال الزبون</p>
                     <div className="mt-4 flex h-16 w-16 items-center justify-center rounded-lg bg-white/10">
                       <QrCode className="h-8 w-8 text-white/50" />
                     </div>
-                    <p className="mt-2 text-[10px] text-white/40">امسح واطلب</p>
+                    <p className="mt-2 text-[11.5px] text-white/40">امسح واطلب</p>
                   </div>
                 </div>
               </div>
@@ -178,7 +178,7 @@ export default function LandingPage() {
                 <Link href="/register" className="btn btn-primary btn-lg mt-7 w-full">
                   ابدأ تجربتك المجانية
                 </Link>
-                <p className="mt-3 text-[11px] text-[var(--color-text-tertiary)]">
+                <p className="mt-3 text-[11.5px] text-[var(--color-text-tertiary)]">
                   لا حاجة لبطاقة ائتمان. 14 يوم مجاناً كاملة.
                 </p>
               </div>

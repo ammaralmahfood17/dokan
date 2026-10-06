@@ -90,7 +90,7 @@ export default function DashboardError({
           <p className="text-xs font-semibold leading-relaxed text-[var(--color-text)]">
             {details.userMessage}
           </p>
-          <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+          <p className="text-[11.5px] leading-relaxed text-[var(--color-text-secondary)]">
             💡 <span className="font-semibold">توجيه:</span> {details.recommendation}
           </p>
         </div>
@@ -118,9 +118,9 @@ export default function DashboardError({
           {showDetails && (
             <div
               id="error-details"
-              className="mt-2 space-y-2 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-3 text-[11px] font-mono text-[var(--color-text-secondary)]"
+              className="mt-2 space-y-2 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-3 text-[11.5px] font-mono text-[var(--color-text-secondary)]"
             >
-              <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-1.5 text-[10px] text-[var(--color-text-muted)]">
+              <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-1.5 text-[11.5px] text-[var(--color-text-muted)]">
                 <span>الوقت: {new Date().toISOString()}</span>
                 <button
                   type="button"
@@ -139,7 +139,7 @@ export default function DashboardError({
                 {error.message || 'لا توجد رسالة نصية للخطأ'}
               </p>
               {error.stack && (
-                <p className="max-h-36 overflow-y-auto whitespace-pre-wrap text-[10px] leading-tight text-[var(--color-text-muted)]">
+                <p className="max-h-36 overflow-y-auto whitespace-pre-wrap text-[11.5px] leading-tight text-[var(--color-text-muted)]">
                   {error.stack}
                 </p>
               )}

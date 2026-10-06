@@ -151,7 +151,7 @@ export function OrderSuccessState({
               return (
                 <div key={s.key} className="flex flex-1 flex-col items-center gap-1.5">
                   <div
-                    className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11px] font-bold transition-colors ${
+                    className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11.5px] font-bold transition-colors ${
                       done
                         ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
                         : active
@@ -161,7 +161,7 @@ export function OrderSuccessState({
                   >
                     {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
                   </div>
-                  <span className={`text-[10.5px] font-semibold ${active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}`}>
+                  <span className={`text-[11.5px] font-semibold ${active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}`}>
                     {s.label}
                   </span>
                 </div>

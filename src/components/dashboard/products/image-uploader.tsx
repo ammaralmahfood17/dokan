@@ -132,7 +132,7 @@ export function ImageUploader({
               <X className="h-3.5 w-3.5" />
             </span>
           </button>
-          <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">JPG أو PNG أو WebP، حد 5MB</p>
+          <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">JPG أو PNG أو WebP، حد 5MB</p>
         </div>
       ) : uploading && previewUrl ? (
         // Fix 6: instant preview while uploading
@@ -146,7 +146,7 @@ export function ImageUploader({
           <div className="absolute inset-0 flex items-center justify-center rounded-[10px] bg-black/40">
             <span className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
           </div>
-          <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">جاري رفع الصورة…</p>
+          <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">جاري رفع الصورة…</p>
         </div>
       ) : (
         <div
@@ -177,7 +177,7 @@ export function ImageUploader({
           <p className="text-sm font-semibold text-[var(--color-text-secondary)]">
             اسحب الصورة هنا أو اضغط للاختيار
           </p>
-          <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
+          <p className="mt-0.5 text-[11.5px] text-[var(--color-text-muted)]">
             JPG أو PNG أو WebP، حد أقصى 5MB
           </p>
           <input
