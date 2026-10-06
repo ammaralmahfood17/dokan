@@ -34,6 +34,8 @@ ALTER TABLE public.impersonation_sessions
   ADD COLUMN IF NOT EXISTS used_at timestamp with time zone;
 
 ALTER TABLE public.impersonation_sessions
+  DROP CONSTRAINT IF EXISTS impersonation_super_admin_session_no_refresh;
+ALTER TABLE public.impersonation_sessions
   ADD CONSTRAINT impersonation_super_admin_session_no_refresh
   CHECK (NOT (super_admin_session ? 'refresh_token'));
 
@@ -43,6 +45,8 @@ ALTER TABLE public.impersonation_sessions
   CHECK (expires_at <= created_at + interval '00:15:05');
 
 -- A consumed marker belongs to a finished impersonation: used_at without ended_at is a bug, not a state.
+ALTER TABLE public.impersonation_sessions
+  DROP CONSTRAINT IF EXISTS impersonation_used_requires_ended;
 ALTER TABLE public.impersonation_sessions
   ADD CONSTRAINT impersonation_used_requires_ended
   CHECK (used_at IS NULL OR ended_at IS NOT NULL);
