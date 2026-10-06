@@ -150,6 +150,20 @@ The spec also refuses to grade a page it never reached: a route the browser was 
 from is SKIPPED with a named reason, and a route that did not RENDER fails with that wording
 (before this guard, a local 500 was reported as a `document-title` violation of the menu page).
 
+**Two CI failures on this branch, both resolved, one of them a real trap:**
+
+- `npm ci` failed on BOTH jobs: `package.json` required `@axe-core/playwright` while the committed
+  `package-lock.json` predated the install. `npm ci` does not resolve - that is its value - so the
+  branch was broken in CI while green locally. Fixed by committing the lockfile (`d4225ba`).
+  Lesson: `git add -A <dirs>` is not a substitute for checking what a dependency install touched.
+- `next build` failed once in CI with `Module not found: Can't resolve
+  '@vercel/turbopack-next/internal/font/google/font'`. `src/app/layout.tsx` imports
+  `Cairo` from `next/font/google`, so **every build fetches the font from Google at build time**;
+  when the runner cannot reach fonts.googleapis.com the build fails. It is unrelated to the audit
+  changes (the same head rebuilt green minutes later) and it is a **known robustness gap, dated
+  follow-up: self-host Cairo via `next/font/local`, or pin the font fetch**. Not one of the 37
+  findings, so it is recorded here rather than silently absorbed.
+
 **Wave 3 gates:** `tsc` 0 - `lint` 0 (was 26 errors) - **vitest 209/209 (17 files)** - `build` 0 -
 `check-touch-targets` 0 - `check-public-write-gates` 0 - `env:check` 0.
 
