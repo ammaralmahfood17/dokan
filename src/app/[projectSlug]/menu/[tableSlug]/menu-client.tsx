@@ -485,7 +485,11 @@ export function MenuClient({
         }),
       });
       if (!res.ok) {
-        toast.error('تعذّر إرسال الطلب');
+        // Surface the server's reason (rate limited / stale QR / unknown table)
+        // instead of a generic failure — the customer needs to know whether to
+        // wait or to rescan, and a bare «تعذّر إرسال الطلب» tells them neither.
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        toast.error(data?.error || 'تعذّر إرسال الطلب');
         return;
       }
       toast.success(kind === 'waiter' ? 'تم استدعاء الموظف' : 'تم طلب الفاتورة');

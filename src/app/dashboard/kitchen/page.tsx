@@ -3,6 +3,7 @@ import { getCurrentProject } from '@/lib/project';
 import { createClient } from '@/lib/supabase/server';
 import { KitchenClient } from './kitchen-client';
 import type { Order, OrderItem } from '@/lib/types';
+import type { ServiceRequestRow } from '@/components/dashboard/kitchen/use-kitchen-service-requests';
 
 export default async function KitchenPage() {
   const ctx = await getCurrentProject();
@@ -31,6 +32,16 @@ export default async function KitchenPage() {
     from += PAGE;
   }
 
+  // Open «طلب موظف / طلب فاتورة» rows — staff-facing, so the RLS policy on
+  // service_requests (project members) is the boundary; this client is the
+  // signed-in staff session, not the service role.
+  const { data: serviceRequests } = await supabase
+    .from('service_requests')
+    .select('id,type,created_at,table_id,tables(number)')
+    .eq('project_id', ctx.project.id)
+    .eq('is_resolved', false)
+    .order('created_at', { ascending: true });
+
   return (
     <KitchenClient
       projectId={ctx.project.id}
@@ -41,6 +52,7 @@ export default async function KitchenPage() {
           order_items?: OrderItem[];
         })[]
       }
+      initialServiceRequests={(serviceRequests ?? []) as unknown as ServiceRequestRow[]}
     />
   );
 }

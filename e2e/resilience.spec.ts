@@ -168,6 +168,7 @@ async function dropStore(seed: Seeded | null): Promise<void> {
   const { data: orders } = await admin.from('orders').select('id').eq('project_id', seed.projectId);
   for (const o of orders ?? []) await admin.from('order_items').delete().eq('order_id', o.id);
   await admin.from('orders').delete().eq('project_id', seed.projectId);
+  await admin.from('service_requests').delete().eq('project_id', seed.projectId);
   await admin.from('daily_order_counters').delete().eq('project_id', seed.projectId);
   await admin.from('rate_limits').delete().ilike('key', `%${seed.slug}%`);
   await admin.from('tables').delete().eq('project_id', seed.projectId);
@@ -293,6 +294,8 @@ test('R1 public order: a body that is not JSON is a 400, never a 500', async ({ 
 test('R1b no json route 500s on a non-object body (null/array/string/number/bool)', async ({ request }) => {
   const routes = [
     '/api/public/order',
+    '/api/public/waiter',
+    '/api/public/bill',
     '/api/auth/signup',
     '/api/auth/reset-password',
     '/api/telegram/link',
@@ -341,6 +344,65 @@ test('R1b no json route 500s on a non-object body (null/array/string/number/bool
       }
       expectNoLeak(text, `${path} [${label}]`);
     }
+  }
+});
+
+/**
+ * R7 — waiter / bill service requests.
+ *
+ * Restored 2026-10-06: the routes were deleted as "unused" (b3aab0c) while the
+ * menu buttons kept calling them, so «طلب موظف» and «طلب فاتورة» silently
+ * 404'd for every customer. They are back, backed by `service_requests`, and
+ * this is the contract they must keep:
+ *   - a correct table token writes ONE row and answers 200 {ok:true}
+ *   - the same kind of request from the same table inside the window is 429
+ *     (anti-spam), and a DIFFERENT kind is still allowed
+ *   - a wrong token is 404 (a published slug is not authorisation)
+ *   - an unknown store is 404 and writes nothing
+ */
+test('R7 waiter/bill: token-gated write, dedupe, and no cross-tenant writes', async ({ request }) => {
+  const seed = await seedStore('r7');
+  try {
+    await resetOwnRateLimit(seed.slug);
+    const body = { projectSlug: seed.slug, tableSlug: seed.tableSlug, tableToken: HEX32 };
+
+    const waiter = await request.post('/api/public/waiter', { headers: JSON_CT, data: body });
+    expect(waiter.status(), 'waiter with the scanned token must be accepted').toBe(200);
+    expect((await waiter.json()).ok).toBe(true);
+
+    // Same kind, same table, inside the dedupe window -> 429, and NOT a second row.
+    const repeat = await request.post('/api/public/waiter', { headers: JSON_CT, data: body });
+    expect(repeat.status(), 'a repeat waiter call must be de-duplicated').toBe(429);
+    expect(typeof (await repeat.json()).error).toBe('string');
+
+    // A bill request is a different kind — the waiter row must not block it.
+    const bill = await request.post('/api/public/bill', { headers: JSON_CT, data: body });
+    expect(bill.status(), 'a bill request must not be blocked by an open waiter call').toBe(200);
+
+    // A wrong token is a 404 (junk is never treated as "no token").
+    const wrongToken = await request.post('/api/public/waiter', {
+      headers: JSON_CT,
+      data: { ...body, tableToken: 'a'.repeat(32) },
+    });
+    expect(wrongToken.status(), 'a mismatched table token must be 404').toBe(404);
+
+    // An unknown store writes nothing and answers 404.
+    const absent = await request.post('/api/public/bill', {
+      headers: JSON_CT,
+      data: { projectSlug: ABSENT, tableSlug: seed.tableSlug, tableToken: HEX32 },
+    });
+    expect(absent.status(), 'an unknown store must be 404').toBe(404);
+
+    // Exactly the two accepted rows exist — the rejected probes wrote nothing.
+    const { data: rows } = await admin
+      .from('service_requests')
+      .select('type,is_resolved')
+      .eq('project_id', seed.projectId);
+    expect(rows?.length, 'exactly one waiter + one bill row must exist').toBe(2);
+    expect(rows?.map((r) => r.type).sort()).toEqual(['bill', 'waiter']);
+    expect(rows?.every((r) => r.is_resolved === false), 'new requests start unresolved').toBe(true);
+  } finally {
+    await dropStore(seed);
   }
 });
 

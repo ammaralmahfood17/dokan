@@ -18,31 +18,40 @@ export function Sheet({
   const startY = useRef(0);
   const currentY = useRef(0);
 
-  // Focus trap
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (e.key !== 'Tab') return;
-      const el = sheetRef.current;
-      if (!el) return;
-      const focusable = el.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last?.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first?.focus();
-      }
-    },
-    [onClose]
-  );
+  // The parent passes an inline arrow (`onClose={() => setX(null)}`), so its
+  // identity changes on EVERY render — including the render caused by typing a
+  // character into an input inside the sheet. Holding it in a ref keeps the
+  // keydown handler (and therefore the mount effect below) stable: a handler
+  // that changed per keystroke re-ran the effect, whose cleanup restored focus
+  // to the element that opened the sheet. On mobile that stole focus from the
+  // input mid-word and dismissed the keyboard after the first character.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
-  // Scroll lock + keyboard listener + focus management
+  // Focus trap — stable identity ([] deps) so it never re-subscribes mid-typing.
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') { onCloseRef.current(); return; }
+    if (e.key !== 'Tab') return;
+    const el = sheetRef.current;
+    if (!el) return;
+    const focusable = el.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first?.focus();
+    }
+  }, []);
+
+  // Scroll lock + keyboard listener + focus management — runs ONCE per mount.
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
     const scrollY = window.scrollY;

@@ -38,24 +38,28 @@ export function useKitchenAudio() {
 
   const playFallbackChime = useCallback((ctx: AudioContext) => {
     const master = ctx.createGain();
-    master.gain.value = 0.15;
+    // Light chime, matching public/sounds/notification.wav: two soft bell notes
+    // (A5 → D6) instead of the old three-tone 660/880/1100 alarm. Lower master
+    // gain so a busy kitchen is not startled on every ticket.
+    master.gain.value = 0.09;
     master.connect(ctx.destination);
 
-    const notes = [660, 880, 1100];
-    const startTime = ctx.currentTime + 0.05;
+    const notes = [880, 1174.66];
+    const startTime = ctx.currentTime + 0.02;
 
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const noteGain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.value = freq;
-      noteGain.gain.setValueAtTime(0, startTime + i * 0.12);
-      noteGain.gain.linearRampToValueAtTime(1, startTime + i * 0.12 + 0.02);
-      noteGain.gain.exponentialRampToValueAtTime(0.001, startTime + i * 0.12 + 0.15);
+      const at = startTime + i * 0.13;
+      noteGain.gain.setValueAtTime(0, at);
+      noteGain.gain.linearRampToValueAtTime(1, at + 0.008);
+      noteGain.gain.exponentialRampToValueAtTime(0.001, at + 0.42);
       osc.connect(noteGain);
       noteGain.connect(master);
-      osc.start(startTime + i * 0.12);
-      osc.stop(startTime + i * 0.12 + 0.15);
+      osc.start(at);
+      osc.stop(at + 0.45);
     });
   }, []);
 

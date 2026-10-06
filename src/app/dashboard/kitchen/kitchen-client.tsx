@@ -19,6 +19,10 @@ import { KitchenTicket } from '@/components/dashboard/kitchen/kitchen-ticket';
 import { useTitleFlash } from '@/components/dashboard/kitchen/use-title-flash';
 import { useKitchenOrders } from '@/components/dashboard/kitchen/use-kitchen-orders';
 import { useKitchenActions } from '@/components/dashboard/kitchen/use-kitchen-actions';
+import {
+  useKitchenServiceRequests,
+  type ServiceRequestRow,
+} from '@/components/dashboard/kitchen/use-kitchen-service-requests';
 
 /* ========== Component ========== */
 
@@ -26,10 +30,13 @@ export function KitchenClient({
   projectId,
   projectName,
   initialOrders,
+  initialServiceRequests = [],
 }: {
   projectId: string;
   projectName: string;
   initialOrders: OrderRow[];
+  /** Open «طلب موظف / طلب فاتورة» rows, seeded by the server render. */
+  initialServiceRequests?: ServiceRequestRow[];
 }) {
   const [soundOn, setSoundOn] = useState(true);
   const [newOrderCount, setNewOrderCount] = useState(0);
@@ -65,6 +72,29 @@ export function KitchenClient({
     initialOrders,
     notifyNewOrder,
   });
+
+  // «طلب موظف / طلب فاتورة» — same chime + badge as a new order, because a
+  // customer waiting to be served is exactly as time-critical as a ticket.
+  const notifyServiceRequest = useCallback(
+    (kind: 'waiter' | 'bill', tableNumber: number | null) => {
+      if (soundOn) {
+        playChime();
+        try { navigator.vibrate?.(200); } catch {}
+      }
+      toast.message(kind === 'waiter' ? '🔔 طلب موظف' : '🧾 طلب فاتورة', {
+        description: tableNumber !== null ? `طاولة ${tableNumber}` : undefined,
+      });
+      setNewOrderCount((c) => c + 1);
+    },
+    [soundOn, playChime]
+  );
+
+  const { requests: serviceRequests, resolve: resolveServiceRequest } =
+    useKitchenServiceRequests({
+      projectId,
+      initialRequests: initialServiceRequests,
+      onNewRequest: notifyServiceRequest,
+    });
 
   // Clock + tick — كل دقيقة (60s) لأن العرض بالدقائق.
   // The first tick runs immediately so the values are filled the moment we are
@@ -240,6 +270,52 @@ export function KitchenClient({
           </button>
         </div>
       </header>
+
+      {/* Service requests — «طلب موظف / طلب فاتورة» from the table menu.
+          A customer waiting to be served is as time-critical as a ticket, so
+          this sits above the board (and rings the same chime). */}
+      {serviceRequests.length > 0 && (
+        <section
+          className="border-b border-[var(--color-border)] bg-[var(--color-primary-tint)] px-5 py-3"
+          aria-label="طلبات الخدمة"
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-[13.5px] font-bold text-[var(--color-primary)]">
+              🔔 طلبات الخدمة
+            </h2>
+            <span className="rounded-full border border-[var(--color-primary)] px-2 py-0.5 text-[11.5px] font-bold tabular-nums text-[var(--color-primary)]">
+              {serviceRequests.length}
+            </span>
+          </div>
+          <ul className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            {serviceRequests.map((r) => (
+              <li
+                key={r.id}
+                className="flex min-w-[220px] shrink-0 items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-primary)] bg-[var(--color-surface)] px-3.5 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="text-[13.5px] font-bold text-[var(--color-text)]">
+                    {r.type === 'waiter' ? 'طلب موظف' : 'طلب فاتورة'}
+                  </p>
+                  <p className="text-[12px] font-semibold text-[var(--color-text-secondary)]">
+                    طاولة{' '}
+                    <span dir="ltr" className="tabular-nums">
+                      {String(r.tables?.number ?? '—').padStart(2, '0')}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void resolveServiceRequest(r.id)}
+                  className="min-h-[44px] shrink-0 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-[12.5px] font-bold text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+                >
+                  تم ✓
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Board — Calm Surface mockup: three fixed stage columns */}
       <main

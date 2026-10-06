@@ -21,12 +21,26 @@ export function Modal({ title, children, onClose }: ModalProps) {
   // FIX-O-002: exit animation — closing state + timeout ثم onClose
   const [closing, setClosing] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards a double-close without making requestClose depend on `closing`
+  // (a state dep would re-create it after the first click — and the click
+  // handler is what sets it).
+  const closingRef = useRef(false);
+
+  // Same stability rule as the menu Sheet: the parent's inline `onClose` changes
+  // identity on every render (every keystroke in a form inside the dialog), and
+  // this handler is an effect dependency. Re-running that effect mid-typing
+  // re-applied the body scroll lock and scrolled the page on every character.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   const requestClose = useCallback(() => {
-    if (closing) return;
+    if (closingRef.current) return;
+    closingRef.current = true;
     setClosing(true);
-    closeTimer.current = setTimeout(() => onClose(), 200);
-  }, [closing, onClose]);
+    closeTimer.current = setTimeout(() => onCloseRef.current(), 200);
+  }, []);
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -61,7 +75,6 @@ export function Modal({ title, children, onClose }: ModalProps) {
         first?.focus();
       }
     },
-    // FIX-O-002: requestClose مطلوب (ESC يستخدمه) — onClose غير مستخدم هنا
     [requestClose]
   );
 

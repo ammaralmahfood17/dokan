@@ -18,7 +18,8 @@ import {
  *
  *   place (public API) → listed on the KDS board → بدء التحضير → جاهز للتسليم
  *   → تم التسليم ✓ → cancelled order can never be revived → waiter + bill
- *   service requests are typed rows, NOT real orders.
+ *   service requests are typed rows in `service_requests`, surfaced on the KDS
+ *   board's «طلبات الخدمة» strip, and never shown as tickets.
  *
  * The difference vs money-path.spec.ts: that one walks the happy path and
  * stops at "ready". This one watches the ITEM-level state machine
@@ -43,9 +44,11 @@ import {
  *     quantity, addonIds?, notes? }], notes?, clientRequestId? }
  *     → 200 { order: { id, status, totalAmount, orderNumber } }
  *   POST /api/pos/cancel    { orderId }   (staff session)  → 200 { ok: true }
- *   POST /api/public/waiter { projectSlug, tableSlug } → 200 { ok, id } /
- *     400 'بيانات ناقصة' / 400 'معرّف المتجر غير صالح'
+ *   POST /api/public/waiter { projectSlug, tableSlug, tableToken? } → 200 { ok, id } /
+ *     400 'بيانات ناقصة' / 400 'معرّف المتجر غير صالح' / 429 (repeat inside 5 min)
  *   POST /api/public/bill   same contract as waiter
+ *     Both write ONE `service_requests` row (type waiter|bill, is_resolved
+ *     false) and notify staff; they do NOT create an `orders` row.
  *
  * Everything it creates lives in an isolated store (unique slug) and is
  * removed in afterAll.
@@ -61,8 +64,10 @@ const BTN_DELIVER = 'تم التسليم ✓'; // kitchen-ticket.tsx — ready s
 const COL_NEW = 'جديد'; // kitchen-tickets.ts STAGE_COLUMNS[pending]
 const COL_PREPARING = 'قيد التحضير'; // kitchen-tickets.ts STAGE_COLUMNS[preparing]
 const COL_READY = 'جاهز للتسليم'; // kitchen-tickets.ts STAGE_COLUMNS[ready]
-const NOTES_WAITER = 'طلب موظف'; // api/public/waiter/route.ts insert.notes
-const NOTES_BILL = 'طلب فاتورة'; // api/public/bill/route.ts insert.notes
+const NOTES_WAITER = 'طلب موظف'; // the «طلب موظف» card on the KDS service strip
+const NOTES_BILL = 'طلب فاتورة'; // the «طلب فاتورة» card on the KDS service strip
+/** The table scan token for this store's seeded table (tables.qrcode). */
+const TABLE_TOKEN = 'c'.repeat(32);
 
 const email = makeEmail();
 const runId = Date.now() % 1_000_000;
@@ -283,7 +288,7 @@ test.beforeAll(async () => {
       project_id: projectId,
       number: 1,
       slug: tableSlug,
-      qrcode: `e2e-${runId}-qr`,
+      qrcode: TABLE_TOKEN,
       is_active: true,
     })
     .select('id')
@@ -507,9 +512,10 @@ test('cancel: POST /api/pos/cancel → cancelled, and a stale advance is rejecte
 });
 
 /* ====================================================================== *
- * 7) SERVICE REQUESTS — waiter + bill are typed rows, never real orders
+ * 7) SERVICE REQUESTS — waiter + bill write `service_requests` rows and show
+ *    up on the KDS «طلبات الخدمة» strip; they are never tickets
  * ====================================================================== */
-test('waiter + bill: typed service_type rows, no line items, off the KDS board', async ({
+test('waiter + bill: token-gated rows on the KDS service strip, resolvable in place', async ({
   request,
   page,
 }) => {
@@ -528,18 +534,23 @@ test('waiter + bill: typed service_type rows, no line items, off the KDS board',
   expect(badSlug.status()).toBe(400);
   expect((await badSlug.json()).error).toBe('معرّف المتجر غير صالح');
 
+  // A mismatched token is a 404 — a published table slug is not authorisation.
+  const wrongToken = await request.post('/api/public/waiter', {
+    data: { projectSlug: slug, tableSlug, tableToken: 'd'.repeat(32) },
+  });
+  expect(wrongToken.status()).toBe(404);
+
   // No row may have been written by any of the rejected calls.
   const { count: beforeRows } = await admin
-    .from('orders')
+    .from('service_requests')
     .select('id', { count: 'exact', head: true })
-    .eq('project_id', projectId)
-    .in('service_type', ['waiter', 'bill']);
+    .eq('project_id', projectId);
   expect(beforeRows ?? 0).toBe(0);
 
   // 7b) The two happy paths.
   for (const endpoint of ['waiter', 'bill'] as const) {
     const res = await request.post(`/api/public/${endpoint}`, {
-      data: { projectSlug: slug, tableSlug },
+      data: { projectSlug: slug, tableSlug, tableToken: TABLE_TOKEN },
     });
     const text = await res.text();
     expect(res.status(), `${endpoint} should succeed: ${text}`).toBe(200);
@@ -552,38 +563,66 @@ test('waiter + bill: typed service_type rows, no line items, off the KDS board',
     else billRowId = body.id;
   }
 
-  // 7c) DB truth: both rows are typed, zero-amount, and carry NO line items.
-  for (const [id, serviceType, noteText] of [
-    [waiterRowId, 'waiter', NOTES_WAITER],
-    [billRowId, 'bill', NOTES_BILL],
-  ] as const) {
-    const row = await dbOrder(id);
-    expect(row.status).toBe('pending');
-    expect(row.service_type, `${serviceType} row must be typed`).toBe(serviceType);
-    expect(Number(row.total_amount), `${serviceType} request has no money`).toBe(0);
-    expect(row.table_id).toBe(tableId);
-    expect(row.notes).toContain(noteText);
-    expect(row.order_items ?? [], `${serviceType} must not create line items`).toEqual([]);
-    expect(await itemCount(id)).toBe(0);
-  }
+  // A repeat of the SAME kind from the same table is de-duplicated (429), and
+  // it must not have written a second row.
+  const repeat = await request.post('/api/public/waiter', {
+    data: { projectSlug: slug, tableSlug, tableToken: TABLE_TOKEN },
+  });
+  expect(repeat.status(), 'a repeat waiter call inside the window must be 429').toBe(429);
 
-  // 7d) Not orders: the KDS board and the orders board both filter on
-  // service_type IS NULL, so neither service row is ever shown as a ticket.
+  // 7c) DB truth: one waiter + one bill row, unresolved, on the right table —
+  // and NOTHING written into `orders`.
+  const { data: rows, error: rowsErr } = await admin
+    .from('service_requests')
+    .select('id,type,is_resolved,table_id')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+  if (rowsErr) throw new Error(`service_requests read failed: ${rowsErr.message}`);
+  expect(rows?.length, 'exactly one waiter + one bill row').toBe(2);
+  expect(rows?.map((r) => r.type)).toEqual(['waiter', 'bill']);
+  expect(rows?.every((r) => r.is_resolved === false)).toBe(true);
+  expect(rows?.every((r) => r.table_id === tableId)).toBe(true);
+
+  const { count: serviceOrders } = await admin
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+    .not('service_type', 'is', null);
+  expect(serviceOrders ?? 0, 'service requests are NOT orders any more').toBe(0);
+
+  // 7d) The KDS board shows them on the service strip — not as tickets — and a
+  // staff member resolves one in place.
   await openKitchen(page);
-  await expect(page.getByText(NOTES_WAITER)).toHaveCount(0);
-  await expect(page.getByText(NOTES_BILL)).toHaveCount(0);
+  const strip = page.getByRole('region', { name: 'طلبات الخدمة' });
+  await expect(strip, 'the service strip must render the open requests').toBeVisible({
+    timeout: 25_000,
+  });
+  await expect(strip.getByText(NOTES_WAITER, { exact: true })).toBeVisible();
+  await expect(strip.getByText(NOTES_BILL, { exact: true })).toBeVisible();
+  // Neither is a ticket: no stage column and no «بدء التحضير» button.
   await expect(page.getByText(BTN_START, { exact: true })).toHaveCount(0);
-  await expect(page.getByText('بانتظار الطلبات…')).toBeVisible({ timeout: 20_000 });
 
+  // Resolve the waiter card (created first → it is the first card).
+  await strip.getByRole('button', { name: 'تم ✓' }).first().click();
+  await expect
+    .poll(
+      async () => {
+        const { data } = await admin
+          .from('service_requests')
+          .select('is_resolved')
+          .eq('id', waiterRowId)
+          .single();
+        return data?.is_resolved;
+      },
+      { timeout: 20_000, message: 'the waiter request must be marked resolved' }
+    )
+    .toBe(true);
+  // The strip keeps the other one and drops the resolved card.
+  await expect(strip.getByText(NOTES_WAITER, { exact: true })).toHaveCount(0);
+  await expect(strip.getByText(NOTES_BILL, { exact: true })).toBeVisible();
+
+  // 7e) The orders board still filters service rows out entirely.
   await page.goto('/dashboard/orders');
-  // Scope to the delivered order's card (`order-<N>` header, orders-client.tsx
-  // line 434) and match the line's product-name text node — the card renders
-  // `<strong>2×</strong> شاي أول NNN`, so the name is not the whole line text.
-  const cardA = page.locator('article').filter({ hasText: `order-${orderANumber}` });
-  await expect(cardA).toBeVisible({ timeout: 25_000 });
-  await expect(cardA.getByText(new RegExp(`${productAName}$`))).toBeVisible();
-  await expect(cardA.getByText(new RegExp(`${productBName}$`))).toBeVisible();
-  // Service requests are not orders: the board filters service_type IS NULL.
   await expect(page.getByText(NOTES_WAITER)).toHaveCount(0);
   await expect(page.getByText(NOTES_BILL)).toHaveCount(0);
 });
