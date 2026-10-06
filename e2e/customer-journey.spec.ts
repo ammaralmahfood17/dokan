@@ -303,9 +303,11 @@ test('2. two different products (one with options) → qty controls → total = 
   await expect(picker).toBeVisible({ timeout: 15_000 });
   // The variety row shows its own price: `+{formatMoney(price)}`.
   await expect(picker.getByText('+0.250 BHD')).toBeVisible();
-  // A variety is a role=checkbox BUTTON now (groups replaced the flat addon
-  // list), so assert the ARIA state rather than an <input> property.
-  const variety = picker.getByRole('checkbox', { name: new RegExp(optionName) });
+  // A variety is an ARIA control on a BUTTON now (groups replaced the flat addon
+  // list): role=radio when the group is single-choice, checkbox when multiple.
+  // This group is max_select=1, so it renders as a radio. Assert the ARIA state
+  // rather than an <input> property.
+  const variety = picker.getByRole('radio', { name: new RegExp(optionName) });
   await expect(variety).toHaveAttribute('aria-checked', 'false');
   await variety.click();
   await expect(variety).toHaveAttribute('aria-checked', 'true');

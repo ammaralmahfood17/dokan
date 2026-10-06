@@ -55,17 +55,27 @@ async function countFor(table: string, column: string, projectId: string): Promi
   return count ?? 0;
 }
 
-/** Option groups live under a product, so count them for the whole project at once. */
+/**
+ * Option groups/choices live under a product (and a group), so they are counted
+ * through the project's products — two plain queries rather than an embedded
+ * filter, which keeps this runnable against production without relying on
+ * PostgREST's `!inner` syntax.
+ */
 async function countOptions(projectId: string): Promise<number> {
   const { data: prods, error } = await admin.from('products').select('id').eq('project_id', projectId);
   if (error || !prods?.length) return error ? -1 : 0;
-  const ids = prods.map((p) => p.id);
-  const [groups, choices] = await Promise.all([
-    admin.from('option_groups').select('*', { count: 'exact', head: true }).in('product_id', ids),
-    admin.from('option_choices').select('id, option_groups!inner(product_id)', { count: 'exact', head: true }).in('option_groups.product_id', ids),
-  ]);
-  if (groups.error || choices.error) return -1;
-  return (groups.count ?? 0) + (choices.count ?? 0);
+  const { data: groups, error: gErr } = await admin
+    .from('option_groups')
+    .select('id')
+    .in('product_id', prods.map((p) => p.id));
+  if (gErr) return -1;
+  if (!groups?.length) return 0;
+  const { count, error: cErr } = await admin
+    .from('option_choices')
+    .select('*', { count: 'exact', head: true })
+    .in('group_id', groups.map((g) => g.id));
+  if (cErr) return -1;
+  return groups.length + (count ?? 0);
 }
 
 async function main(): Promise<void> {

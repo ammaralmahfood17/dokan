@@ -93,7 +93,8 @@ test('POS: add product + option → confirm → order lands with correct price',
   // 3. Option picker appears (dialog) → pick the variety.
   const picker = page.getByRole('dialog', { name: /خيارات — موهيتو/ });
   await expect(picker).toBeVisible({ timeout: 15_000 });
-  const variety = picker.getByRole('checkbox', { name: /نعناع إضافي/ });
+  // The group is max_select=1, so each variety renders as a radio.
+  const variety = picker.getByRole('radio', { name: /نعناع إضافي/ });
   await expect(variety).toBeVisible({ timeout: 15_000 });
   await variety.click();
   await expect(variety).toHaveAttribute('aria-checked', 'true');
