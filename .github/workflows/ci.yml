@@ -114,6 +114,9 @@ jobs:
       - name: Assert every route body tolerates malformed JSON
         run: node scripts/check-json-body-guard.mjs
 
+      - name: Assert a production deploy cannot build without its required env
+        run: node scripts/check-prod-env-gate.mjs
+
       # Unit tests, BEFORE the build: a logic regression should fail in seconds
       # here rather than after a full Next build. `vitest run` exits non-zero on
       # a single failure, so there is no "expected failures" escape hatch here.

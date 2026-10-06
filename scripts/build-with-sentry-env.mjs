@@ -59,6 +59,19 @@ if (have.length === NEEDED.length) {
   );
 }
 
+// Owner decision 8 (2026-10-06): "boot-time validation, fail closed in production". The validator
+// existed but nothing called it on a deploy, so a misconfigured production build would ship and then
+// refuse every signup at runtime (Turnstile unconfigured) instead of never shipping. It is wired
+// HERE, in the build wrapper Vercel runs, and gated on VERCEL_ENV: CI sets no VERCEL_ENV and builds
+// with placeholder values, so this cannot affect it.
+if (process.env.VERCEL_ENV === 'production') {
+  const gate = spawnSync('node', ['scripts/validate-env.mjs'], { stdio: 'inherit', env: process.env });
+  if (gate.status !== 0) {
+    console.error('[build] refusing to build a production deployment with an invalid environment');
+    process.exit(1);
+  }
+}
+
 const result = spawnSync('npx', ['next', 'build'], {
   stdio: 'inherit',
   env: process.env,
