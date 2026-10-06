@@ -303,3 +303,43 @@ project ran inside a single psql session with savepoints.**
 - `react-dom/server` renders under this repo's node vitest environment → presentational
   components are testable with no new dependency.
 - `react-hooks/refs` rejects writing a ref during render; refresh refs inside an effect.
+
+
+---
+
+## Owner decisions, round 2 (2026-10-06) — D1–D4
+
+### D1 — W6-T1 (`service_requests` drop): DEFERRED
+The migration is out of the deploy set: `docs/audit-2026-10/DEFERRED-DDL/20261006140000_drop_dead_schema.sql`,
+with a README stating the two companion changes to restore with it. The two side-changes it came with
+are reverted here so the suite agrees with the schema that still exists:
+- `supabase/tests/phase4_5_advisor_hardening.sql` — back to four indexes (count 4).
+- `src/lib/database.types.ts` — the `service_requests` block and both `service_request_type` entries restored.
+Re-evaluate **7 days after the deploy** (OPS-VERIFICATION §13). T2 #13's row in the wave table above
+therefore reads DEFERRED, not DONE.
+
+### D2 — W6-T3 (impersonation constraints): apply IMMEDIATELY AFTER the deploy
+Order, and the reason, are in `DEPLOY-RUNBOOK.md` step 7 and `MIGRATION-MANIFEST.md`. Asked whether it
+can be made backward-compatible instead: `ADD CONSTRAINT … NOT VALID` only spares EXISTING rows and
+still enforces new inserts, so the old code's refresh-token insert would fail anyway; with 0 rows
+there is nothing to spare. Verify with the four-constraint + `used_at` queries in the manifest.
+Both new constraints now carry `DROP CONSTRAINT IF EXISTS` before the `ADD`, so a re-run is safe.
+
+### D3 — public menu: cached, token out of the render
+`src/app/[projectSlug]/menu/[tableSlug]/page.tsx` no longer reads `searchParams`, and is
+`revalidate = 60` + `dynamic = 'force-static'`; the token is read client-side from the URL and enforced
+server-side by `/api/public/order`. On-demand invalidation is unchanged (`menu-${projectId}` tag,
+purged by `/api/revalidate-menu`, whose only writer is `src/lib/products-utils.ts` — the single write
+path the decision required).
+
+**The first measurement failed, and that is why `force-static` is there.** Without it Next built its
+router state tree from the request URL and emitted the token into the React Flight payload
+(`"c":["","estikana","menu","table-1?k=<token>"]`), so the HTML differed with and without `?k=` and the
+token was in the page source. Measured, then fixed; `e2e/menu-cache.a11y.spec.ts` asserts both
+properties. `generateStaticParams` stays empty on purpose (a real list would put a database query in
+the build and break the hermetic CI gate), so paths are rendered on first request and cached after —
+the build classifies the route `ƒ` for that reason, not because it reads the request.
+
+### D4 — `REQUIRE_TABLE_TOKEN` stays false at deploy
+Flip gate and the daily query: `POST-DEPLOY-MONITORING.md`. Baseline at the time of writing:
+`token_present=true` = 1, `token_present=false` = 0 (`public.order_audit_logs`).

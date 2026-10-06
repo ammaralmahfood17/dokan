@@ -417,3 +417,39 @@ The Wave 6 migrations add: a dropped dead table (`service_requests`) and its enu
 privilege, and three constraints on `impersonation_sessions`.
 
     date: __________  security advisor findings: ____  performance advisor findings: ____
+
+
+---
+
+## 13. The deferred DDL (owner decision D1)
+
+`service_requests` is **not** dropped: it is dead surface (0 rows, no inbound foreign keys, no reader
+or writer in the app) but harmless, and the drop is irreversible. The migration therefore lives at
+`docs/audit-2026-10/DEFERRED-DDL/20261006140000_drop_dead_schema.sql`, outside `supabase/migrations/`,
+so no `db push` and no CI reset can apply it by accident. Its README lists the two companion changes.
+
+**Calendar note: re-evaluate 7 days after the deploy.** Then either drop it — the file, the pgTAP
+index count back to 4, and `npm run db:types` are one commit — or leave it and record why.
+
+## 14. Realtime isolation: what is actually proven (owner item E1)
+
+`scripts/realtime-probe.ts` **was run against the real production Supabase** (not a branch, not a
+local stack). The transcript is quoted in the PR description. Its verdict is **INCONCLUSIVE**, and the
+honest reading is:
+
+| assertion | result |
+|---|---|
+| own-tenant order arrives (positive control) | **FAIL** — inserted into A, no event received, even after a 30s drain |
+| foreign-tenant order does NOT arrive | ok — but with a failing control this proves nothing |
+| anonymous subscriber receives nothing | ok — same caveat |
+
+So this probe does **not** establish tenant isolation. What the isolation rests on today: the
+publication contains only `orders` + `order_items`, every public table has RLS on (21/21, §3 of the
+drift report), the 24 `SECURITY DEFINER` functions all pin `search_path`, and the client-side
+`realtime-guard` filters incoming rows by project as defence in depth. Re-run this probe after the
+deploy with a longer drain and the event-received instrumentation on the INSERT response, and treat the
+result as the evidence — until then, do not describe isolation as probe-proven.
+
+Note for operations: the same transcript shows Realtime delivery to a subscribed user channel did not
+happen within 130s in production. The kitchen's 30-second polling fallback is load-bearing, not
+decoration.
