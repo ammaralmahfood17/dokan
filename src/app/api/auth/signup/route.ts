@@ -65,6 +65,12 @@ export async function POST(request: Request) {
     // cannot spend a real merchant's per-IP budget. An unconfigured Turnstile in production
     // is a REFUSAL (503), never a bypass — the boot-time validator refuses to start such a
     // deployment too, so a missing secret cannot go unnoticed.
+    // Deliberate pause (owner decision 2026-10-06): signups are closed until Turnstile keys exist,
+    // and they stay closed even if keys appear later - the switch is explicit, not implicit.
+    if (process.env.SIGNUP_ENABLED === 'false') {
+      return NextResponse.json({ error: 'التسجيل متوقف مؤقتًا، جرّب لاحقًا.' }, { status: 503 });
+    }
+
     const turnstile = await verifyTurnstile(turnstileToken, ip);
     if (!turnstile.ok) {
       return NextResponse.json(

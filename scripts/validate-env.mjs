@@ -50,8 +50,14 @@ const productionRequired = [
   // Without it /api/health answers anyone, briefing an attacker on the deployment.
   ['HEALTH_TOKEN', 'the ops endpoints would be open to the public'],
   // Without them signup is unprotected (Turnstile) — decision 7 turned it on.
-  ['NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'the signup widget would not render'],
-  ['TURNSTILE_SECRET', 'signup could not be verified'],
+  // Turnstile is required only when signups are meant to be open: `SIGNUP_ENABLED=false` is the
+  // deliberate, recorded way to pause signups (owner decision 2026-10-06), and pausing without
+  // captcha keys is coherent - the route answers 503 either way.
+  ...(process.env.SIGNUP_ENABLED === 'false'
+    ? []
+    : [['NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'the signup widget would not render'],
+       ['TURNSTILE_SECRET', 'signup could not be verified']]),
+  ['SIGNUP_ENABLED', 'signups would be neither open nor deliberately paused'],
   // Security flags: a deployment that forgets them silently runs in the wrong mode.
   ['REQUIRE_TABLE_TOKEN', 'the table-token rollout mode would be implicit'],
   ['ORDERS_TOKEN_TELEMETRY', 'the rollout telemetry would be implicit'],
