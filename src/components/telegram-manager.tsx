@@ -126,7 +126,7 @@ export function TelegramManager({ projectId }: { projectId: string }) {
                 type="button"
                 aria-label="إلغاء الربط"
                 onClick={() => removeLink(l.chat_id)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-danger-tint)] hover:text-[var(--color-danger)]"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-danger-tint)] hover:text-[var(--color-danger)]"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

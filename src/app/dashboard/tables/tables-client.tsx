@@ -368,8 +368,9 @@ export function TablesClient({
         <Modal title="طاولة جديدة" onClose={() => setShowTable(false)}>
           <form onSubmit={createTable}>
             <div className="field">
-              <label className="label">رقم الطاولة</label>
+              <label htmlFor="table-number" className="label">رقم الطاولة</label>
               <input
+                id="table-number"
                 className="input"
                 type="number"
                 inputMode="numeric"
@@ -390,8 +391,9 @@ export function TablesClient({
               <p className="hint">رقم الطاولة بين 1 و 999</p>
             </div>
             <div className="field">
-              <label className="label">معرّف الرابط (slug)</label>
+              <label htmlFor="table-slug" className="label">معرّف الرابط (slug)</label>
               <input
+                id="table-slug"
                 className="input"
                 required
                 maxLength={60}

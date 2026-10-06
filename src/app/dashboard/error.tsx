@@ -63,11 +63,13 @@ export default function DashboardError({
   return (
     <div className="flex min-h-dvh items-center justify-center bg-[var(--color-bg)] p-4 font-sans" dir="rtl">
       {/* FIX-A-002: إعلان الخطأ لقارئ الشاشة فور ظهوره */}
-      <div
-        className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 sm:p-8"
-        role="alert"
-        aria-live="assertive"
-      >
+      <div className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 sm:p-8">
+        {/* audit T1 #14: role="alert" used to wrap the retry button and the details accordion,
+            so their labels were re-announced on every update and the announcement was unusable.
+            The assertion now sits in its own live region, outside the interactive content. */}
+        <p role="alert" aria-live="assertive" className="sr-only">
+          {details.title}
+        </p>
         {/* Header Badge & Title */}
         <div className="mb-4 flex items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-danger-tint)] text-[var(--color-danger)]">

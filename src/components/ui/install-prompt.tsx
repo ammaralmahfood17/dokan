@@ -58,8 +58,10 @@ export function InstallPrompt() {
 
   return (
     <div
-      role="dialog"
-      aria-label="تثبيت التطبيق"
+      /* audit T1 #13: nothing here is modal, traps focus or is labelled - role="dialog" only
+         confused assistive tech. It is a passive announcement. */
+      role="status"
+      aria-live="polite"
       className="fixed bottom-20 inset-x-0 z-[var(--z-drawer)] mx-auto flex w-[calc(100%-2rem)] max-w-md items-center gap-3 rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-float"
     >
       <div className="min-w-0 flex-1">

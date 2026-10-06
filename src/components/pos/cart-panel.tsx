@@ -115,7 +115,7 @@ export function CartPanel({
             mobile keeps it above the product grid). */}
         <div
           className="mt-3 hidden gap-1 rounded-[var(--radius-md)] bg-[var(--color-surface-sunken)] p-1 md:flex"
-          role="tablist"
+          role="group"
           aria-label="نوع الطلب"
         >
           {(
@@ -128,8 +128,7 @@ export function CartPanel({
             <button
               key={value}
               type="button"
-              role="tab"
-              aria-selected={type === value}
+              aria-pressed={type === value}
               onClick={() => onTypeChange(value)}
               disabled={submitting}
               className={cn(

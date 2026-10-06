@@ -810,7 +810,7 @@ export function MenuClient({
             </div>
           )}
           <div className="field">
-            <label className="label">ملاحظة على الصنف</label>
+            <label htmlFor="item-notes" className="label">ملاحظة على الصنف</label>
             {/* UX-6: quick-note chips — most common Gulf requests, one tap
                 each. Toggle adds/removes the phrase from the notes text. */}
             <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="ملاحظات سريعة">
@@ -834,6 +834,7 @@ export function MenuClient({
               })}
             </div>
             <input
+              id="item-notes"
               className="input"
               value={itemNotes}
               onChange={(e) => {

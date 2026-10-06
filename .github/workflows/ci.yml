@@ -100,6 +100,11 @@ jobs:
       - name: Assert every service-role route has a documented gate
         run: node scripts/check-public-write-gates.mjs
 
+      # Audit T1 #7 (W3-T6): an icon-only control under 44px is the one a cashier misses
+      # mid-rush. Cheap grep-level check, so it can afford to run on every push.
+      - name: Assert icon-only controls are at least 44px
+        run: node scripts/check-touch-targets.mjs
+
       # Unit tests, BEFORE the build: a logic regression should fail in seconds
       # here rather than after a full Next build. `vitest run` exits non-zero on
       # a single failure, so there is no "expected failures" escape hatch here.

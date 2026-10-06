@@ -144,7 +144,17 @@ export function KitchenClient({
   const preparingCount = tickets.filter((t) => t.order.status === 'preparing').length;
 
   return (
-    <div className="min-h-dvh bg-[var(--color-bg)]" onClick={clearBadge}>
+    <div
+      className="min-h-dvh bg-[var(--color-bg)]"
+      /* audit T1 #20: a click-anywhere handler on a non-interactive div. It only clears a
+         local badge - it is not an affordance - so it must not be announced or reachable;
+         the explicit non-interactive role says so, and jsx-a11y accepts it. */
+      role="presentation"
+      onClick={clearBadge}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') clearBadge();
+      }}
+    >
       {/* Header — Scan Grid: title + tabs + actions */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
         <div className="flex items-center gap-2.5">

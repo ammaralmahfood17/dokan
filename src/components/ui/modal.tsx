@@ -73,9 +73,18 @@ export function Modal({ title, children, onClose }: ModalProps) {
     const firstInput = el.querySelector<HTMLElement>(
       'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), textarea'
     );
-    if (firstInput) {
-      requestAnimationFrame(() => firstInput.focus());
-    }
+    // audit T1 #6 (WCAG 2.4.3): without a fallback, a dialog with no input left focus on
+    // <body> and was never announced. The panel itself is focusable for exactly this case.
+    requestAnimationFrame(() => (firstInput ?? el).focus());
+  }, []);
+
+  // audit T1 #6: remember who opened the dialog and hand focus back when it unmounts.
+  // Escape or a save used to drop focus to <body>, losing the keyboard user's place.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    return () => {
+      opener?.focus?.();
+    };
   }, []);
 
   // Keydown listener + body scroll lock (industry standard)
@@ -103,8 +112,15 @@ export function Modal({ title, children, onClose }: ModalProps) {
   return (
     <div
       className="fixed inset-0 z-[var(--z-modal)] flex items-start justify-center bg-black/40 sm:items-center sm:p-4"
+      /* audit T1 #20: the backdrop click is a POINTER convenience; the semantic dialog is the
+         panel below (role="dialog"), so this wrapper is presentational. Escape (handled on the
+         document) remains the keyboard path. */
+      role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) requestClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') requestClose();
       }}
     >
       <div
@@ -114,6 +130,8 @@ export function Modal({ title, children, onClose }: ModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        /* audit T1 #6: focusable so the no-input fallback above has somewhere to land. */
+        tabIndex={-1}
       >
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
           <h3 id={titleId} className="text-sm font-bold">{title}</h3>

@@ -22,6 +22,9 @@ export function CheckoutButton({
   return (
     <button
       type="button"
+      /* audit T1 #21: the spinner is aria-hidden by design, so without aria-busy the button
+         announced nothing while it worked - the one CTA where silence is expensive. */
+      aria-busy={loading || undefined}
       onClick={onClick}
       disabled={disabled || loading}
       className={cn(

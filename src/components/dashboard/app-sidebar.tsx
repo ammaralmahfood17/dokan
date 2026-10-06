@@ -152,7 +152,10 @@ export function AppSidebar({
       {isOpen && (
         <div
           className="fixed inset-0 z-[var(--z-drawer)] bg-black/50 backdrop-blur-sm lg:hidden animate-fade-in"
+          /* audit T1 #20: a backdrop is not a control; the drawer's own close button is. */
+          role="presentation"
           onClick={() => setIsOpen(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setIsOpen(false); }}
         />
       )}
 

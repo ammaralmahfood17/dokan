@@ -263,7 +263,7 @@ export default function OnboardingPage() {
                 </p>
               </div>
               <div className="field">
-                <label className="label">العملة</label>
+                <label htmlFor="currency-step2" className="label">العملة</label>
                 <select
                   id="currency-step2"
                   className="select"
@@ -277,9 +277,10 @@ export default function OnboardingPage() {
               </div>
 
               <div className="field">
-                <label className="label">اللون الأساسي</label>
+                <label htmlFor="brand-color" className="label">اللون الأساسي</label>
                 <div className="flex items-center gap-3">
                   <input
+                    id="brand-color"
                     type="color"
                     value={primaryColor}
                     onChange={(e) => setPrimaryColor(e.target.value)}

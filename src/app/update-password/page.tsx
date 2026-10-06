@@ -150,7 +150,7 @@ export default function UpdatePasswordPage() {
                 onClick={() => setShowPass((v) => !v)}
                 aria-label={showPass ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                 aria-pressed={showPass}
-                className="absolute end-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+                className="absolute end-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
               >
                 {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>

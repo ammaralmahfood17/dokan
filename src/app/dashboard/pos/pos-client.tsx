@@ -346,13 +346,15 @@ export function PosClient({
         {/* ── Left: product grid ─────────────────────────────────────── */}
         <div className="min-w-0">
           {/* Mobile order type — desktop keeps it in the cart header */}
-          <div className="mb-3 flex gap-1 rounded-[var(--radius-md)] bg-[var(--color-surface-sunken)] p-1 md:hidden" role="tablist" aria-label="نوع الطلب">
+          {/* audit T1 #15: these are filter buttons over ONE visible region, not tabs with
+              panels - role="tab" without panels is a half-implemented pattern that axe flags
+              (aria-required-children). aria-pressed matches the other filters in the app. */}
+          <div className="mb-3 flex gap-1 rounded-[var(--radius-md)] bg-[var(--color-surface-sunken)] p-1 md:hidden" role="group" aria-label="نوع الطلب">
             {ORDER_TYPES.map(([value, label]) => (
               <button
                 key={value}
                 type="button"
-                role="tab"
-                aria-selected={type === value}
+                aria-pressed={type === value}
                 onClick={() => setType(value)}
                 disabled={submitting}
                 className={`min-h-[44px] flex-1 rounded-[6px] text-sm font-semibold transition-colors ${type === value ? 'bg-[var(--color-surface)] text-[var(--color-text)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'}`}
@@ -383,7 +385,7 @@ export function PosClient({
                 type="button"
                 onClick={() => setQuery('')}
                 aria-label="مسح البحث"
-                className="absolute end-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-sunken)] hover:text-[var(--color-text)]"
+                className="absolute end-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-sunken)] hover:text-[var(--color-text)]"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -465,6 +467,7 @@ export function PosClient({
           aria-modal="true"
           aria-label="سلة الطلب"
           onClick={(e) => { if (e.target === e.currentTarget) setCartOpen(false); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setCartOpen(false); }}
         >
           <div className="flex h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--color-surface)] animate-slide-up">
             <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2">
@@ -521,7 +524,7 @@ export function PosClient({
               type="button"
               onClick={() => setLastConfirmed(null)}
               aria-label="إغلاق"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/20"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/20"
             >
               <X className="h-4 w-4" />
             </button>
@@ -537,6 +540,7 @@ export function PosClient({
           aria-modal="true"
           aria-label={`إضافات — ${picker.name}`}
           onClick={(e) => { if (e.target === e.currentTarget) setPicker(null); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setPicker(null); }}
         >
           <div
             ref={pickerRef}

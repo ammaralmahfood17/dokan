@@ -86,8 +86,9 @@ export function CategoryManager({
         <Modal title="تعديل التصنيف" onClose={onCloseEdit}>
           <form onSubmit={(e) => { e.preventDefault(); updateCategory(); }} className="space-y-4">
             <div className="field">
-              <label className="label">اسم التصنيف</label>
+              <label htmlFor="category-name" className="label">اسم التصنيف</label>
               <input
+                id="category-name"
                 className="input"
                 required
                 maxLength={50}

@@ -112,7 +112,7 @@ export function ImageUploader({
 
   return (
     <div className="field">
-      <label className="label">صورة المنتج</label>
+      <label htmlFor="product-image" className="label">صورة المنتج</label>
       {imageUrl ? (
         <div className="relative inline-block">
           <Image
@@ -150,6 +150,17 @@ export function ImageUploader({
         </div>
       ) : (
         <div
+          /* audit T1 #20: this dropzone IS a control (click or drop to choose a file), so it
+             gets button semantics and a keyboard path. It cannot be a real <button>: the hidden
+             file input lives inside it, and interactive content must not nest in a button. */
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           onDrop={onDrop}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
@@ -170,6 +181,7 @@ export function ImageUploader({
             JPG أو PNG أو WebP، حد أقصى 5MB
           </p>
           <input
+            id="product-image"
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"

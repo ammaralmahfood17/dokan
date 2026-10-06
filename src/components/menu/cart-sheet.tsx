@@ -88,8 +88,9 @@ export function CartSheet({
       </ul>
 
       <div className="mb-4">
-        <label className="label">ملاحظة للطلب</label>
+        <label htmlFor="order-notes" className="label">ملاحظة للطلب</label>
         <input
+          id="order-notes"
           className="input"
           value={orderNotes}
           onChange={(e) => {

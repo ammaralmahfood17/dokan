@@ -66,7 +66,7 @@ export function CartLineItem({
               type="button"
               onClick={onDecrement}
               aria-label={`تقليل كمية ${line.productName}`}
-              className="flex h-11 w-10 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
             >
               <Minus className="h-4 w-4" />
             </button>
@@ -96,7 +96,7 @@ export function CartLineItem({
               type="button"
               onClick={onIncrement}
               aria-label={`زيادة كمية ${line.productName}`}
-              className="flex h-11 w-10 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
             >
               <Plus className="h-4 w-4" />
             </button>

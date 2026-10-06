@@ -102,6 +102,7 @@ export function Sheet({
       aria-modal="true"
       aria-label={title}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
       <div
         ref={sheetRef}

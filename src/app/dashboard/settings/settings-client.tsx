@@ -256,12 +256,13 @@ export function SettingsClient({
           role="dialog"
           aria-modal="true"
           aria-label="إيقاف المتجر"
-          onClick={() => setConfirmDeactivate(false)}
+          onClick={(e) => { if (e.target === e.currentTarget) setConfirmDeactivate(false); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setConfirmDeactivate(false); }}
         >
-          <div
-            className="w-full max-w-xs rounded-xl bg-[var(--color-surface)] p-5 text-center shadow-float"
-            onClick={(e) => e.stopPropagation()}
-          >
+          {/* audit T1 #20: the inner panel used onClick={stopPropagation} purely to survive the
+              backdrop handler - a click handler on a non-interactive element that exists only to
+              cancel another one. The backdrop now tests e.target instead, so it is gone. */}
+          <div className="w-full max-w-xs rounded-xl bg-[var(--color-surface)] p-5 text-center shadow-float">
             <div className="mb-3 mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-danger-tint)]">
               <span className="text-lg font-bold text-[var(--color-danger)]">!</span>
             </div>

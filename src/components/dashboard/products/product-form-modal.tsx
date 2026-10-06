@@ -377,8 +377,9 @@ export function ProductFormModal({
             {fieldErrors.name && <p id="product-name-error" className="error-text" role="alert">{fieldErrors.name}</p>}
           </div>
           <div className="field">
-            <label className="label">بالإنجليزي</label>
+            <label htmlFor="product-name-en" className="label">بالإنجليزي</label>
             <input
+              id="product-name-en"
               className="input"
               dir="ltr"
               maxLength={100}
@@ -391,8 +392,9 @@ export function ProductFormModal({
 
         {/* DESCRIPTION */}
         <div className="field">
-          <label className="label">الوصف</label>
+          <label htmlFor="product-description" className="label">الوصف</label>
           <textarea
+            id="product-description"
             className="textarea"
             rows={3}
             maxLength={500}
@@ -437,9 +439,10 @@ export function ProductFormModal({
 
           {/* Category select with inline quick-add */}
           <div className="field">
-            <label className="label">التصنيف</label>
+            <label htmlFor="product-category" className="label">التصنيف</label>
             <div className="flex gap-1">
               <select
+                id="product-category"
                 className="select flex-1"
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
@@ -503,9 +506,9 @@ export function ProductFormModal({
         />
 
         {/* ======== ADDONS ======== */}
-        <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
+        <fieldset className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
           <div className="mb-3 flex items-center justify-between">
-            <label className="label mb-0">الإضافات <span className="text-[var(--color-text-muted)]">(اختياري)</span></label>
+            <legend className="label mb-0">الإضافات <span className="text-[var(--color-text-muted)]">(اختياري)</span></legend>
             <button
               type="button"
               onClick={addFormAddon}
@@ -557,7 +560,7 @@ export function ProductFormModal({
               </button>
             </div>
           ))}
-        </div>
+        </fieldset>
 
         {/* ======== AVAILABLE TOGGLE ======== */}
         <div className="flex items-center gap-3">

@@ -449,7 +449,7 @@ export function OrdersClient({
               type="button"
               onClick={() => setQuery('')}
               aria-label="مسح البحث"
-              className="absolute end-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-sunken)]"
+              className="absolute end-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-sunken)]"
             >
               <X className="h-4 w-4" />
             </button>
