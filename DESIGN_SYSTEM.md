@@ -120,11 +120,11 @@
 
 | Token | القيمة | الاستخدام |
 |---|---|---|
-| `--radius-xs` | 4px | Checkbox، مؤشرات صغيرة |
+| `--radius-xs` | 4px | **not declared in globals.css and referenced nowhere** (checked 2026-10-06) | Checkbox، مؤشرات صغيرة |
 | `--radius-sm` | 6px | حقول الإدخال، أزرار صغيرة |
-| `--radius-md` | 8px | أزرار، بطاقات فرعية |
-| `--radius-lg` | 10px | بطاقات رئيسية، نوافذ منبثقة صغيرة |
-| `--radius-xl` | 12px | لوحات كبيرة، Modal |
+| `--radius-md` | 10px | أزرار، بطاقات فرعية |
+| `--radius-lg` | 14px | بطاقات رئيسية، نوافذ منبثقة صغيرة |
+| `--radius-xl` | 20px | لوحات كبيرة، Modal |
 | `--radius-full` | 999px | Avatar، نقطة حالة، شارة Pill |
 
 ### الظلال — الحدود أولاً، الظل استثناء
