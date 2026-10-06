@@ -30,8 +30,17 @@ export function useTitleFlash() {
       // title early.
       stopFlash();
 
+      // audit T1 #18: a 1 Hz document.title swap is motion the CSS kill-switch cannot reach (it
+      // is JS), and it fires exactly when nobody is looking - a hidden tab. Reduced motion gets a
+      // single, steady marker instead of a flash; a visible tab still alternates.
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.title = `🔔 ${count} طلب جديد | ${originalTitleRef.current}`;
+        return;
+      }
+
       let showAlert = true;
       flashIntervalRef.current = setInterval(() => {
+        if (document.hidden) return; // no work while nobody is looking
         document.title = showAlert
           ? `🔔 ${count} طلب جديد | ${originalTitleRef.current}`
           : originalTitleRef.current;
