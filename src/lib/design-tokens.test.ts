@@ -38,7 +38,12 @@ function rule(selector: string): string {
 }
 
 function declaration(block: string, property: string): string {
-  const m = block.match(new RegExp(`(?:^|;)\\s*${property}:\\s*([^;]+)`));
+  // Strip CSS comments FIRST. The Wave 3 fixes put an explanatory comment inside the blocks
+  // they change, and a comment sits between the previous `;` and the property - so the naive
+  // (?:^|;) anchor missed the very declaration it was meant to read. Stripping keeps this
+  // guardrail honest against real CSS, comments included.
+  const clean = block.replace(/\/\*[\s\S]*?\*\//g, '');
+  const m = clean.match(new RegExp(`(?:^|;)\\s*${property}:\\s*([^;]+)`));
   if (!m) throw new Error(`no "${property}" declaration in block: ${block.trim().slice(0, 80)}`);
   return m[1].trim();
 }
@@ -95,5 +100,75 @@ describe('design tokens meet WCAG AA (4.5:1) for normal-size text', () => {
     const fg = resolveColor(declaration(block, 'color'));
     const bg = resolveColor(declaration(block, 'background'));
     expect(ratio(fg, bg), `${selector} (${fg} on ${bg})`).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+/**
+ * Wave 3 T1 (audit T1 #1, CRITICAL) - WCAG 2.2 SC 2.4.11 / 1.4.11: a focus indicator must be
+ * at least 3:1 against what it sits on. The old ring was rgba(79,70,229,.25), which composites
+ * to #D3D1F8 on white - a measured 1.47:1, so keyboard focus was effectively invisible.
+ */
+describe('focus indicator is perceivable (WCAG 2.2 SC 2.4.11 / 1.4.11: 3:1)', () => {
+  it(':focus-visible uses a solid outline in --color-primary', () => {
+    const block = rule('*:focus-visible');
+    const outline = declaration(block, 'outline');
+    expect(outline, 'outline must not be none').not.toMatch(/none/);
+    expect(outline).toMatch(/var\(--color-primary\)/);
+    expect(ratio(token('color-primary'), token('color-surface'))).toBeGreaterThanOrEqual(3);
+    expect(ratio(token('color-primary'), token('color-bg'))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * Wave 3 T2 (audit T1 #2, CRITICAL) - WCAG 1.4.11: the boundary that makes a control
+ * perceivable needs 3:1. --color-border is rgba(20,20,15,.08) = a 1.18:1 hairline, which is
+ * correct for a divider and a failure as a control boundary.
+ */
+describe('form control boundaries meet WCAG 1.4.11 (3:1)', () => {
+  it('--color-border-control clears 3:1 against every surface it is drawn on', () => {
+    const c = token('color-border-control');
+    for (const bg of ['color-surface', 'color-bg', 'color-surface-sunken']) {
+      expect(ratio(c, token(bg)), `${c} on ${token(bg)}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('.input renders that token, not the decorative hairline', () => {
+    const block = rule('.input, .select, .textarea');
+    expect(declaration(block, 'border')).toMatch(/var\(--color-border-control\)/);
+  });
+
+  it('.card and table dividers keep the decorative hairline', () => {
+    // The fix must not turn every divider into a heavy line.
+    const card = rule('.card');
+    expect(declaration(card, 'border')).toMatch(/var\(--color-border\)/);
+  });
+});
+
+/**
+ * Wave 3 T4 (audit T1 #4) - WCAG 1.4.3 at the COMPONENT level.
+ *
+ * This finding survived the original audit because the guard watched globals.css while the
+ * real product renders a Tailwind class string from a component. So the component is parsed
+ * too: its tone pairs are resolved from the tokens and measured, and the specific class that
+ * caused the 4.34:1 is named so it cannot come back.
+ */
+const statusChip = readFileSync(resolve(process.cwd(), 'src/components/ui/status-chip.tsx'), 'utf8');
+
+describe('StatusChip tones meet 4.5:1 (WCAG 1.4.3)', () => {
+  const tones: [string, string, string][] = [
+    ['color-warn', 'color-warn-tint', 'pending'],
+    ['color-info', 'color-info-tint', 'preparing'],
+    ['color-success', 'color-success-tint', 'ready'],
+    ['color-text-secondary', 'color-surface-sunken', 'delivered'],
+    ['color-danger', 'color-danger-tint', 'cancelled'],
+  ];
+  it.each(tones)('%s on %s - %s', (fg, bg, label) => {
+    expect(ratio(token(fg), token(bg)), label).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the delivered tone does not use text-muted on the sunken surface', () => {
+    const delivered = statusChip.match(/delivered:\s*'([^']+)'/)?.[1] ?? '';
+    expect(delivered).not.toMatch(/color-text-muted/);
+    expect(delivered).toMatch(/color-text-secondary/);
   });
 });

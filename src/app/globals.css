@@ -41,6 +41,11 @@
   --color-surface-sunken: #F1F5F9;
   --color-border: rgba(20, 20, 15, 0.08);
   --color-border-strong: rgba(20, 20, 15, 0.14);
+  /* audit T1 #2 (WCAG 1.4.11): --color-border is rgba(20,20,15,.08) -> #ECECEC on white, a
+     1.18:1 hairline. That is right for a DIVIDER and a failure as a CONTROL boundary, so
+     controls get their own token. #767B74 measures well above the 3:1 floor on every surface
+     it is drawn on (the test asserts all three). */
+  --color-border-control: #767B74;
   --color-text: #1F2320;
   --color-text-secondary: #6B6F68;
   /* FIX-D-006: رفع تباين text-muted من 2.45:1 إلى 7.6:1 (WCAG AA Pass) */
@@ -245,7 +250,8 @@
 .input, .select, .textarea {
   width: 100%;
   height: 36px;
-  border: 1px solid var(--color-border);
+  /* audit T1 #2: a control boundary, not a divider (see --color-border-control). */
+  border: 1px solid var(--color-border-control);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
@@ -394,9 +400,14 @@
    ========================================================================== */
 @layer base {
   *:focus-visible {
-    outline: none;
-    /* FIX-A-005: تقوية التباين من 0.15 إلى 0.25 opacity (~4.5:1) */
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
+    /* audit T1 #1 (WCAG 2.2 SC 2.4.11): the old ring was rgba(79,70,229,.25), which composites
+       to #D3D1F8 on white — a measured 1.47:1, far under the 3:1 floor, so keyboard focus was
+       effectively invisible on the POS. A solid brand outline measures 6.29:1 on white and
+       5.97:1 on the page background, and survives forced-colors mode where a box-shadow does
+       not get painted at all. */
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.28); /* keeps the existing inset look */
     border-radius: 4px;
   }
 }
