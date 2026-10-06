@@ -3,21 +3,22 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "a11y": "playwright test --config=playwright.a11y.config.ts",
     "build": "node scripts/build-with-sentry-env.mjs",
-    "start": "next start",
-    "lint": "eslint . --max-warnings 0",
     "db:types": "supabase gen types typescript --linked --schema public > src/lib/database.types.ts",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "sweep:test-data": "node scripts/sweep-test-data.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "dev": "next dev",
     "env:check": "node scripts/check-env-contract.mjs",
     "env:validate": "node scripts/validate-env.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "start": "next start",
+    "sweep:test-data": "node scripts/sweep-test-data.mjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:db": "supabase test db",
-    "test:e2e:fast": "playwright test --grep-invert 'resilience|kitchen-ops'"
+    "test:e2e": "playwright test",
+    "test:e2e:fast": "playwright test --grep-invert 'resilience|kitchen-ops'",
+    "test:e2e:ui": "playwright test --ui",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": "24.x"
@@ -38,6 +39,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.0.9",
     "@types/node": "^22.5.0",
