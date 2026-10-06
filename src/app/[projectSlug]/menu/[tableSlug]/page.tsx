@@ -52,13 +52,17 @@ async function getMenuData(projectId: string, tableId: string) {
   )();
 }
 
-// Enable ISR for any slug combination: without generateStaticParams, async
-// `params` force dynamic rendering (cache-control: no-store) regardless of
-// revalidate. An empty list + dynamicParams=true opts into on-demand
-// static generation: first visit builds the page, then it's cached & revalidated.
-export async function generateStaticParams() {
-  return [];
-}
+// This route reads `searchParams.k` (the table token) and therefore CANNOT be statically
+// generated: the empty generateStaticParams below classified it as SSG while the render used a
+// dynamic API, and Next answers that contradiction with DYNAMIC_SERVER_USAGE - reproducible on a
+// local production build (500 on every menu URL), which is why the Wave 5 verification had to run
+// against `next dev`. Stated explicitly instead of left to the framework's inference:
+export const dynamic = 'force-dynamic';
+// The expensive part (the menu query) stays cached by its own fetch-level `revalidate: 60` and is
+// purged by /api/revalidate-menu, so a dynamic render here costs a serialisation, not a DB round
+// trip. TRADE-OFF, recorded for the owner: no full-page ISR cache for the public menu. Restoring it
+// means moving the token out of `searchParams` (read it client-side and let /api/public/order
+// resolve it, exactly as it already does) so the page can be static again.
 
 // A2/UX-report: every public menu served under 3 hostnames had no canonical —
 // search engines saw duplicates. Store name also becomes the tab/OG title.
