@@ -89,6 +89,7 @@ export type Database = {
           target_project_id: string | null
           target_session: Json
           target_user_id: string
+          used_at: string | null
         }
         Insert: {
           created_at?: string
@@ -100,6 +101,7 @@ export type Database = {
           target_project_id?: string | null
           target_session: Json
           target_user_id: string
+          used_at?: string | null
         }
         Update: {
           created_at?: string
@@ -111,6 +113,7 @@ export type Database = {
           target_project_id?: string | null
           target_session?: Json
           target_user_id?: string
+          used_at?: string | null
         }
         Relationships: []
       }

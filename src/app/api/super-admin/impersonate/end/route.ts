@@ -50,13 +50,19 @@ export async function POST(request: NextRequest) {
       if (adminSession) {
         try {
           const userClient = await createClient();
+          // W6-T3 (A8 option A): the stored session is an ACCESS TOKEN ONLY - a refreshable
+          // credential for a super admin must not sit at rest. `setSession` still wants a
+          // refresh_token value, so it gets the same non-refreshable placeholder the target side
+          // uses: it is never sent to GoTrue while the access token is valid, and auto-refresh is
+          // off in support mode. The admin's own browser cookie remains the real session; if the
+          // access token has expired by the time they end support mode, they re-login.
           const { error } = await userClient.auth.setSession({
             access_token: adminSession.access_token,
-            refresh_token: adminSession.refresh_token,
+            refresh_token: `non-refreshable-${marker}`,
           });
           restored = !error;
         } catch {
-          restored = false; // stale refresh token — admin must re-login
+          restored = false; // expired access token — admin must re-login
         }
       }
 

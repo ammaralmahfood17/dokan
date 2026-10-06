@@ -30,7 +30,8 @@ export const SUPPORT_MODE_COOKIE = 'dokan-support-mode';
 /** Shape of the session objects we mint and store server-side ourselves. */
 export type StoredSession = {
   access_token: string;
-  refresh_token: string;
+  /** Absent since W6-T3: a session we hold at rest never carries a refresh token. */
+  refresh_token?: string;
   expires_in?: number;
   token_type?: string;
 };
@@ -109,7 +110,10 @@ export async function logSuperAdminAction(input: {
 // at verifyOtp. Flagged, not silently handled.
 // ===========================================================================
 
-const IMPERSONATION_TTL_MS = 30 * 60 * 1000; // hard 30-minute limit
+// W6-T3 (audit T2 #15 / A8): 30 -> 15 minutes. The matching DB constraint
+// (impersonation_max_duration) is shortened in the same change, so the schema cannot accept what the
+// code refuses.
+const IMPERSONATION_TTL_MS = 15 * 60 * 1000;
 const IMPERSONATION_TTL_TOLERANCE_MS = 5_000;
 
 export type ImpersonationSession = {
@@ -192,6 +196,14 @@ export async function startImpersonation(input: {
 
   // Persist the admin session for restoration. The target JSON intentionally
   // contains no refresh token; the DB constraint enforces that invariant.
+  // W6-T3 (A8 option A): keep the actor's ACCESS token only. The admin's browser still holds its own
+  // session cookie, so restoration does not need a refresh token - and a refreshable credential for
+  // the highest-privileged account must not sit in a plaintext column. The DB CHECK enforces it.
+  const actorAccessToken = (input.actorSession as { access_token?: string } | null)?.access_token;
+  if (typeof actorAccessToken !== 'string' || !actorAccessToken) {
+    throw new Error('actor session carries no access token');
+  }
+
   const expiresAt = new Date(Math.min(Date.now() + IMPERSONATION_TTL_MS, tokenExpiresAt)).toISOString();
   const { data: row, error: insErr } = await admin
     .from('impersonation_sessions')
@@ -199,7 +211,7 @@ export async function startImpersonation(input: {
       super_admin_user_id: input.actorUserId,
       target_user_id: input.targetUserId,
       target_project_id: input.targetProjectId,
-      super_admin_session: input.actorSession,
+      super_admin_session: { access_token: actorAccessToken },
       target_session: { access_token: verified.session.access_token },
       expires_at: expiresAt,
     })
@@ -228,10 +240,13 @@ export async function getImpersonationById(
   const admin = createAdminClient();
   const { data } = await admin
     .from('impersonation_sessions')
-    .select('id, target_user_id, target_project_id, expires_at, ended_at')
+    .select('id, target_user_id, target_project_id, expires_at, ended_at, used_at')
     .eq('id', sessionId)
     .maybeSingle();
   if (!data || data.ended_at) return null;
+  // W6-T3: the marker is single-use. `end/route.ts` already claimed "the id is dead once used"; this
+  // is the enforcement - a consumed marker resolves to nothing, so it cannot be replayed.
+  if (data.used_at) return null;
   const expired = new Date(data.expires_at as string).getTime() <= Date.now();
 
   const { data: targetUser } = await admin.auth.admin.getUserById(data.target_user_id as string);
@@ -265,6 +280,9 @@ export async function endImpersonation(sessionId: string): Promise<{
     .from('impersonation_sessions')
     .update({
       ended_at: new Date().toISOString(),
+      // W6-T3: the marker is consumed HERE. `getImpersonationById` refuses a row with used_at set, so
+      // a marker cookie cannot be replayed after its session ends.
+      used_at: new Date().toISOString(),
       super_admin_session: {},
       target_session: {},
     })
