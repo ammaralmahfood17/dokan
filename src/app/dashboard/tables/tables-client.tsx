@@ -181,7 +181,7 @@ export function TablesClient({
 
     printWindow.document.write(`
       <!DOCTYPE html>
-      <html dir="rtl">
+      <html lang="ar" dir="rtl">
       <head>
         <meta charset="utf-8">
         <title>QR الطاولات — ${projectSlug}</title>
@@ -201,7 +201,7 @@ export function TablesClient({
         <div class="grid">
           ${qrData.map((q) => `
             <div class="card">
-              <img src="${q.dataUrl}" alt="Table ${q.number}" />
+              <img src="${q.dataUrl}" alt="رمز QR لطاولة ${q.number}" />
               <div class="label">طاولة ${q.number}</div>
               <div class="slug">${q.slug}</div>
             </div>
