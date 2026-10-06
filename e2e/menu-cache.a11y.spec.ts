@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
 /**
  * Owner decision D3 (2026-10-06) — the public menu is cached again, and the table token is not part
@@ -22,29 +22,40 @@ const BASE = process.env.E2E_BASE_URL || 'https://dokanstore.xyz';
 const STRICT_BASE = process.env.E2E_BASE_URL_STRICT; // a server started with REQUIRE_TABLE_TOKEN=true
 const MENU = process.env.E2E_MENU_PATH || '/estikana/menu/table-1';
 
+// Fetch the RAW response, not `page.content()`: the live DOM is post-hydration and would compare
+// client state, not what the CDN would serve. This is what a cache-identity assertion has to look at.
+async function raw(request: APIRequestContext, url: string): Promise<string> {
+  const res = await request.get(url);
+  return await res.text();
+}
+
 async function html(page: Page, url: string): Promise<string> {
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => document.styleSheets.length > 0);
   return page.content();
 }
 
-test('the menu HTML is byte-identical with and without ?k=', async ({ page }) => {
-  const without = await html(page, `${BASE}${MENU}`);
-  const withToken = await html(page, `${BASE}${MENU}?k=0123456789abcdef0123456789abcdef`);
+test('the menu HTML is byte-identical with and without ?k=', async ({ request }) => {
+  const without = await raw(request, `${BASE}${MENU}`);
+  const withToken = await raw(request, `${BASE}${MENU}?k=0123456789abcdef0123456789abcdef`);
   expect(
     withToken === without,
     'the cached HTML must not depend on the token: identical bytes are the point of D3'
   ).toBe(true);
 });
 
-test('the table token never appears in the served HTML', async ({ page }) => {
-  const body = await html(page, `${BASE}${MENU}?k=0123456789abcdef0123456789abcdef`);
+test('the table token never appears in the served HTML', async ({ request }) => {
+  const body = await raw(request, `${BASE}${MENU}?k=0123456789abcdef0123456789abcdef`);
   expect(body).not.toContain('0123456789abcdef0123456789abcdef');
   expect(body, 'no ?k= in the markup').not.toContain('?k=');
 });
 
 test('with REQUIRE_TABLE_TOKEN=true the gate follows the URL, client-side', async ({ page }) => {
-  test.skip(!STRICT_BASE, 'set E2E_BASE_URL_STRICT to a server with REQUIRE_TABLE_TOKEN=true');
+  // NOTE: E2E_BASE_URL_STRICT must be a target rendered with the flag TRUE and must NOT share an ISR
+  // cache directory with a flag-false server: the cached HTML carries whichever value was rendered,
+  // which is how the first run of this test failed (two `next start` processes share .next/cache).
+  // A `next dev` server with REQUIRE_TABLE_TOKEN=true is the easy target.
+  test.skip(!STRICT_BASE, 'set E2E_BASE_URL_STRICT to a server rendered with REQUIRE_TABLE_TOKEN=true');
   // the cart bar only exists once something is in the cart, so add one product first
   const add = page.getByRole('button', { name: /إضافة .* إلى السلة/ }).first();
   await html(page, `${STRICT_BASE}${MENU}`);
