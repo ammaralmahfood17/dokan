@@ -12,6 +12,13 @@
 -- subscriber received nothing). These assertions are what keeps the property true as the
 -- schema evolves — assertion 3 is deliberately general: ANY table added to the publication
 -- without RLS fails CI, instead of the next audit finding it.
+--
+-- 2026-10-06: the publication deliberately grew a THIRD table, `service_requests`, so the
+-- kitchen board sees a «طلب موظف / طلب فاتورة» the moment it is made instead of on its
+-- fallback poll (migration 20261006170000). RLS is enabled on it and its only policy scopes
+-- every row to project members, which is what assertion 3 independently checks. Assertion 4
+-- is therefore updated to three tables on purpose — it exists to catch an ACCIDENTAL
+-- addition, and this one is not accidental.
 
 BEGIN;
 
@@ -25,12 +32,16 @@ SELECT ok(
   (
     SELECT bool_and(relrowsecurity)
       FROM pg_class
-     WHERE oid IN ('public.orders'::regclass, 'public.order_items'::regclass)
+     WHERE oid IN (
+       'public.orders'::regclass,
+       'public.order_items'::regclass,
+       'public.service_requests'::regclass
+     )
   ),
   'realtime-published tables keep RLS enabled'
 );
 
--- 2. Both stay in the publication — if either silently drops out, the UI stops updating and
+-- 2. All three stay in the publication — if any silently drops out, the UI stops updating and
 --    the failure looks like "realtime is broken" rather than a policy change.
 SELECT is(
   (
@@ -38,10 +49,10 @@ SELECT is(
       FROM pg_publication_tables
      WHERE pubname = 'supabase_realtime'
        AND schemaname = 'public'
-       AND tablename IN ('orders', 'order_items')
+       AND tablename IN ('orders', 'order_items', 'service_requests')
   ),
-  2,
-  'orders + order_items are both in the supabase_realtime publication'
+  3,
+  'orders + order_items + service_requests are all in the supabase_realtime publication'
 );
 
 -- 3. THE GENERAL GATE: every table in the publication has RLS enabled.
@@ -58,7 +69,7 @@ SELECT is(
   'no table is published to Realtime without RLS enabled'
 );
 
--- 4. The publication stays exactly these two tables. A table added by accident is a leak
+-- 4. The publication stays exactly these three tables. A table added by accident is a leak
 --    waiting for its first subscriber, and this is the assertion that makes that visible.
 SELECT is(
   (
@@ -66,8 +77,8 @@ SELECT is(
       FROM pg_publication_tables
      WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
   ),
-  2,
-  'the realtime publication contains exactly orders + order_items'
+  3,
+  'the realtime publication contains exactly orders + order_items + service_requests'
 );
 
 SELECT * FROM finish();
