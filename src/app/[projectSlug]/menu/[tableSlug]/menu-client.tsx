@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState , useSyncExternalStore } from 'react';
 import { ShoppingBag, X, Check, Bell, FileText, Search, Languages } from 'lucide-react';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
 import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
@@ -30,6 +30,9 @@ import { OrderSuccessState } from '@/components/menu/order-success-state';
 import { MenuProductRow } from '@/components/menu/product-card';
 // D7: offline indicator on the customer-facing menu (banner, not blocker).
 import { OfflineBanner } from '@/components/ui/offline-banner';
+
+// stable identity: useSyncExternalStore re-subscribes when this function changes
+const subscribeNever = () => () => {};
 import {
   queuePendingOrder,
   registerPendingOrderSync,
@@ -127,14 +130,20 @@ export function MenuClient({
   // so the server-rendered HTML is identical for every visitor and therefore cacheable. The token is
   // a UI gate only - `/api/public/order` resolves it through the SECURITY DEFINER function and is the
   // real boundary. `requireToken` is the rollout flag, constant for every visitor.
-  const [tableToken, setTableToken] = useState('');
-  useEffect(() => {
-    try {
-      setTableToken(new URLSearchParams(window.location.search).get('k') ?? '');
-    } catch {
-      setTableToken('');
-    }
-  }, []);
+  // Read the browser URL without a setState-in-effect (this repo's react-hooks rule rejects that,
+  // correctly: it costs a cascading render). useSyncExternalStore is the supported way to read a
+  // client-only value with a distinct server snapshot.
+  const tableToken = useSyncExternalStore(
+    subscribeNever,
+    () => {
+      try {
+        return new URLSearchParams(window.location.search).get('k') ?? '';
+      } catch {
+        return '';
+      }
+    },
+    () => ''
+  );
   const orderingEnabled = !requireToken || Boolean(tableToken);
 
   const displayName = useCallback(
