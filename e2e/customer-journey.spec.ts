@@ -47,6 +47,9 @@ import {
  *                                        «تم استلام طلبك» (h1), «رقم الطلب»
  *                                        + `order-{n}`, «قيد الانتظار» /
  *                                        «قيد التحضير» / «جاهز» (live step strip),
+ *                                        «طلبك قيد الانتظار — يتم تحديث الحالة
+ *                                        تلقائيًا» / «طلبك قيد التحضير — يتم تحديث
+ *                                        الحالة تلقائيًا» (current stage line),
  *                                        «طلبك جاهز 🎉» (terminal status line),
  *                                        «تعذّر تحديث الحالة — سنخبرك عند الجاهزية» (lost)
  *   src/app/api/public/order/route.ts     400 'منتج غير متاح أو لا ينتمي لهذا المتجر'
@@ -446,11 +449,25 @@ test('4. the order moves pending → preparing → ready → delivered, and orde
       p_caller_user_id: userId,
     });
 
+  // OWNER REPORT 2026-10-06: the customer's status screen lagged the kitchen.
+  // Measure it end to end: the success screen polls every 3s in this window, so
+  // the visible line must change well inside 8s (cadence + render + network).
+  // Before the fix this screen polled every 12s and the same assertion fails.
+  const t0 = Date.now();
   const r1 = await advance('pending', 'preparing');
   expect(r1.error, `pending→preparing: ${r1.error?.message}`).toBeNull();
   await expect
     .poll(async () => ((await orderStatusOf(orderId, slug)).body as { status: string }).status, { timeout: 20_000 })
     .toBe('preparing');
+
+  await expect(cust.getByText('طلبك قيد التحضير — يتم تحديث الحالة تلقائيًا')).toBeVisible({
+    timeout: 15_000,
+  });
+  const lagMs = Date.now() - t0;
+  expect(
+    lagMs,
+    `the customer saw «قيد التحضير» ${lagMs}ms after the kitchen advanced the order`
+  ).toBeLessThan(8000);
 
   const r2 = await advance('preparing', 'ready');
   expect(r2.error, `preparing→ready: ${r2.error?.message}`).toBeNull();

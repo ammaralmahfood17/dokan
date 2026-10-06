@@ -7,7 +7,19 @@ import { getClientIp } from '@/lib/ip';
 // آمنة بحدود:
 //  - إرجاع الحالة فقط (status + created_at) — لا أرقام/مبالغ/بيانات زبون
 //  - تحقق tenant: الطلب يجب أن ينتمي لمشروع الـ slug (عبر admin client)
-//  - rate limit لكل IP + لكل مشروع (polling 12s ≈ 5/min/زبون)
+//  - rate limit: لكل ORDER (الأدق) + لكل IP + لكل مشروع
+//
+// Cadence (2026-10-06, owner report: the customer saw a stale status for up to
+// 12s after the kitchen acted): the client polls every 3s for the first ~2
+// minutes, then every 10s. The budgets below are sized for that, and for a
+// café where every customer shares ONE carrier-NAT IP:
+//   orderId  45/min  — a 3s poll spends 20; the headroom absorbs retries. This
+//                      is the key that actually bounds abuse per order.
+//   ip       600/min — ~10 customers polling at 3s behind one NAT IP.
+//   project 2000/min — a 30-table rush at 20/min is 600.
+// Each poll is two indexed reads (project by slug, order by PK), so the ceiling
+// is ~33 queries/s per project — cheap for Postgres and far below the previous
+// effective load, which was a 12s poll repeated by every open tab.
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);
@@ -24,9 +36,13 @@ export async function GET(request: NextRequest) {
     }
 
     const ip = getClientIp(request);
-    const [ipLimit, projectLimit] = await Promise.all([
-      rateLimit(`ip:${ip}`, { limit: 60, windowMs: 60 * 1000, keyPrefix: 'order-status-ip' }),
-      rateLimit(projectSlug, { limit: 300, windowMs: 60 * 1000, keyPrefix: 'order-status' }),
+    const [ipLimit, projectLimit, orderLimit] = await Promise.all([
+      rateLimit(`ip:${ip}`, { limit: 600, windowMs: 60 * 1000, keyPrefix: 'order-status-ip' }),
+      rateLimit(projectSlug, { limit: 2000, windowMs: 60 * 1000, keyPrefix: 'order-status' }),
+      // Per-order is the tightest and most meaningful key: it bounds how hard a
+      // single order can be polled (and so how much a single caller can spend
+      // minting junk order ids is bounded by the IP key above).
+      rateLimit(orderId, { limit: 45, windowMs: 60 * 1000, keyPrefix: 'order-status-order' }),
     ]);
     if (!ipLimit.allowed) {
       const res = createRateLimitResponse(ipLimit.resetIn);
@@ -34,6 +50,10 @@ export async function GET(request: NextRequest) {
     }
     if (!projectLimit.allowed) {
       const res = createRateLimitResponse(projectLimit.resetIn);
+      return NextResponse.json({ error: res.error }, { status: res.status });
+    }
+    if (!orderLimit.allowed) {
+      const res = createRateLimitResponse(orderLimit.resetIn);
       return NextResponse.json({ error: res.error }, { status: res.status });
     }
 

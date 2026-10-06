@@ -54,7 +54,6 @@ export function OrderSuccessState({
   const [lost, setLost] = useState(false);
   const [copied, setCopied] = useState(false);
   const notifiedRef = useRef(false);
-  const attemptsRef = useRef(0);
 
   // UX-6: نسخ رقم الطلب — للرجوع له عند سؤال الموظف
   async function copyOrderNumber() {
@@ -67,18 +66,46 @@ export function OrderSuccessState({
     }
   }
 
-  // UX-U1: polling خفيف — يتوقف عند جاهز/ملغي/تم التسليم أو بعد 20 محاولة (~4 دقائق)
+  // UX-U1: شريط حالة الطلب الحي.
+  // A staff status change must reach the customer FAST — the old flat 12s poll
+  // left them reading «قيد الانتظار» for up to twelve seconds after the kitchen
+  // had already started the order (owner report 2026-10-06). The cadence is now
+  // adaptive: 3s while the wait is short (the window where the customer is
+  // actually watching the screen), backing off to 10s once the order has been
+  // sitting a while, plus an immediate re-check whenever the tab returns to the
+  // foreground — a customer who switched away comes back to a fresh status
+  // instead of waiting out the next tick.
   useEffect(() => {
     if (!orderId || !projectSlug) return;
     let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+
+    /** Fast window: ~2 minutes at 3s, then a slower watch for ~10 more minutes. */
+    const FAST_MS = 3000;
+    const SLOW_MS = 10000;
+    const FAST_ATTEMPTS = 40;
+    const MAX_ATTEMPTS = 100;
+
+    const schedule = () => {
+      if (stopped) return;
+      if (attempts >= MAX_ATTEMPTS) {
+        stopped = true;
+        return;
+      }
+      timer = setTimeout(check, attempts < FAST_ATTEMPTS ? FAST_MS : SLOW_MS);
+    };
 
     const check = async () => {
       try {
         const res = await fetch(
           `/api/public/order-status?orderId=${encodeURIComponent(orderId)}&projectSlug=${encodeURIComponent(projectSlug)}`
         );
+        if (stopped) return;
         if (!res.ok) {
           setLost(true);
+          attempts += 1;
+          schedule();
           return;
         }
         const data = (await res.json()) as { status: OrderStatus };
@@ -98,18 +125,29 @@ export function OrderSuccessState({
           stopped = true;
           return;
         }
-        attemptsRef.current += 1;
-        if (attemptsRef.current >= 20) stopped = true;
+        attempts += 1;
+        schedule();
       } catch {
         // شبكة عابرة — المحاولة التالية تلتقطها
+        attempts += 1;
+        schedule();
       }
     };
 
+    // Coming back to the tab must not mean waiting up to 10s for the next tick.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !stopped) {
+        if (timer) clearTimeout(timer);
+        void check();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     void check();
-    const id = setInterval(check, 12000);
     return () => {
       stopped = true;
-      clearInterval(id);
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [orderId, projectSlug]);
 
@@ -174,7 +212,9 @@ export function OrderSuccessState({
               ? 'تعذّر تحديث الحالة — سنخبرك عند الجاهزية'
               : status === 'ready' || status === 'delivered'
                 ? 'طلبك جاهز 🎉'
-                : 'يتم تحديث الحالة تلقائيًا'}
+                : status === 'preparing'
+                  ? 'طلبك قيد التحضير — يتم تحديث الحالة تلقائيًا'
+                  : 'طلبك قيد الانتظار — يتم تحديث الحالة تلقائيًا'}
           </div>
         </div>
       )}
