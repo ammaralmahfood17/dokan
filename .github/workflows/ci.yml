@@ -105,6 +105,15 @@ jobs:
       - name: Assert icon-only controls are at least 44px
         run: node scripts/check-touch-targets.mjs
 
+      # 2026-10 follow-up: the build used to fetch the font from Google at BUILD time, which
+      # failed CI twice for identical code. Cairo is self-hosted now; this keeps it that way.
+      - name: Assert the build needs no network for assets
+        run: node scripts/check-hermetic-build.mjs
+
+      # 2026-10 follow-up: a non-JSON body was a 500 + a Sentry event on 12 routes.
+      - name: Assert every route body tolerates malformed JSON
+        run: node scripts/check-json-body-guard.mjs
+
       # Unit tests, BEFORE the build: a logic regression should fail in seconds
       # here rather than after a full Next build. `vitest run` exits non-zero on
       # a single failure, so there is no "expected failures" escape hatch here.

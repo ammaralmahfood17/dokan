@@ -37,7 +37,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
     }
 
-    const body = (await request.json()) as {
+        // audit follow-up: a non-JSON body made request.json() throw and the catch-all
+    // answered 500 + Sentry noise for input nobody validated. Same shape as the
+    // verified public/order fix (W1).
+    const rawBody = await request.json().catch(() => null);
+    if (rawBody === null || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
+    }
+    const body = rawBody as {
       type?: OrderType;
       items?: PublicOrderItemInput[];
       notes?: string;

@@ -37,7 +37,14 @@ export async function POST(request: NextRequest) {
     const throttled = await limitSuperAdmin(request, user.id, 'impersonate');
     if (throttled) return throttled;
 
-    const body = (await request.json()) as { targetUserId?: string; projectId?: string };
+        // audit follow-up: a non-JSON body made request.json() throw and the catch-all
+    // answered 500 + Sentry noise for input nobody validated. Same shape as the
+    // verified public/order fix (W1).
+    const rawBody = await request.json().catch(() => null);
+    if (rawBody === null || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
+    }
+    const body = rawBody as { targetUserId?: string; projectId?: string };
     if (!body.targetUserId || typeof body.targetUserId !== 'string') {
       return NextResponse.json({ error: 'targetUserId مطلوب' }, { status: 400 });
     }

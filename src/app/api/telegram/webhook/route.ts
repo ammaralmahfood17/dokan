@@ -27,7 +27,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const update = (await request.json()) as {
+        // audit follow-up: a non-JSON body made request.json() throw, and this route's
+    // catch answered 500 with a Sentry event. Telegram retries non-2xx, so the
+    // hook still acks and ignores - the other routes reject with 400.
+    const rawBody = await request.json().catch(() => null);
+    if (rawBody === null || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return NextResponse.json({ ok: true });
+    }
+    const update = rawBody as {
       message?: {
         chat?: { id: number | string; type?: string; first_name?: string; title?: string };
         text?: string;
