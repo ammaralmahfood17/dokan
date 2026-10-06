@@ -7,6 +7,7 @@ import { getPublicProject } from '@/lib/public-project';
 import { MenuClient } from './menu-client';
 import type { Category, Product, ProductAddon, Project, Table } from '@/lib/types';
 import { buildRestaurantJsonLd } from '@/lib/jsonld';
+import { isTableTokenRequired } from '@/lib/public-write-guard';
 
 // The page itself is DYNAMIC (no `export const revalidate`): the subscription
 // cutoff flips projects.is_active=false and that must cut the public menu
@@ -52,17 +53,24 @@ async function getMenuData(projectId: string, tableId: string) {
   )();
 }
 
-// This route reads `searchParams.k` (the table token) and therefore CANNOT be statically
-// generated: the empty generateStaticParams below classified it as SSG while the render used a
-// dynamic API, and Next answers that contradiction with DYNAMIC_SERVER_USAGE - reproducible on a
-// local production build (500 on every menu URL), which is why the Wave 5 verification had to run
-// against `next dev`. Stated explicitly instead of left to the framework's inference:
-export const dynamic = 'force-dynamic';
-// The expensive part (the menu query) stays cached by its own fetch-level `revalidate: 60` and is
-// purged by /api/revalidate-menu, so a dynamic render here costs a serialisation, not a DB round
-// trip. TRADE-OFF, recorded for the owner: no full-page ISR cache for the public menu. Restoring it
-// means moving the token out of `searchParams` (read it client-side and let /api/public/order
-// resolve it, exactly as it already does) so the page can be static again.
+// Owner decision D3 (2026-10-06): the public menu is CACHED again. The route no longer reads
+// `searchParams`, so the rendered HTML is identical for every visitor and carries no table token:
+//   * the token lives in the URL fragment the QR encodes and is read by the CLIENT,
+//   * /api/public/order still resolves and enforces it server-side (that is the security boundary),
+//   * the only server knob the HTML depends on is REQUIRE_TABLE_TOKEN, an env constant identical
+//     for every request, which is what makes this cacheable at all.
+// On-demand revalidation is unchanged: getMenuData tags its fetches `menu-${projectId}` and the menu
+// write path calls /api/revalidate-menu (revalidateTag). See src/lib/products-utils.ts.
+export const revalidate = 60;
+// The FIRST measurement of D3 failed and this line is why it is here. With the route merely
+// "dynamic", Next still builds its router state tree from the REQUEST url, so a request carrying the
+// token produced `"c":["","estikana","menu","table-1?k=<token>"]` inside the React Flight payload -
+// the served HTML was not identical with and without `?k=` AND the token was in the page source.
+// `force-static` tells Next the render must not depend on the request at all: the response is then
+// produced once per path and reused, the router state carries no query, and the client still reads
+// the token from its own browser URL (which the server never sees). Verified by
+// e2e/menu-cache.a11y.spec.ts; measured before this line with the token visible in the payload.
+export const dynamic = 'force-static';
 
 // A2/UX-report: every public menu served under 3 hostnames had no canonical —
 // search engines saw duplicates. Store name also becomes the tab/OG title.
@@ -83,13 +91,10 @@ export async function generateMetadata({
 
 export default async function PublicMenuPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ projectSlug: string; tableSlug: string }>;
-  searchParams: Promise<{ k?: string }>;
 }) {
   const { projectSlug, tableSlug } = await params;
-  const { k } = await searchParams;
   // anon client (no user cookies) → RLS anon role → public menu data,
   // so signed-in users see other restaurants' menus too
   const supabase = createAnonClient();
@@ -108,21 +113,10 @@ export default async function PublicMenuPage({
 
   if (!table) notFound();
 
-  // Audit 2026-10-05 (T2 #1): ordering requires the table's scan token. `anon` cannot read
-  // tables.qrcode (column-level REVOKE), so the check goes through the SECURITY DEFINER
-  // resolver — which returns nothing unless slug AND token match the same live table.
-  const tableToken = typeof k === 'string' ? k : '';
-  const { data: resolved } = await supabase.rpc('resolve_table_by_token', {
-    p_project_slug: projectSlug,
-    p_table_token: tableToken,
-  });
-  const tokenResolved = Boolean(resolved);
-
-  // The UI must gate exactly when the server enforces, never earlier: while the rollout
-  // window is open (REQUIRE_TABLE_TOKEN unset/false) already-printed QR sheets still work,
-  // and every tokenless order is recorded so the flip can be justified with data.
-  const orderingEnabled =
-    tokenResolved || process.env.REQUIRE_TABLE_TOKEN !== 'true';
+  // D3: the token is NOT resolved here any more - resolving it would make the render depend on the
+  // request. The client reads it from the URL and the order endpoint enforces it. What the page
+  // passes down is only the rollout flag, which is constant for every visitor:
+  const requireToken = isTableTokenRequired();
 
   // M5: cached + project-tagged — see getMenuData above.
   const { categories, products } = await getMenuData(project.id, table.id);
@@ -150,8 +144,7 @@ export default async function PublicMenuPage({
       <MenuClient
         project={project as Project}
         table={table as Table}
-        tableToken={tableToken}
-        orderingEnabled={orderingEnabled}
+        requireToken={requireToken}
         categories={categories}
         products={products}
       />

@@ -53,22 +53,22 @@ const QUICK_NOTE_CHIPS = ['بدون سكر', 'بدون ثلج', 'ثلج على �
 export function MenuClient({
   project,
   table,
-  tableToken,
-  orderingEnabled,
+  requireToken,
   categories,
   products,
 }: {
   project: Project;
   table: Table;
   /** Table scan token from the QR URL (?k=…) — empty on a link that carries none. */
-  tableToken: string;
+  /** D3: the page no longer receives the token - it is read from the URL on the client instead. */
+  requireToken: boolean;
   /**
    * Server-computed (audit T2 #1): true while ordering is allowed — either the URL's token
    * resolved to this table, or the server is still in the rollout window
    * (REQUIRE_TABLE_TOKEN unset). The client never reads the flag itself, so the UI and the
    * server enforcement can never disagree.
    */
-  orderingEnabled: boolean;
+
   categories: Category[];
   products: ProductWithAddons[];
 }) {
@@ -122,6 +122,20 @@ export function MenuClient({
       // privacy mode — تجاهل بصمت
     }
   }, [lang]);
+
+  // D3: the table token travels in the URL the QR encodes (`?k=…`) and is read HERE, on the client,
+  // so the server-rendered HTML is identical for every visitor and therefore cacheable. The token is
+  // a UI gate only - `/api/public/order` resolves it through the SECURITY DEFINER function and is the
+  // real boundary. `requireToken` is the rollout flag, constant for every visitor.
+  const [tableToken, setTableToken] = useState('');
+  useEffect(() => {
+    try {
+      setTableToken(new URLSearchParams(window.location.search).get('k') ?? '');
+    } catch {
+      setTableToken('');
+    }
+  }, []);
+  const orderingEnabled = !requireToken || Boolean(tableToken);
 
   const displayName = useCallback(
     (p: ProductWithAddons) =>
