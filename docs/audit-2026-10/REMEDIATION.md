@@ -184,11 +184,32 @@ the panel inside), the settings confirm dialog lost an inner `onClick={stopPropa
 that existed only to cancel another handler, and the dropzone got `role="button"` + Enter/Space
 because it cannot BE a button - the hidden file input lives inside it.
 
-## Waves 4–6 — not started
+## Wave 4 — design, i18n and the Arabic legibility floor
+
+| # | Finding | Sev | Status | Evidence |
+|---|---|---|---|---|
+| T1 #8 | `lang` never updates for English menu content | **Major** | **DONE** | `dc8dbca`. An English product name sat inside an Arabic page with no `lang`, so a screen reader read it with the Arabic voice — on the product's public face. **Deviation from the plan, stated:** the plan marked these by the TOGGLE, and that premise is false here — a store named in Arabic is still Arabic with the toggle on EN. The marker follows the script of the text (`src/lib/i18n.ts`, 4 tests), and the toggle moves `document.documentElement.lang` while `dir` stays rtl |
+| T1 #9 | Radius scale inverted (`xl` 12px < `lg` 14px) | Minor | **DONE** | `f853f08` + `4033473`. `--radius-xl` 12 → 20 (option a). Guard written first and seen RED on the real values — `radius scale must ascend: [6,10,14,12]` — then GREEN. Blast radius: 12 call sites; a browser measured **20px at 100% and 200%** on the 8 reachable ones (7 landing + 1 storefront). The other 4 are the SAME token in states this run could not reach (settings deactivate modal, dashboard error boundary, skeletons) and are **not** claimed as verified. `DESIGN_SYSTEM.md` disagreed with the code (md 8/lg 10/xl 12) and was corrected; its `--radius-xs` row is flagged — no such token is declared or referenced anywhere |
+| T1 #10 | Arabic-Indic numerals in UI strings | Minor | **DONE** | `1657e50`. 5 strings → Latin (`٧ أيام`, `٣٠ يوم`, `آخر ٧ ساعات`, `١.`, `٢.`). The guard is source-wide, so a sixth cannot appear: RED with the fixes stashed (`telegram-manager.tsx:149`, `hourly-sales-chart.tsx:21`, `analytics-client.tsx:10`), GREEN after. `src/lib/utils.ts` is excluded on purpose — it holds the transliteration MAP (data) and a comment about this rule |
+| T1 #11 | `toLocaleDateString('ar-BH')` without `-u-nu-latn` | Minor | **DONE** | `1657e50`. → `'ar-BH-u-nu-latn'` — one string, the smallest change that forces Latin numerals while the surrounding text stays Arabic |
+| T1 #12 | Print sheet missing `lang`; English `alt` | Minor | **DONE** | `fb37036`. The print window is a fresh document, so it declares its own: `<html lang="ar" dir="rtl">`. The printed QR alt went from `Table 3` to `رمز QR لطاولة 3` (written as escapes so no toolchain can mangle it) |
+| T1 #16 | `global-error` uses off-token colours | Minor | **DONE** | `6017781`. Cool slate → the warm tokens (#FAF9F6/#1F2320/#6B6F68), with a comment saying why the values are duplicated (it replaces the root layout and cannot read the tokens). It also declares its own viewport + `theme-color`, which it previously inherited from nothing |
+| T1 #17 | Dead `phone-mockup` class; unused `screenshots/dark.png` | Minor | **DONE** | `5f2adfc`. The class was verified undefined (no rule in globals.css, no other usage) and removed. `dark.png` was registered in the manifest's `screenshots` rather than deleted — deleting a shipped asset is the owner's call, and the install dialog now shows both |
+| T1 #18 | Title flashing ignores `prefers-reduced-motion` | Minor | **DONE** | `ca92488`. A 1 Hz `document.title` swap is motion the CSS kill-switch cannot reach (JS) and it fired while the tab was hidden — when nobody is looking. Under reduce: the title is set ONCE with no interval; a visible tab still alternates, a hidden one no longer works every second |
+| T1 #19 | 63 uses of 10px/11px text | Minor | **DONE** | `c566765`. The measured list is **65 across 29 files** (11px ×38, 10px ×25, **10.5px ×2** — which the plan's two-pattern grep missed), all raised to `text-[11.5px]`. Guard fails under 11.5px resolved from px OR rem: RED `expected [ …(65) ] to deeply equal []`, GREEN 0 hits. Verified in the browser, not just the source: **0px horizontal overflow and 0 rendered elements below the floor** at 100% AND 200% on the POS grid, the analytics (hourly chart) and the public product card. The floor is absolute — no unverifiable "11px for numeric badges" exception — and the tradeoff is documented in `DESIGN_SYSTEM.md` |
+
+**Wave 4 gates:** `tsc` 0 · `lint` 0 · **vitest 233/233 (19 files)** · `build` 0 ·
+`check-hermetic-build` 0 · `check-json-body-guard` 0 · `check-touch-targets` 0 ·
+`check-public-write-gates` 0 · `env:check` 0.
+
+**Two deviations from the plan, both deliberate and recorded above:** the `lang` marker follows the
+text's script rather than the toggle (the plan's premise was false in the code), and the legibility
+floor has no numeric-badge exception (a guard cannot see what a className is written on).
+
+## Waves 5–6 — not started
 
 | Wave | Findings | Status |
 |---|---|---|
-| W4 design/i18n | T1 #8–#12, #16–#19 | TODO |
 | W5 SEO/headers/perf | T1 #5, #22 + CWV budget | TODO |
 | W6 hardening | T2 #13 (remainder), #14, #15 | TODO |
 
