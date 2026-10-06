@@ -1,4 +1,7 @@
 import Link from 'next/link';
+// الرسمي للنصوص الطويلة: thmanyah serif text — its own CSS file, so this ~105KB is only
+// downloaded by whoever opens a legal page, never by the app or the customer menu.
+import '@/app/fonts/thmanyah-text.css';
 
 /**
  * Shared legal-page shell (Arabic, RTL) for /terms and /privacy.
@@ -37,7 +40,7 @@ export function LegalPage({
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-10">
+      <main className="legal-prose mx-auto max-w-3xl px-4 py-10">
         <h1 className="text-2xl font-extrabold text-[var(--color-text)]">{title}</h1>
         <p className="mt-2 text-sm text-[var(--color-text-tertiary)]">آخر تحديث: {updatedAt}</p>
 

@@ -56,7 +56,7 @@ export default async function StorefrontPage({
   // your table") and offers the single browse link, so the customer learns how ordering works
   // before they reach a menu they cannot order from.
 
-  const heroColor = project.primary_color || '#4338CA';
+  const heroColor = project.primary_color || '#7047EB';
 
   return (
     <main

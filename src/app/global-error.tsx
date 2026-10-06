@@ -17,7 +17,10 @@ export default function GlobalError({
       </head>
       <body
         style={{
-          fontFamily: "'Cairo', sans-serif",
+          // Brand family first, system fallback after: global-error replaces the root layout,
+          // so it cannot rely on fonts/thmanyah.css being loaded. The page must render no
+          // matter what — a webfont is never worth a blank error screen.
+          fontFamily: "'thmanyah sans', system-ui, -apple-system, 'Segoe UI', sans-serif",
           display: 'flex',
           minHeight: '100dvh',
           alignItems: 'center',
@@ -43,7 +46,7 @@ export default function GlobalError({
             type="button"
             onClick={reset}
             style={{
-              background: '#4F46E5',
+              background: '#7047EB',
               color: '#fff',
               border: 0,
               borderRadius: 8,

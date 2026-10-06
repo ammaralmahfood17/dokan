@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { DokanMark } from '@/components/brand/dokan-mark';
 import {
   QrCode,
   ChefHat,
@@ -56,9 +57,7 @@ export default function LandingPage() {
       <header className="landing-nav sticky top-0 z-[var(--z-sticky)] border-b border-white/70">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white text-sm font-bold">
-              د
-            </div>
+            <DokanMark className="h-9 w-9" />
             <span className="text-base font-bold">دكان</span>
           </div>
           <div className="flex items-center gap-2">
@@ -97,7 +96,9 @@ export default function LandingPage() {
                 <div className="overflow-hidden rounded-[2.5rem] border-[6px] border-[var(--color-text)] bg-[var(--color-primary)] shadow-xl">
                   <div className="mx-auto mt-2 h-5 w-28 rounded-full bg-[var(--color-text)]" />
                   <div className="flex flex-col items-center justify-center px-4 pb-8 pt-6 text-center text-white">
-                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-2xl font-bold">د</div>
+                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white">
+                      <DokanMark className="h-9 w-9" />
+                    </div>
                     <p className="text-sm font-bold">دكان</p>
                     <p className="mt-1 text-[11.5px] text-white/60">قائمة طعامك في جوال الزبون</p>
                     <div className="mt-4 flex h-16 w-16 items-center justify-center rounded-lg bg-white/10">

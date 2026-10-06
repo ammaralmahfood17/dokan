@@ -3,7 +3,7 @@
 /* ==========================================================================
    دكان Design System — Enterprise SaaS v1.0 + Calm Surface Layer v1.1
    Gulf hospitality multi-tenant restaurant SaaS.
-   Indigo primary, Cairo-only typography, LIGHT MODE ONLY (no .dark),
+   خط ثمانية identity: violet primary (#7047EB), Thmanyah typography, LIGHT MODE ONLY,
    strict 8px spacing grid, border-first elevation.
    Source of truth: DESIGN_SYSTEM.md (Enterprise v1.0).
    v1.1 (Calm Surface): warm bg #FAF9F6, border-first elevation (no card
@@ -28,12 +28,17 @@
 }
 
 @theme {
-  /* Brand — Indigo (used ONLY for action/focus/selection, never decoration) */
-  --color-primary: #4F46E5;
-  --color-primary-hover: #4338CA;
-  --color-primary-active: #3730A3;
-  --color-primary-tint: #EEF0FF; /* v1.1 Calm Surface: indigo tint */
-  --color-primary-tint-strong: #E0E7FF;
+  /* Brand — خط ثمانية identity (logo 2026-10-06).
+     The primary is the logo's dominant violet, #7047EB: white on it measures
+     5.54:1 and it measures 5.26:1 on the warm page background, so it clears the
+     WCAG AA 4.5:1 text floor and the 3:1 control-boundary floor on its own.
+     The rest of the logo gradient (pink #E23B7B / coral #FF9B53) is reserved for
+     the mark itself — semantic UI colour stays functional, never decorative. */
+  --color-primary: #7047EB;
+  --color-primary-hover: #6034DC;
+  --color-primary-active: #4E27BC;
+  --color-primary-tint: #F1ECFE; /* violet tint — primary text on it = 4.79:1 */
+  --color-primary-tint-strong: #E6DBFE;
 
   /* Neutral — cool slate */
   --color-bg: #FAF9F6; /* v1.1 Calm Surface: warm off-white */
@@ -66,13 +71,20 @@
   --color-info: #0369A1; /* a11y: 3.84→5.64:1 on info-tint; 5.93:1 on white */
   --color-info-tint: #F0F9FF;
 
-  /* Typography — Cairo ONLY (no secondary faces, no display face) */
-  /* Self-hosted: the family name the package declares is "Cairo Variable". The quoted "Cairo"
-     stays in the chain for any locally installed copy, and the generic is last. */
-  --font-cairo: "Cairo Variable";
-  --font-sans: var(--font-cairo), "Cairo", ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-cairo), "Cairo", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-cairo), "Cairo", ui-monospace, monospace;
+  /* Typography — خط ثمانية (Thmanyah Typeface).
+     The role mapping is the foundry's own (دليل جماليات خط ثمانية):
+       thmanyah Sans           → الشاشات الرقمية (UI)
+       thmanyah Serif Display  → العناوين
+       thmanyah Serif Text     → النصوص الطويلة
+     Weights: the family ships five discrete weights and the UI asks for
+     semibold (600) constantly, so each face declares a RANGE (500-600 = Medium,
+     700-800 = Bold) — see scripts/build-thmanyah-fonts.mjs.
+     The faces are INLINED in src/app/fonts/thmanyah.css as data: URIs. That is
+     deliberate and licence-mandated: no font file is served from a URL. */
+  --font-sans: "thmanyah sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "thmanyah serif display", "thmanyah sans", ui-serif, serif;
+  --font-serif: "thmanyah serif text", "thmanyah serif display", ui-serif, serif;
+  --font-mono: "thmanyah sans", ui-monospace, monospace;
 
   /* Radius — small by intent; full-round reads "consumer" */
   --radius-sm: 6px;
@@ -149,10 +161,10 @@
     color: var(--color-text);
   }
 
-  /* Typography — Cairo only, for display and body alike (spec §2.1). Headings are
-     bold; the old comment claimed "-0.01em on display-size headings" but no such
-     letter-spacing rule was ever written here (the only -0.01em in this file is a
-     clamp() width in the marquee), so the note was describing code that did not exist. */
+  /* Typography. Headings use the display family (thmanyah serif display), body and UI use
+     thmanyah sans — that split is the foundry's own role mapping, not a preference. The old
+     comment here claimed "-0.01em on display-size headings"; no such rule was ever written
+     (the only -0.01em in this file is a clamp() width in the marquee). */
   h1, h2, h3, h4, h5, h6 {
     margin: 0;
     font-weight: 700;
@@ -614,4 +626,10 @@
   .dashboard-stat {
     border: 1px solid #E5E7EB;
   }
+}
+
+/* /terms + /privacy long-form reading — thmanyah serif text, imported only by those pages
+   (src/components/legal-page.tsx) so the app and the customer menu never download it. */
+.legal-prose {
+  font-family: var(--font-serif);
 }

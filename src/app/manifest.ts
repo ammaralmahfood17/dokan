@@ -10,7 +10,7 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     display: 'standalone',
     background_color: '#FAF9F6',
-    theme_color: '#4F46E5',
+    theme_color: '#7047EB',
     orientation: 'any',
     lang: 'ar',
     dir: 'rtl',
@@ -36,7 +36,10 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'maskable',
       },
       {
-        src: '/icons/icon-192.png',
+        // A real maskable: its own file, its own safe-zone padding. This entry used to point
+        // at icon-192.png, i.e. the 'any' artwork (mark at 72% of the canvas) was also
+        // declared maskable, so Android's circular crop cut into the mark.
+        src: '/icons/icon-maskable-192.png',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'maskable',

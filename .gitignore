@@ -56,3 +56,5 @@ coverage/
 
 # Local agent scratch (DB probes, build logs) — never committed
 .hermes-scratch/
+# Hermes agent scratch (plan files, session artifacts) — never part of the product
+.hermes/

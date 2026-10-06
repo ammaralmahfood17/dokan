@@ -1,12 +1,16 @@
 import type { Metadata, Viewport } from 'next';
-// Self-hosted Cairo (2026-10 CI follow-up). The build used to fetch this font from Google at
-// BUILD time via next/font/google; a runner that cannot reach fonts.googleapis.com fails the
-// whole build with "Module not found: @vercel/turbopack-next/internal/font/google/font" - seen
-// twice on CI for the same code, which is a broken build for a reason nothing in the repo
-// controls. @fontsource-variable/cairo ships the woff2 in the npm package (build touches no
-// network), and its CSS carries per-subset unicode-range (arabic + latin-ext + latin) which
-// next/font/local cannot express per file.
-import '@fontsource-variable/cairo';
+// خط ثمانية (Thmanyah Typeface) — the faces live INLINE in fonts/thmanyah.css as data: URIs.
+// Two reasons, both load-bearing:
+//   1. LICENCE. The Thmanyah licence permits embedding the font in a website/app only as part
+//      of a compiled product, and forbids hosting it or making it available as a font file at
+//      any URL. A plain `url('/fonts/x.woff2')` would break that; a data: URI does not.
+//   2. OFFLINE BUILD. next/font/google fetched from Google at BUILD time and broke CI twice
+//      with "Module not found: @vercel/turbopack-next/internal/font/google/font" — a build
+//      failure caused by something no file in this repo controls.
+// Cost, measured: ~415KB of base64 (five discrete static weights, and the licence forbids
+// subsetting). It is content-hashed and immutable-cached, so it is paid once per user.
+// Rebuild: node scripts/build-thmanyah-fonts.mjs "<thmanyah typeface dir>"
+import './fonts/thmanyah.css';
 import { Toaster } from 'sonner';
 import { ServiceWorkerRegister } from '@/components/service-worker-register';
 import { WebVitals } from '@/components/web-vitals';
@@ -65,6 +69,22 @@ export const metadata: Metadata = {
   other: { 'mobile-web-app-capable': 'yes' },
 };
 
+/**
+ * iOS launch images. iOS matches these by device metrics, not by "nearest size", so
+ * each entry is one physical device family. Only these four exist as artwork; an
+ * unmatched device simply gets no splash image, which is the correct failure mode.
+ */
+const SPLASH_SCREENS = [
+  // 375x812 @3x — iPhone X / XS / 11 Pro / 12–13 mini
+  { file: '1125x2436.png', media: '(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)' },
+  // 414x896 @3x — iPhone XS Max / XR / 11 Pro Max
+  { file: '1242x2688.png', media: '(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)' },
+  // 834x1194 @2x — iPad Pro 11"
+  { file: '1668x2388.png', media: '(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2)' },
+  // 1024x1366 @2x — iPad Pro 12.9"
+  { file: '2048x2732.png', media: '(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)' },
+];
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -83,8 +103,8 @@ export default function RootLayout({
       lang="ar"
       dir="rtl"
       suppressHydrationWarning
-      /* The family is applied through --font-sans (globals.css); the font-face rules come from
-         the imported @fontsource-variable/cairo package, so no variable class is needed. */
+      /* The family is applied through --font-sans (globals.css); the @font-face rules come
+         from the imported fonts/thmanyah.css, so no variable class is needed. */
     >
       <head>
         {/* Supabase: early connect */}
@@ -94,9 +114,29 @@ export default function RootLayout({
             <link rel="dns-prefetch" href={supabaseOrigin} />
           </>
         )}
-        {/* iOS touch icons */}
-        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-maskable-512.png" />
-        <link rel="apple-touch-startup-image" href="/splash/light-1242x2688.png" />
+        {/* iOS touch icon. A dedicated opaque 180x180 — the old href pointed at the 512
+            maskable, so iOS downscaled a launcher icon whose safe-zone padding made the
+            mark read smaller than intended. */}
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        {/* iOS launch images. iOS picks a startup image by matching a media query against the
+            device; an UNQUALIFIED link — which is what used to be here, one file with no
+            media — is ignored by every device whose resolution it does not match exactly,
+            i.e. all of them but one (1242x2688 is the iPhone XS Max). One link per
+            resolution, each with its dark sibling, is the only shape that ever applies. */}
+        {SPLASH_SCREENS.flatMap((s) => [
+          <link
+            key={`light-${s.file}`}
+            rel="apple-touch-startup-image"
+            href={`/splash/light-${s.file}`}
+            media={`${s.media} and (prefers-color-scheme: light)`}
+          />,
+          <link
+            key={`dark-${s.file}`}
+            rel="apple-touch-startup-image"
+            href={`/splash/dark-${s.file}`}
+            media={`${s.media} and (prefers-color-scheme: dark)`}
+          />,
+        ])}
         {/* NOTE: no <link rel="prefetch" as="document"> for the dashboard routes here.
             These were four full HTML/RSC fetches fired for EVERY visitor — including an
             anonymous customer who just scanned a QR code on mobile data, for whom the
