@@ -129,9 +129,10 @@ export async function cleanupTestUser(email: string): Promise<void> {
     await admin.from('push_subscriptions').delete().eq('project_id', projectId);
     await admin.from('subscription_payments').delete().eq('project_id', projectId);
     await admin.from('tables').delete().eq('project_id', projectId);
-    // product_addons has NO project_id (it hangs off product_id), and the old
+    // option_groups/option_choices have NO project_id (they hang off
+    // product_id / group_id), and the old
     // `.eq('project_id', …)` here was a 400 that quietly did nothing. It still
-    // cleaned up in the end, because product_addons.product_id is ON DELETE
+    // cleaned up in the end, because option_groups.product_id is ON DELETE
     // CASCADE from products — so the line is dropped rather than "fixed": one
     // fewer misleading statement, and the cascade is the real guarantee.
     await admin.from('products').delete().eq('project_id', projectId);

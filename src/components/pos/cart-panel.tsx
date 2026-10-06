@@ -39,7 +39,7 @@ export function CartPanel({
   className,
 }: {
   lines: PosLine[];
-  products: (Product & { product_addons?: { id: string }[] })[];
+  products: (Product & { option_groups?: { id: string }[] })[];
   currency: string;
   type: OrderType;
   onTypeChange: (t: OrderType) => void;

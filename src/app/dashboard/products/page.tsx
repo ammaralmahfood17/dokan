@@ -1,7 +1,7 @@
 import { requireCurrentProjectRole } from '@/lib/project';
 import { createClient } from '@/lib/supabase/server';
 import { ProductsClient } from './products-client';
-import type { Category, Product, ProductAddon } from '@/lib/types';
+import type { Category, Product, ProductOptionGroup } from '@/lib/types';
 
 export default async function ProductsPage() {
   const ctx = await requireCurrentProjectRole(['owner', 'manager']);
@@ -16,7 +16,7 @@ export default async function ProductsPage() {
       .order('sort_order'),
     supabase
       .from('products')
-      .select('*, product_addons(*)')
+      .select('*, option_groups(*, option_choices(*))')
       .eq('project_id', ctx.project.id)
       .order('sort_order'),
   ]);
@@ -27,7 +27,7 @@ export default async function ProductsPage() {
       currency={ctx.project.currency}
       initialCategories={(categories ?? []) as Category[]}
       initialProducts={
-        (products ?? []) as (Product & { product_addons: ProductAddon[] })[]
+        (products ?? []) as (Product & { option_groups: ProductOptionGroup[] })[]
       }
     />
   );

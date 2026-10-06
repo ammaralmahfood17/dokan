@@ -72,16 +72,42 @@ export interface Product {
   created_at?: string;
 }
 
-export interface ProductAddon {
+/**
+ * A product can carry MANY option groups («خيارات»), and each group holds its
+ * own varieties («أنواع») with their own price. This replaced the flat,
+ * single-level addon list on 2026-10-06 (owner decision: options only).
+ *
+ * min_select = 0 → optional; >= 1 → the customer must pick that many.
+ * max_select = 1 → single choice (radios); higher → multi-select.
+ */
+export interface ProductOptionChoice {
+  id: string;
+  group_id: string;
+  name: string;
+  name_en: string | null;
+  price: number;
+  is_available: boolean;
+  sort_order: number;
+}
+
+export interface ProductOptionGroup {
   id: string;
   product_id: string;
   name: string;
-  price: number;
-  is_available: boolean;
+  name_en: string | null;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
+  option_choices: ProductOptionChoice[];
 }
 
-/** Snapshot of an addon stored on an order line */
-export interface OrderItemAddon {
+/**
+ * Snapshot of the chosen varieties stored on an order line. The FIELD that
+ * carries it keeps the name `addons` because it mirrors the `order_items.addons`
+ * column (renaming the column would ripple through the cart, the KDS, the POS
+ * and the offline queue for no behavioural gain) — but the concept is options.
+ */
+export interface OrderItemOption {
   id: string;
   name: string;
   price: number;
@@ -106,7 +132,7 @@ export interface OrderItem {
   product_name: string;
   quantity: number;
   unit_price: number;
-  addons: OrderItemAddon[];
+  addons: OrderItemOption[];
   notes: string | null;
   /** KDS cooking state — derived order status syncs automatically. */
   status?: OrderItemStatus;
@@ -124,7 +150,7 @@ export interface StaffMember {
 export interface PublicOrderItemInput {
   productId: string;
   quantity: number;
-  addonIds?: string[];
+  optionIds?: string[];
   notes?: string;
 }
 
@@ -137,7 +163,7 @@ export interface CartLine {
   productName: string;
   unitPrice: number;
   quantity: number;
-  addons: OrderItemAddon[];
+  addons: OrderItemOption[];
   notes: string;
 }
 

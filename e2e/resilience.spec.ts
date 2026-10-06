@@ -172,7 +172,7 @@ async function dropStore(seed: Seeded | null): Promise<void> {
   await admin.from('daily_order_counters').delete().eq('project_id', seed.projectId);
   await admin.from('rate_limits').delete().ilike('key', `%${seed.slug}%`);
   await admin.from('tables').delete().eq('project_id', seed.projectId);
-  // product_addons has NO project_id column — it hangs off product_id, so this
+  // option_groups/option_choices have NO project_id column — they hang off
   // used to be a silent 400. The rows are removed anyway by the ON DELETE
   // CASCADE from products below, which is why the leak was invisible.
   await admin.from('products').delete().eq('project_id', seed.projectId);
@@ -466,8 +466,8 @@ test('R3 public order: item-level validation rejects bad lines with 400', async 
     // must be ignored, not crash .trim().
     await expectErrorBody(request, '/api/public/order', { status: 400, data: { ...line({}), notes: 'n'.repeat(600) } });
     await expectErrorBody(request, '/api/public/order', { status: 400, data: line({ notes: 'n'.repeat(300) }) });
-    // An addon that exists nowhere, or belongs to another product.
-    await expectErrorBody(request, '/api/public/order', { status: 400, data: line({ addonIds: [GHOST_UUID] }) });
+    // An option variety that exists nowhere, or belongs to another product.
+    await expectErrorBody(request, '/api/public/order', { status: 400, data: line({ optionIds: [GHOST_UUID] }) });
   } finally {
     await dropStore(seed);
   }

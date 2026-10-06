@@ -8,6 +8,6 @@ export type PosLine = {
   productName: string;
   unitPrice: number;
   quantity: number;
-  addonIds: string[];
+  optionIds: string[];
   addonLabels: string[];
 };

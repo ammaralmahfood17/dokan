@@ -14,7 +14,7 @@ import {
 
 /**
  * THE CUSTOMER JOURNEY — the public, UNAUTHENTICATED path a real diner takes:
- *   scan the table QR → browse the menu → add items (+ addons) → adjust the
+ *   scan the table QR → browse the menu → add items (+ options) → adjust the
  *   cart → submit → watch the order move through the kitchen → and the two
  *   failure modes that matter (sold-out item, empty cart).
  *
@@ -71,12 +71,13 @@ const otherSlug = `e2e-cust-other-${runId}`;
 const storeName = `مقهى تجربة العميل ${runId}`;
 const categoryName = `مشروبات ${runId}`;
 // Unique per run — a repeat or parallel run must never collide in the menu.
-const addonProductName = `كابتشينو ${runId}`; // HAS an addon (picker path)
-const addonName = `حليب اللوز ${runId}`; //      +0.250
+const optionProductName = `كابتشينو ${runId}`; // HAS options (picker path)
+const optionName = `حليب اللوز ${runId}`; //      +0.250
+const optionGroupName = `النوع ${runId}`; //  the option group it lives in
 const plainProductName = `شاي ${runId}`; //      plain (quick-add path)
-const addonPrice = 0.25;
+const optionPrice = 0.25;
 const plainPrice = 0.75;
-const addonProductPrice = 1.25; // unit with the addon = 1.500
+const optionProductPrice = 1.25; // unit with the variety = 1.500
 
 type OrderRow = {
   id: string;
@@ -96,9 +97,9 @@ type OrderRow = {
 let userId: string;
 let projectId: string;
 let otherProjectId: string;
-let addonProductId: string;
+let optionProductId: string;
 let plainProductId: string;
-let addonId: string;
+let optionId: string;
 
 let cust: Page; // the diner's phone — kept across every step
 let custCtx: BrowserContext;
@@ -115,9 +116,9 @@ function parseMoney(text: string | null | undefined): number {
 }
 
 const totalOf = (unit: number, qty: number) => unit * qty;
-const addonUnit = () => addonProductPrice + addonPrice; // 1.500
+const optionUnit = () => optionProductPrice + optionPrice; // 1.500
 /** Two capuccinos + one tea. */
-const expectedTotal = () => totalOf(addonUnit(), 2) + totalOf(plainPrice, 1); // 3.750
+const expectedTotal = () => totalOf(optionUnit(), 2) + totalOf(plainPrice, 1); // 3.750
 
 /** The «الإجمالي» row in the cart sheet — read the value next to the label. */
 async function cartTotal(page: Page): Promise<{ raw: string; value: number }> {
@@ -181,8 +182,8 @@ test.beforeAll(async ({ browser, playwright }) => {
     .from('products')
     .insert({
       project_id: projectId,
-      name: addonProductName,
-      price: addonProductPrice,
+      name: optionProductName,
+      price: optionProductPrice,
       category_id: cat.id,
       is_available: true,
       sort_order: 1,
@@ -190,7 +191,7 @@ test.beforeAll(async ({ browser, playwright }) => {
     .select('id')
     .single();
   if (e1 || !prod1) throw new Error(`seed product 1: ${e1?.message}`);
-  addonProductId = prod1.id;
+  optionProductId = prod1.id;
 
   const { data: prod2, error: e2 } = await admin
     .from('products')
@@ -207,13 +208,23 @@ test.beforeAll(async ({ browser, playwright }) => {
   if (e2 || !prod2) throw new Error(`seed product 2: ${e2?.message}`);
   plainProductId = prod2.id;
 
-  const { data: addon, error: aErr } = await admin
-    .from('product_addons')
-    .insert({ product_id: addonProductId, name: addonName, price: addonPrice, is_available: true })
+  // One OPTIONAL single-choice group holding the priced variety. Optional on
+  // purpose: it keeps the "add to cart" button enabled from the start, so the
+  // test exercises the picker without depending on required-group gating.
+  const { data: optGroup, error: gErr } = await admin
+    .from('option_groups')
+    .insert({ product_id: optionProductId, name: optionGroupName, min_select: 0, max_select: 1, sort_order: 0 })
     .select('id')
     .single();
-  if (aErr || !addon) throw new Error(`seed addon: ${aErr?.message}`);
-  addonId = addon.id;
+  if (gErr || !optGroup) throw new Error(`seed option group: ${gErr?.message}`);
+
+  const { data: optChoice, error: aErr } = await admin
+    .from('option_choices')
+    .insert({ group_id: optGroup.id, name: optionName, price: optionPrice, is_available: true, sort_order: 0 })
+    .select('id')
+    .single();
+  if (aErr || !optChoice) throw new Error(`seed option variety: ${aErr?.message}`);
+  optionId = optChoice.id;
 
   const { error: tErr } = await admin
     .from('tables')
@@ -274,7 +285,7 @@ test('1. scanning the table QR opens the store menu with the seeded products', a
   await expect(cust.getByText(/^طاولة\s*0?1$/)).toBeVisible();
   // Category heading + both products are on the page.
   await expect(cust.getByText(categoryName).first()).toBeVisible();
-  await expect(cust.getByText(addonProductName).first()).toBeVisible();
+  await expect(cust.getByText(optionProductName).first()).toBeVisible();
   await expect(cust.getByText(plainProductName).first()).toBeVisible();
   // Nothing sold out yet, and an empty cart shows no cart bar.
   await expect(cust.getByText('غير متوفر')).toHaveCount(0);
@@ -285,34 +296,37 @@ test('1. scanning the table QR opens the store menu with the seeded products', a
 /* ====================================================================== *
  * 2. BUILD THE CART
  * ====================================================================== */
-test('2. two different products (one with an addon) → qty controls → total = sum(unit × qty)', async () => {
-  // --- 2a. The addon product opens the picker (it HAS addons) ---------------
-  await cust.locator(`[aria-label="إضافة ${addonProductName} إلى السلة"]`).first().click();
-  const picker = cust.getByRole('dialog', { name: addonProductName });
+test('2. two different products (one with options) → qty controls → total = sum(unit × qty)', async () => {
+  // --- 2a. The product with options opens the picker -------------------------
+  await cust.locator(`[aria-label="إضافة ${optionProductName} إلى السلة"]`).first().click();
+  const picker = cust.getByRole('dialog', { name: optionProductName });
   await expect(picker).toBeVisible({ timeout: 15_000 });
-  // The addon row shows its own price: `+{formatMoney(price)}`.
+  // The variety row shows its own price: `+{formatMoney(price)}`.
   await expect(picker.getByText('+0.250 BHD')).toBeVisible();
-  // Checkbox + name live inside a <label>, so clicking the name toggles it.
-  await picker.getByText(addonName, { exact: true }).click();
-  await expect(picker.getByRole('checkbox')).toBeChecked();
+  // A variety is a role=checkbox BUTTON now (groups replaced the flat addon
+  // list), so assert the ARIA state rather than an <input> property.
+  const variety = picker.getByRole('checkbox', { name: new RegExp(optionName) });
+  await expect(variety).toHaveAttribute('aria-checked', 'false');
+  await variety.click();
+  await expect(variety).toHaveAttribute('aria-checked', 'true');
   await picker.getByRole('button', { name: 'أضف إلى السلة' }).click();
 
   // The first add auto-opens the cart sheet.
   const cart = cust.getByRole('dialog', { name: 'سلتك' });
   await expect(cart).toBeVisible({ timeout: 20_000 });
-  await expect(cart.getByText(addonProductName)).toBeVisible();
-  await expect(cart.getByText(addonName)).toBeVisible();
-  // unit_price is price + addons, so the LINE already carries the addon.
-  // `[last()]` not `[1]`: the name <p> is followed by the addons <p> and then
+  await expect(cart.getByText(optionProductName)).toBeVisible();
+  await expect(cart.getByText(optionName)).toBeVisible();
+  // unit_price is price + options, so the LINE already carries the option.
+  // `[last()]` not `[1]`: the name <p> is followed by the options <p> and then
   // the notes <p>, so the price is only ever the LAST sibling <p>.
   const oneLine = await cart
-    .getByText(addonProductName)
+    .getByText(optionProductName)
     .locator('xpath=following-sibling::p[last()]')
     .textContent();
-  expect(parseMoney(oneLine), `line price must be product + addon (got ${oneLine})`).toBeCloseTo(addonUnit(), 3);
+  expect(parseMoney(oneLine), `line price must be product + option (got ${oneLine})`).toBeCloseTo(optionUnit(), 3);
   const afterFirst = await cartTotal(cust);
   expect(afterFirst.raw).toContain('BHD');
-  expect(afterFirst.value).toBeCloseTo(addonUnit(), 3);
+  expect(afterFirst.value).toBeCloseTo(optionUnit(), 3);
 
   // --- 2b. Close the sheet, add the PLAIN product (quick-add) --------------
   await cart.getByRole('button', { name: 'إغلاق' }).click();
@@ -328,21 +342,21 @@ test('2. two different products (one with an addon) → qty controls → total =
   // (menu-client.tsx:701) that is NOT the cart badge/count.
   const barTotal = cartBar.locator('span[dir="ltr"]').last();
   const barText = (await barTotal.textContent()) ?? '';
-  expect(parseMoney(barText), `floating cart bar total (got «${barText}»)`).toBeCloseTo(addonUnit() + plainPrice, 3);
+  expect(parseMoney(barText), `floating cart bar total (got «${barText}»)`).toBeCloseTo(optionUnit() + plainPrice, 3);
   // A later add only toasts — the sheet must NOT steal focus back.
   await expect(cust.getByRole('dialog', { name: 'سلتك' })).toHaveCount(0);
 
-  // --- 2c. Increase the addon line from the cart sheet's stepper ----------
+  // --- 2c. Increase the option line from the cart sheet's stepper ---------
   await cartBar.click();
   await expect(cart).toBeVisible({ timeout: 15_000 });
   await expect(cart.getByText(plainProductName)).toBeVisible();
   const before = await cartTotal(cust);
-  expect(before.value).toBeCloseTo(addonUnit() + plainPrice, 3);
+  expect(before.value).toBeCloseTo(optionUnit() + plainPrice, 3);
 
   await cart.getByRole('button', { name: 'زيادة الكمية' }).first().click();
   const after = await cartTotal(cust);
-  // +1 × 1.500 — the stepper must multiply the addon-inclusive unit price.
-  expect(after.value).toBeCloseTo(before.value + addonUnit(), 3);
+  // +1 × 1.500 — the stepper must multiply the option-inclusive unit price.
+  expect(after.value).toBeCloseTo(before.value + optionUnit(), 3);
   expect(after.value).toBeCloseTo(expectedTotal(), 3);
   // The floating bar agrees with the sheet.
   await expect(cartBar).toContainText(`${expectedTotal().toFixed(3)}`);
@@ -381,7 +395,7 @@ test('3. submitting shows the success screen and hands back the order id + numbe
     (await cust.locator('div.min-h-dvh').getByText(`${expectedTotal().toFixed(3)} BHD`).first().textContent()) ?? '';
   expect(parseMoney(shownTotalText), `success total was "${shownTotalText}"`).toBeCloseTo(expectedTotal(), 3);
 
-  // DB truth: 2 lines, quantities 2 and 1, unit prices already include the addon.
+  // DB truth: 2 lines, quantities 2 and 1, unit prices already include the option.
   const { data } = await admin
     .from('orders')
     .select('id, status, total_amount, order_number, type, service_type, order_items(product_name, quantity, unit_price, addons)')
@@ -397,15 +411,15 @@ test('3. submitting shows the success screen and hands back the order id + numbe
   expect(Number(order!.total_amount)).toBeCloseTo(expectedTotal(), 3);
   expect(order!.order_items).toHaveLength(2);
 
-  const capLine = order!.order_items.find((i) => i.product_name === addonProductName)!;
+  const capLine = order!.order_items.find((i) => i.product_name === optionProductName)!;
   const teaLine = order!.order_items.find((i) => i.product_name === plainProductName)!;
   expect(capLine.quantity).toBe(2);
   expect(teaLine.quantity).toBe(1);
-  expect(Number(capLine.unit_price)).toBeCloseTo(addonUnit(), 3);
+  expect(Number(capLine.unit_price)).toBeCloseTo(optionUnit(), 3);
   expect(Number(teaLine.unit_price)).toBeCloseTo(plainPrice, 3);
   expect(capLine.addons).toHaveLength(1);
-  expect(capLine.addons[0].name).toBe(addonName);
-  expect(Number(capLine.addons[0].price)).toBeCloseTo(addonPrice, 3);
+  expect(capLine.addons[0].name).toBe(optionName);
+  expect(Number(capLine.addons[0].price)).toBeCloseTo(optionPrice, 3);
   expect(teaLine.addons).toHaveLength(0);
 });
 
@@ -592,17 +606,17 @@ test('5. a sold-out product cannot be added to the cart and orders for it 400 (n
     .eq('project_id', projectId);
   expect(after.count).toBe(ordersBeforeClick.count);
 
-  // The still-available product with the addon still orders fine.
+  // The still-available product with options still orders fine.
   const good = await api.post('/api/public/order', {
     data: {
       projectSlug: slug,
       tableSlug: 'table-1',
-      items: [{ productId: addonProductId, quantity: 1, addonIds: [addonId] }],
+      items: [{ productId: optionProductId, quantity: 1, optionIds: [optionId] }],
     },
   });
   expect(good.status(), await good.text().catch(() => '')).toBe(200);
   const goodBody = (await good.json()) as { order: { totalAmount: number } };
-  expect(Number(goodBody.order.totalAmount)).toBeCloseTo(addonUnit(), 3);
+  expect(Number(goodBody.order.totalAmount)).toBeCloseTo(optionUnit(), 3);
 });
 
 /* ====================================================================== *
@@ -618,10 +632,10 @@ test('6. an empty cart has no confirm button, and a emptied cart disables it', a
 
   // Now the harder case: the cart is OPEN but the customer removed the last
   // line — the confirm button stays rendered and must be disabled.
-  await page.locator(`[aria-label="إضافة ${addonProductName} إلى السلة"]`).first().click();
-  const picker = page.getByRole('dialog', { name: addonProductName });
+  await page.locator(`[aria-label="إضافة ${optionProductName} إلى السلة"]`).first().click();
+  const picker = page.getByRole('dialog', { name: optionProductName });
   await expect(picker).toBeVisible({ timeout: 15_000 });
-  await picker.getByText(addonName, { exact: true }).click();
+  await picker.getByText(optionName, { exact: true }).click();
   await picker.getByRole('button', { name: 'أضف إلى السلة' }).click();
 
   const cart = page.getByRole('dialog', { name: 'سلتك' });
@@ -630,7 +644,7 @@ test('6. an empty cart has no confirm button, and a emptied cart disables it', a
   await expect(confirm).toBeEnabled();
 
   await cart.getByRole('button', { name: 'إنقاص الكمية' }).first().click(); // line removed (qty hits 0)
-  await expect(cart.getByText(addonProductName)).toHaveCount(0);
+  await expect(cart.getByText(optionProductName)).toHaveCount(0);
   await expect(confirm).toBeDisabled();
 
   // Total is exactly zero — Object.is, because -0 and 0 must not both pass.

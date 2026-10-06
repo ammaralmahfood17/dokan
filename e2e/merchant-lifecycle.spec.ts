@@ -242,32 +242,38 @@ test('4) products UI: category → 2 products (one with addon) → toggle → ed
   expect(plain?.category_id).toBe(cat!.id);
   await expect(page.getByLabel(`تعديل ${plainProduct}`)).toBeVisible({ timeout: 20_000 });
 
-  // ---- 4c. product with an addon ----
+  // ---- 4c. product with options ----
   await page.getByRole('button', { name: 'منتج جديد', exact: true }).click();
   const addonDialog = page.getByRole('dialog', { name: 'منتج جديد' });
   await expect(addonDialog).toBeVisible({ timeout: 20_000 });
   await addonDialog.getByPlaceholder('مثال: قهوة عربية').fill(addonProduct);
   await addonDialog.getByPlaceholder('وصف مختصر للمنتج يظهر للعملاء في القائمة').fill('مشروب منعش بارد');
   await addonDialog.locator('#product-price').fill('1.250');
-  // Addons block: «إضافة» then the two addon fields.
-  await addonDialog.getByRole('button', { name: 'إضافة', exact: true }).click();
-  await addonDialog.getByPlaceholder('اسم الإضافة').fill(addonName);
+  // Options block: «خيار جديد» → group name + one variety with its price.
+  await addonDialog.getByRole('button', { name: 'خيار جديد' }).click();
+  await addonDialog.getByPlaceholder('اسم الخيار (مثال: الحجم)').fill('النوع');
+  await addonDialog.getByPlaceholder('اسم النوع (مثال: كبير)').fill(addonName);
   await addonDialog.getByPlaceholder('0.000').nth(1).fill('0.250');
   await addonDialog.getByRole('button', { name: 'إضافة المنتج', exact: true }).click();
   await expect(addonDialog).toBeHidden({ timeout: 20_000 });
 
   const addonProductId = await productIdByName(addonProduct);
-  expect(addonProductId, 'addon product persisted').toBeTruthy();
-  const { data: withAddon } = await admin
+  expect(addonProductId, 'option product persisted').toBeTruthy();
+  const { data: withOptions } = await admin
     .from('products')
-    .select('price, product_addons(id, name, price)')
+    .select('price, option_groups(name, option_choices(name, price))')
     .eq('id', addonProductId!)
     .single();
-  expect(Number(withAddon?.price)).toBeCloseTo(1.25, 3);
-  const addonRows = withAddon?.product_addons as unknown as { name: string; price: number }[];
-  expect(addonRows, 'one addon persisted').toHaveLength(1);
-  expect(addonRows[0].name).toBe(addonName);
-  expect(Number(addonRows[0].price)).toBeCloseTo(0.25, 3);
+  expect(Number(withOptions?.price)).toBeCloseTo(1.25, 3);
+  const optGroups = withOptions?.option_groups as unknown as {
+    name: string;
+    option_choices: { name: string; price: number }[];
+  }[];
+  expect(optGroups, 'one option group persisted').toHaveLength(1);
+  expect(optGroups[0].name).toBe('النوع');
+  expect(optGroups[0].option_choices).toHaveLength(1);
+  expect(optGroups[0].option_choices[0].name).toBe(addonName);
+  expect(Number(optGroups[0].option_choices[0].price)).toBeCloseTo(0.25, 3);
   await expect(page.getByLabel(`تعديل ${addonProduct}`)).toBeVisible({ timeout: 20_000 });
 
   // ---- 4d. toggle the plain product to unavailable ----

@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Modal } from '@/components/ui/modal';
 import { PullToRefresh } from '@/components/ui/pull-to-refresh';
 import { Toggle } from '@/components/ui/toggle';
-import type { Category, Product, ProductAddon } from '@/lib/types';
+import type { Category, Product, ProductOptionChoice } from '@/lib/types';
 import type { Database } from '@/lib/database.types';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -31,7 +31,7 @@ import { ProductFormModal } from '@/components/dashboard/products/product-form-m
 // FIX-C-001: modals التصنيفات مستخرجة
 import { CategoryManager } from '@/components/dashboard/products/category-manager';
 // FIX-C-003 (audit 2.4): البطاقة + شريط الفلترة + خطافا.bulk والتصنيفات مستخرجة — نقل حرفي
-import { ProductCard, type ProductWithAddons } from '@/components/dashboard/products/product-card';
+import { ProductCard, type ProductWithOptions } from '@/components/dashboard/products/product-card';
 import { CategoryFilterBar } from '@/components/dashboard/products/category-filter-bar';
 import { useProductBulk } from '@/components/dashboard/products/use-product-bulk';
 import { useCategoryCrud } from '@/components/dashboard/products/use-category-crud';
@@ -49,13 +49,13 @@ export function ProductsClient({
   projectId: string;
   currency: string;
   initialCategories: Category[];
-  initialProducts: ProductWithAddons[];
+  initialProducts: ProductWithOptions[];
 }) {
   const router = useRouter();
   const [categories, setCategories] = useState(initialCategories);
   const [products, setProducts] = useState(initialProducts);
   const [showProductForm, setShowProductForm] = useState(false);
-  const [editing, setEditing] = useState<ProductWithAddons | null>(null);
+  const [editing, setEditing] = useState<ProductWithOptions | null>(null);
 
   // Search + category filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,14 +100,14 @@ export function ProductsClient({
     setShowProductForm(true);
   }
 
-  function openEdit(p: ProductWithAddons) {
+  function openEdit(p: ProductWithOptions) {
     // FIX-C-001: النموذج يهيئ حالته من editing
     setEditing(p);
     setShowProductForm(true);
   }
 
   // Delete confirmation state
-  const [confirmDelete, setConfirmDelete] = useState<ProductWithAddons | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ProductWithOptions | null>(null);
 
   async function deleteProduct(id: string) {
     const supabase = createClient();
@@ -123,32 +123,8 @@ export function ProductsClient({
     revalidateMenuCache(projectId);
   }
 
-  async function deleteAddon(productId: string, addonId: string) {
-    const supabase = createClient();
-    // Verify the product belongs to this project before touching its addons
-    const { data: owned } = await supabase
-      .from('products')
-      .select('id')
-      .eq('id', productId)
-      .eq('project_id', projectId)
-      .maybeSingle();
-    if (!owned) {
-      toast.error('لا يمكن حذف هذه الإضافة');
-      return;
-    }
-    const { error } = await supabase.from('product_addons').delete().eq('product_id', productId).eq('id', addonId);
-    if (error) {
-      toast.error('فشل الحذف');
-      return;
-    }
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId
-          ? { ...p, product_addons: p.product_addons.filter((a) => a.id !== addonId) }
-          : p
-      )
-    );
-  }
+  // (The per-addon delete handler that used to live here is gone: options are
+  // edited inside the product form, and `product_addons` no longer exists.)
 
   // FIX-C-003 (audit 2.4): CRUD التصنيفات مستخرج كما هو (يغذّي CategoryManager)
   const categoryCrud = useCategoryCrud({ projectId, categories, setCategories });
@@ -164,7 +140,7 @@ export function ProductsClient({
       <div className="page-header">
         <div>
           <h1>المنتجات</h1>
-          <p>إدارة التصنيفات والمنتجات والإضافات</p>
+          <p>إدارة التصنيفات والمنتجات والخيارات</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {bulk.bulkMode ? (

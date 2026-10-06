@@ -1,0 +1,12 @@
+-- Drop the retired flat addon list.
+--
+-- Split out of 20261006190000 on purpose: that migration had to run BEFORE the
+-- new build was deployed, and the old build still SELECTs `product_addons(*)`
+-- when rendering the public menu — dropping the table in the same step would
+-- have 500'd every QR scan in the gap. This runs only after the new build is
+-- live and verified.
+--
+-- Safe: the table held ZERO rows when it was retired (checked against
+-- production), nothing has written it since, and every reference to it was
+-- removed from src/ in the same change.
+drop table if exists public.product_addons;

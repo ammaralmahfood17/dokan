@@ -1,10 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Search, ShoppingBag, X } from 'lucide-react';
+import { Check, Search, ShoppingBag, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
-import type { OrderType, Product, ProductAddon } from '@/lib/types';
+import type { OrderType, Product, ProductOptionGroup } from '@/lib/types';
+import {
+  availableChoices,
+  effectiveBounds,
+  selectedChoices,
+  validateOptionSelection,
+} from '@/lib/product-options';
 import { Button } from '@/components/ui/button';
 import { CartPanel } from '@/components/pos/cart-panel';
 import { ProductCard } from '@/components/pos/product-card';
@@ -12,7 +18,7 @@ import type { PosLine } from '@/components/pos/types';
 import { toast } from 'sonner';
 import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
 
-type ProductWithAddons = Product & { product_addons: ProductAddon[] };
+type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
 
 const ORDER_TYPES: [OrderType, string][] = [
   ['walkin', 'سفري'],
@@ -28,7 +34,7 @@ export function PosClient({
 }: {
   projectId: string;
   currency: string;
-  products: ProductWithAddons[];
+  products: ProductWithOptions[];
   /** UX-U12: تكرار طلبات آخر 7 أيام لكل منتج — لتصدر الأكثر طلبًا */
   productFrequency?: Record<string, number>;
 }) {
@@ -36,8 +42,8 @@ export function PosClient({
   const [lines, setLines] = useState<PosLine[]>([]);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [picker, setPicker] = useState<ProductWithAddons | null>(null);
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [picker, setPicker] = useState<ProductWithOptions | null>(null);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [query, setQuery] = useState('');
   // Last successful order — drives the "وصل المطبخ" confirmation banner.
@@ -144,19 +150,29 @@ export function PosClient({
     [lines, currency]
   );
 
-  function openProduct(p: ProductWithAddons) {
-    // Open the picker only when there are AVAILABLE addons; otherwise quick-add
-    if (p.product_addons?.some((a) => a.is_available)) {
+  // ---- Picker: the groups that actually have a pickable variety, and the one
+  // reason «إضافة للسلة» is still disabled. Same rules module as the API.
+  const pickerGroups = picker
+    ? (picker.option_groups || []).filter((g) => availableChoices(g).length > 0)
+    : [];
+  const pickerViolation = picker
+    ? validateOptionSelection(picker.option_groups || [], selectedOptions)
+    : null;
+
+  function openProduct(p: ProductWithOptions) {
+    // The picker is needed whenever the product has a group with a pickable
+    // variety — the cashier must choose before the line can be priced.
+    if ((p.option_groups || []).some((g) => availableChoices(g).length > 0)) {
       setPicker(p);
-      setSelectedAddons([]);
+      setSelectedOptions([]);
     } else {
       addLine(p, [], [], 1, false);
     }
   }
 
   function addLine(
-    p: ProductWithAddons,
-    addonIds: string[],
+    p: ProductWithOptions,
+    optionIds: string[],
     addonLabels: string[],
     qty = 1,
     silent = false
@@ -175,14 +191,12 @@ export function PosClient({
       if (!silent) toast.error('الكمية المطلوبة أكثر من المتوفر');
       return;
     }
-    const addonTotal = money(
-      (p.product_addons || [])
-        .filter((a) => addonIds.includes(a.id))
-        .reduce((s, a) => s + Number(a.price), 0),
+    const optionTotal = money(
+      selectedChoices(p.option_groups || [], optionIds).reduce((sum, c) => sum + Number(c.price), 0),
       currencyDecimals(currency)
     );
-    const unitPrice = money(Number(p.price) + addonTotal, currencyDecimals(currency));
-    const key = `${p.id}:${[...addonIds].sort().join(',')}`;
+    const unitPrice = money(Number(p.price) + optionTotal, currencyDecimals(currency));
+    const key = `${p.id}:${[...optionIds].sort().join(',')}`;
     setLines((prev) => {
       const existing = prev.find((l) => l.key === key);
       if (existing) {
@@ -198,7 +212,7 @@ export function PosClient({
           productName: p.name,
           unitPrice,
           quantity: qty,
-          addonIds,
+          optionIds,
           addonLabels,
         },
       ];
@@ -207,12 +221,32 @@ export function PosClient({
     setPicker(null);
   }
 
-  function confirmAddons() {
+  function confirmOptions() {
     if (!picker) return;
-    const labels = (picker.product_addons || [])
-      .filter((a) => selectedAddons.includes(a.id))
-      .map((a) => a.name);
-    addLine(picker, selectedAddons, labels);
+    const groups = picker.option_groups || [];
+    const violation = validateOptionSelection(groups, selectedOptions);
+    if (violation) {
+      toast.error(violation.message);
+      return;
+    }
+    addLine(
+      picker,
+      selectedOptions,
+      selectedChoices(groups, selectedOptions).map((c) => c.name)
+    );
+  }
+
+  /** Single-choice groups replace; multi groups append up to their max. */
+  function toggleOption(group: ProductOptionGroup, choiceId: string) {
+    const bounds = effectiveBounds(group);
+    const groupIds = new Set(availableChoices(group).map((c) => c.id));
+    setSelectedOptions((prev) => {
+      if (prev.includes(choiceId)) return prev.filter((id) => id !== choiceId);
+      if (bounds.max === 1) return [...prev.filter((id) => !groupIds.has(id)), choiceId];
+      const picked = availableChoices(group).filter((c) => prev.includes(c.id)).length;
+      if (picked >= bounds.max) return prev;
+      return [...prev, choiceId];
+    });
   }
 
   // ---------- Quick action: repeat last order ----------
@@ -249,9 +283,9 @@ export function PosClient({
       for (const it of items) {
         const p = products.find((x) => x.id === it.product_id);
         if (!p || !p.is_available) continue;
-        const addonIds = (it.addons ?? []).map((a) => a.id);
+        const optionIds = (it.addons ?? []).map((a) => a.id);
         const labels = (it.addons ?? []).map((a) => a.name);
-        addLine(p, addonIds, labels, it.quantity, true);
+        addLine(p, optionIds, labels, it.quantity, true);
         added += 1;
       }
       toast.success(
@@ -300,7 +334,7 @@ export function PosClient({
           items: lines.map((l) => ({
             productId: l.productId,
             quantity: l.quantity,
-            addonIds: l.addonIds,
+            optionIds: l.optionIds,
           })),
         }),
       });
@@ -406,7 +440,7 @@ export function PosClient({
                   key={p.id}
                   product={p}
                   currency={currency}
-                  onSelect={(prod) => openProduct(prod as ProductWithAddons)}
+                  onSelect={(prod) => openProduct(prod as ProductWithOptions)}
                 />
               ))}
             </div>
@@ -538,7 +572,7 @@ export function PosClient({
           className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
-          aria-label={`إضافات — ${picker.name}`}
+          aria-label={`خيارات — ${picker.name}`}
           onClick={(e) => { if (e.target === e.currentTarget) setPicker(null); }}
           onKeyDown={(e) => { if (e.key === 'Escape') setPicker(null); }}
         >
@@ -558,44 +592,72 @@ export function PosClient({
               </button>
             </div>
             <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
-              اختر الإضافات
+              اختر الخيارات
             </p>
-            <ul className="mb-4 space-y-2">
-              {(picker.product_addons || [])
-                .filter((a) => a.is_available)
-                .map((a) => (
-                  <label
-                    key={a.id}
-                    className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-sm"
-                  >
-                    <span className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedAddons.includes(a.id)}
-                        onChange={(e) => {
-                          setSelectedAddons((prev) =>
-                            e.target.checked
-                              ? [...prev, a.id]
-                              : prev.filter((id) => id !== a.id)
-                          );
-                        }}
-                      />
-                      {a.name}
-                    </span>
-                    <span className="text-xs text-[var(--color-text-secondary)]">
-                      +{formatMoney(Number(a.price), currency)}
-                    </span>
-                  </label>
-                ))}
-            </ul>
+            <div className="mb-4 space-y-3">
+              {pickerGroups.map((group) => {
+                const choices = availableChoices(group);
+                const bounds = effectiveBounds(group);
+                const single = bounds.max === 1;
+                return (
+                  <div key={group.id} role={single ? 'radiogroup' : 'group'} aria-label={group.name}>
+                    <p className="mb-1 text-[12px] font-bold text-[var(--color-text-secondary)]">
+                      {group.name}
+                      {bounds.min >= 1 && <span className="ms-1 text-[var(--color-primary)]">(إلزامي)</span>}
+                    </p>
+                    <ul className="space-y-1.5">
+                      {choices.map((choice) => {
+                        const on = selectedOptions.includes(choice.id);
+                        return (
+                          <li key={choice.id}>
+                            <button
+                              type="button"
+                              role={single ? 'radio' : 'checkbox'}
+                              aria-checked={on}
+                              onClick={() => toggleOption(group, choice.id)}
+                              className={`flex min-h-[44px] w-full items-center justify-between gap-2 rounded-[var(--radius-md)] border px-3 py-2 text-sm transition-colors ${
+                                on
+                                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)] font-semibold'
+                                  : 'border-[var(--color-border)]'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span
+                                  aria-hidden="true"
+                                  className={`flex items-center justify-center border ${single ? 'rounded-full' : 'rounded-[4px]'} ${
+                                    on ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border-strong)]'
+                                  }`}
+                                  style={{ height: '18px', width: '18px' }}
+                                >
+                                  {on && <Check className="h-3 w-3" />}
+                                </span>
+                                {choice.name}
+                              </span>
+                              <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
+                                {Number(choice.price) > 0 ? `+${formatMoney(Number(choice.price), currency)}` : 'بدون زيادة'}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
             <div className="flex gap-2">
-              <Button block onClick={confirmAddons}>
+              <Button block disabled={pickerViolation !== null} onClick={confirmOptions}>
                 إضافة للسلة
               </Button>
               <Button variant="secondary" onClick={() => setPicker(null)}>
                 إلغاء
               </Button>
             </div>
+            {pickerViolation && (
+              <p role="alert" className="mt-2 text-center text-[12.5px] font-semibold text-[var(--color-danger)]">
+                {pickerViolation.message}
+              </p>
+            )}
           </div>
         </div>
       )}

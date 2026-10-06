@@ -11,7 +11,7 @@ import {
 /**
  * Products screen e2e — the CRUD surface the whole order flow depends on
  * (a store must add products before it can sell). Covers: create category,
- * create product with addon, edit price, toggle availability, delete.
+ * create product with options, edit price, toggle availability, delete.
  * Every step is verified against the DB, not just the UI (DB-first).
  */
 test.describe.configure({ mode: 'serial' });
@@ -25,10 +25,16 @@ let productId: string;
 async function dbProduct() {
   const { data } = await admin
     .from('products')
-    .select('id, name, price, is_available, product_addons(id, name, price)')
+    .select('id, name, price, is_available, option_groups(id, name, min_select, max_select, option_choices(id, name, price))')
     .eq('id', productId)
     .single();
-  return data as { id: string; name: string; price: number; is_available: boolean; product_addons: { name: string; price: number }[] } | null;
+  return data as {
+    id: string;
+    name: string;
+    price: number;
+    is_available: boolean;
+    option_groups: { name: string; option_choices: { name: string; price: number }[] }[];
+  } | null;
 }
 
 test.beforeAll(async () => {
@@ -48,7 +54,7 @@ test.afterAll(async () => {
   await cleanupTestUser(email);
 });
 
-test('products: category → product w/ addon → edit → toggle → delete', async ({ page, context }) => {
+test('products: category → product w/ options → edit → toggle → delete', async ({ page, context }) => {
   const authCookies = await getAuthCookies(email, TEST_PASSWORD);
   await context.addCookies(authCookies);
   await page.goto('/dashboard/products');
@@ -65,7 +71,7 @@ test('products: category → product w/ addon → edit → toggle → delete', a
   // UI: category chip visible
   await expect(page.locator('button', { hasText: 'مشروبات' })).toBeVisible({ timeout: 15_000 });
 
-  // ── 2. Create product with addon ────────────────────────────────
+  // ── 2. Create product with options ──────────────────────────────
   await page.getByRole('button', { name: 'منتج جديد', exact: true }).first().click();
   const formDialog = page.getByRole('dialog', { name: 'منتج جديد' });
   await expect(formDialog).toBeVisible({ timeout: 15_000 });
@@ -75,20 +81,21 @@ test('products: category → product w/ addon → edit → toggle → delete', a
   await page.getByPlaceholder('وصف مختصر للمنتج يظهر للعملاء في القائمة').fill('مشروب منعش');
   await page.getByPlaceholder(`0.${'0'.repeat(3)}`).first().fill('1.250');
 
-  // addon: click "إضافة" in the الإضافات section → fill fields
-  await formDialog.locator('label', { hasText: /^الإضافات/ }).locator('..').locator('button').click();
-  const addonName = page.getByPlaceholder('اسم الإضافة');
-  await expect(addonName).toBeVisible({ timeout: 15_000 });
-  await addonName.fill('نعناع');
+  // options: «خيار جديد» → a group name + one variety with its own price
+  await formDialog.getByRole('button', { name: 'خيار جديد' }).click();
+  const groupNameInput = page.getByPlaceholder('اسم الخيار (مثال: الحجم)');
+  await expect(groupNameInput).toBeVisible({ timeout: 15_000 });
+  await groupNameInput.fill('النوع');
+  await page.getByPlaceholder('اسم النوع (مثال: كبير)').fill('نعناع');
   await page.getByPlaceholder(`0.${'0'.repeat(3)}`).nth(1).fill('0.25');
 
   await page.getByRole('button', { name: 'إضافة المنتج', exact: true }).click();
   await expect(formDialog).toBeHidden({ timeout: 15_000 });
 
-  // DB: product + addon persisted
+  // DB: product + option group + variety persisted
   const { data: created } = await admin
     .from('products')
-    .select('id, name, price, is_available, product_addons(id, name, price)')
+    .select('id, name, price, is_available, option_groups(id, name, min_select, max_select, option_choices(id, name, price))')
     .eq('project_id', projectId)
     .eq('name', 'موهيتو ليمون')
     .single();
@@ -97,8 +104,20 @@ test('products: category → product w/ addon → edit → toggle → delete', a
   expect(created!.name).toBe('موهيتو ليمون');
   expect(Number(created!.price)).toBeCloseTo(1.25, 3);
   expect(created!.is_available).toBe(true);
-  expect(created!.product_addons).toHaveLength(1);
-  expect((created!.product_addons as { name: string; price: number }[])[0].name).toBe('نعناع');
+  const groups = created!.option_groups as unknown as {
+    name: string;
+    min_select: number;
+    max_select: number;
+    option_choices: { name: string; price: number }[];
+  }[];
+  expect(groups).toHaveLength(1);
+  expect(groups[0].name).toBe('النوع');
+  // The form defaults a new group to required + single-choice.
+  expect(groups[0].min_select).toBe(1);
+  expect(groups[0].max_select).toBe(1);
+  expect(groups[0].option_choices).toHaveLength(1);
+  expect(groups[0].option_choices[0].name).toBe('نعناع');
+  expect(Number(groups[0].option_choices[0].price)).toBeCloseTo(0.25, 3);
 
   // UI: product card visible
   await expect(page.locator('div').filter({ hasText: 'موهيتو ليمون' }).first()).toBeVisible({ timeout: 15_000 });

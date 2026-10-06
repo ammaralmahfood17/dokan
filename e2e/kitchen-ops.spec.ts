@@ -41,7 +41,7 @@ import {
  *
  * Verified API contracts:
  *   POST /api/public/order  { projectSlug, tableSlug, items:[{ productId,
- *     quantity, addonIds?, notes? }], notes?, clientRequestId? }
+ *     quantity, optionIds?, notes? }], notes?, clientRequestId? }
  *     → 200 { order: { id, status, totalAmount, orderNumber } }
  *   POST /api/pos/cancel    { orderId }   (staff session)  → 200 { ok: true }
  *   POST /api/public/waiter { projectSlug, tableSlug, tableToken? } → 200 { ok, id } /

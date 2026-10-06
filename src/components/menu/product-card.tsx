@@ -11,13 +11,13 @@ import { Check, Minus, Plus, X } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
 import { langOfText } from '@/lib/i18n';
 import { isSoldOut, lowStockLabel, maxOrderableQty } from '@/lib/product-stock';
-import type { Product, ProductAddon } from '@/lib/types';
+import type { Product, ProductOptionGroup } from '@/lib/types';
 
 /** Generic blur placeholder for product images — tiny 16×16 grey base64 */
 const BLUR_PLACEHOLDER =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMklEQVQ4T2NkYPj/n4EBBJgYKAQMFFiAKcBAUwsDUx0DxS5gYKA8DCh2AQNlYUBZCgDxpwgRg9RXOAAAAABJRU5ErkJggg==';
 
-export type MenuProduct = Product & { product_addons: ProductAddon[] };
+export type MenuProduct = Product & { option_groups: ProductOptionGroup[] };
 
 export function MenuProductRow({
   product,

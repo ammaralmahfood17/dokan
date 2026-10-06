@@ -7,9 +7,9 @@ import Image from 'next/image';
 import { ImageIcon, Check } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
 import { isSoldOut, remainingStock } from '@/lib/product-stock';
-import type { Product, ProductAddon } from '@/lib/types';
+import type { Product, ProductOptionGroup } from '@/lib/types';
 
-export type ProductWithAddons = Product & { product_addons: ProductAddon[] };
+export type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
 
 export function ProductCard({
   product: p,
@@ -19,7 +19,7 @@ export function ProductCard({
   onOpen,
   onToggleSelect,
 }: {
-  product: ProductWithAddons;
+  product: ProductWithOptions;
   currency: string;
   bulkMode: boolean;
   selected: boolean;
@@ -108,19 +108,20 @@ export function ProductCard({
           {formatMoney(Number(p.price), currency)}
         </p>
 
-        {p.product_addons?.length > 0 && (
+        {p.option_groups?.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {p.product_addons.slice(0, 2).map((a) => (
+            {/* One chip per OPTION GROUP (with its variety count), not per variety. */}
+            {p.option_groups.slice(0, 2).map((g) => (
               <span
-                key={a.id}
+                key={g.id}
                 className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-[11.5px] font-semibold text-[var(--color-text-secondary)]"
               >
-                {a.name}
+                {g.name} · {(g.option_choices ?? []).length}
               </span>
             ))}
-            {p.product_addons.length > 2 && (
+            {p.option_groups.length > 2 && (
               <span className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-[11.5px] font-bold tabular-nums text-[var(--color-primary)]">
-                +{p.product_addons.length - 2}
+                +{p.option_groups.length - 2}
               </span>
             )}
           </div>

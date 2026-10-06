@@ -5,7 +5,7 @@ import { createAnonClient } from '@/lib/supabase/anon';
 import { getSiteUrl } from '@/lib/site-url';
 import { getPublicProject } from '@/lib/public-project';
 import { MenuClient } from './menu-client';
-import type { Category, Product, ProductAddon, Project, Table } from '@/lib/types';
+import type { Category, Product, ProductOptionGroup, Project, Table } from '@/lib/types';
 import { buildRestaurantJsonLd } from '@/lib/jsonld';
 import { isTableTokenRequired } from '@/lib/public-write-guard';
 
@@ -38,14 +38,14 @@ async function getMenuData(projectId: string, tableId: string) {
         // safety is server-side: createSecureOrder rejects unavailable items.
         supabase
           .from('products')
-          .select('*, product_addons(*)')
+          .select('*, option_groups(*, option_choices(*))')
           .eq('project_id', projectId)
           .order('is_available', { ascending: false })
           .order('sort_order'),
       ]);
       return {
         categories: (categories ?? []) as Category[],
-        products: (products ?? []) as (Product & { product_addons: ProductAddon[] })[],
+        products: (products ?? []) as (Product & { option_groups: ProductOptionGroup[] })[],
       };
     },
     ['menu-data', projectId, tableId],

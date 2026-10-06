@@ -37,8 +37,9 @@ const TABLES: { table: string; column: string }[] = [
   { table: 'telegram_links', column: 'project_id' },
   { table: 'orders', column: 'project_id' },
   { table: 'tables', column: 'project_id' },
-  // product_addons is keyed by product_id, so it is counted through the
-  // project's products (the same indirection cleanupTestUser uses).
+  // option_groups/option_choices are keyed by product_id / group_id, so they
+  // are counted through the project's products (the same indirection
+  // cleanupTestUser uses).
   { table: 'products', column: 'project_id' },
   { table: 'categories', column: 'project_id' },
   { table: 'staff_members', column: 'project_id' },
@@ -54,16 +55,17 @@ async function countFor(table: string, column: string, projectId: string): Promi
   return count ?? 0;
 }
 
-/** Addons live under a product, so count them for the whole project at once. */
-async function countAddons(projectId: string): Promise<number> {
+/** Option groups live under a product, so count them for the whole project at once. */
+async function countOptions(projectId: string): Promise<number> {
   const { data: prods, error } = await admin.from('products').select('id').eq('project_id', projectId);
   if (error || !prods?.length) return error ? -1 : 0;
-  const { count, error: e2 } = await admin
-    .from('product_addons')
-    .select('*', { count: 'exact', head: true })
-    .in('product_id', prods.map((p) => p.id));
-  if (e2) return -1;
-  return count ?? 0;
+  const ids = prods.map((p) => p.id);
+  const [groups, choices] = await Promise.all([
+    admin.from('option_groups').select('*', { count: 'exact', head: true }).in('product_id', ids),
+    admin.from('option_choices').select('id, option_groups!inner(product_id)', { count: 'exact', head: true }).in('option_groups.product_id', ids),
+  ]);
+  if (groups.error || choices.error) return -1;
+  return (groups.count ?? 0) + (choices.count ?? 0);
 }
 
 async function main(): Promise<void> {
@@ -90,7 +92,12 @@ async function main(): Promise<void> {
     .insert({ project_id: projectId, name: 'p', price: 1, category_id: cat!.id, is_available: true })
     .select('id')
     .single();
-  await admin.from('product_addons').insert({ product_id: prod!.id, name: 'a', price: 0.5, is_available: true });
+  const { data: optGroup } = await admin
+    .from('option_groups')
+    .insert({ product_id: prod!.id, name: 'g', min_select: 1, max_select: 1, sort_order: 0 })
+    .select('id')
+    .single();
+  await admin.from('option_choices').insert({ group_id: optGroup!.id, name: 'a', price: 0.5, is_available: true, sort_order: 0 });
   await admin.from('tables').insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: 'x' });
   const { data: order } = await admin
     .from('orders')
@@ -108,7 +115,7 @@ async function main(): Promise<void> {
   // --- assert they are all there BEFORE cleanup ----------------------------
   const before: string[] = [];
   for (const t of TABLES) {
-    const n = t.table === 'product_addons' ? await countAddons(projectId) : await countFor(t.table, t.column, projectId);
+    const n = t.table === 'option_groups' ? await countOptions(projectId) : await countFor(t.table, t.column, projectId);
     before.push(`${t.table}=${n}`);
     if (n <= 0) console.log(`  ⚠️  ${t.table} had ${n} rows before cleanup (check the insert above)`);
   }
@@ -121,13 +128,13 @@ async function main(): Promise<void> {
   let failures = 0;
   console.log('AFTER  cleanup:');
   {
-    const n = await countAddons(projectId);
+    const n = await countOptions(projectId);
     const ok = n === 0;
     if (!ok) failures += 1;
-    console.log(`  ${ok ? '✅' : '❌'} ${'product_addons'.padEnd(22)} ${n}`);
+    console.log(`  ${ok ? '✅' : '❌'} ${'option_groups+choices'.padEnd(22)} ${n}`);
   }
   for (const t of TABLES) {
-    const n = t.table === 'product_addons' ? await countAddons(projectId) : await countFor(t.table, t.column, projectId);
+    const n = t.table === 'option_groups' ? await countOptions(projectId) : await countFor(t.table, t.column, projectId);
     const ok = n === 0;
     if (!ok) failures += 1;
     console.log(`  ${ok ? '✅' : '❌'} ${t.table.padEnd(22)} ${n}`);

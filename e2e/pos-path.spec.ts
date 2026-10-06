@@ -45,17 +45,23 @@ test.beforeAll(async () => {
     .select('id')
     .single();
 
-  // Product WITH an addon — exercises the addon picker in POS.
+  // Product WITH an option group — exercises the option picker in POS.
   const { data: prod } = await admin
     .from('products')
     .insert({ project_id: projectId, name: 'موهيتو', price: 1.5, category_id: cat!.id, is_available: true })
     .select('id')
     .single();
-  await admin.from('product_addons').insert({
-    product_id: prod!.id,
+  const { data: optGroup } = await admin
+    .from('option_groups')
+    .insert({ product_id: prod!.id, name: 'إضافات', min_select: 0, max_select: 1, sort_order: 0 })
+    .select('id')
+    .single();
+  await admin.from('option_choices').insert({
+    group_id: optGroup!.id,
     name: 'نعناع إضافي',
     price: 0.25,
     is_available: true,
+    sort_order: 0,
   });
 
   await admin
@@ -71,7 +77,7 @@ test.afterAll(async () => {
   await cleanupTestUser(email);
 });
 
-test('POS: add product + addon → confirm → order lands with correct price', async ({ page, context }) => {
+test('POS: add product + option → confirm → order lands with correct price', async ({ page, context }) => {
   const authCookies = await getAuthCookies(email, TEST_PASSWORD);
   await context.addCookies(authCookies);
 
@@ -84,12 +90,13 @@ test('POS: add product + addon → confirm → order lands with correct price', 
   await expect(card).toBeVisible({ timeout: 20_000 });
   await card.click();
 
-  // 3. Addon picker appears (dialog) → check the addon checkbox.
-  const picker = page.getByRole('dialog', { name: /إضافات — موهيتو/ });
+  // 3. Option picker appears (dialog) → pick the variety.
+  const picker = page.getByRole('dialog', { name: /خيارات — موهيتو/ });
   await expect(picker).toBeVisible({ timeout: 15_000 });
-  const addonCheckbox = picker.getByText('نعناع إضافي', { exact: false });
-  await expect(addonCheckbox).toBeVisible({ timeout: 15_000 });
-  await addonCheckbox.click();
+  const variety = picker.getByRole('checkbox', { name: /نعناع إضافي/ });
+  await expect(variety).toBeVisible({ timeout: 15_000 });
+  await variety.click();
+  await expect(variety).toHaveAttribute('aria-checked', 'true');
 
   // 4. Confirm adding to cart.
   await picker.getByRole('button', { name: 'إضافة للسلة', exact: true }).click();
@@ -99,11 +106,11 @@ test('POS: add product + addon → confirm → order lands with correct price', 
     await page.getByLabel('سلة الطلب').click().catch(() => {});
   });
 
-  // 6. Cart shows the item with the addon price included (1.5 + 0.25 = 1.750).
+  // 6. Cart shows the item with the option price included (1.5 + 0.25 = 1.750).
   const cartItem = page.getByText('موهيتو', { exact: false }).first();
   await expect(cartItem).toBeVisible({ timeout: 15_000 });
   const totalText = await page.getByText(/1\.750|1\.75/).first().textContent().catch(() => '');
-  expect(totalText, `cart total should include addon: ${totalText}`).toBeTruthy();
+  expect(totalText, `cart total should include the option: ${totalText}`).toBeTruthy();
 
   // 7. Confirm the order → success toast with the order number. Measure the
   // user-visible latency (click → toast) as a perf regression check.

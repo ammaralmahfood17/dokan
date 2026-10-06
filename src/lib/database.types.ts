@@ -305,34 +305,84 @@ export type Database = {
           },
         ]
       }
-      product_addons: {
+      option_groups: {
         Row: {
+          created_at: string
           id: string
-          is_available: boolean
+          max_select: number
+          min_select: number
           name: string
-          price: number
+          name_en: string | null
           product_id: string
+          sort_order: number
         }
         Insert: {
+          created_at?: string
           id?: string
-          is_available?: boolean
+          max_select?: number
+          min_select?: number
           name: string
-          price?: number
+          name_en?: string | null
           product_id: string
+          sort_order?: number
         }
         Update: {
+          created_at?: string
           id?: string
-          is_available?: boolean
+          max_select?: number
+          min_select?: number
           name?: string
-          price?: number
+          name_en?: string | null
           product_id?: string
+          sort_order?: number
         }
         Relationships: [
           {
-            foreignKeyName: "product_addons_product_id_fkey"
+            foreignKeyName: "option_groups_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      option_choices: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          is_available: boolean
+          name: string
+          name_en: string | null
+          price: number
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          is_available?: boolean
+          name: string
+          name_en?: string | null
+          price?: number
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          is_available?: boolean
+          name?: string
+          name_en?: string | null
+          price?: number
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "option_choices_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "option_groups"
             referencedColumns: ["id"]
           },
         ]

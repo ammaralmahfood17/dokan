@@ -10,16 +10,37 @@ import { formatMoney, money, currencyDecimals } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { Toggle } from '@/components/ui/toggle';
-import type { Category, Product, ProductAddon } from '@/lib/types';
+import type { Category, Product, ProductOptionGroup } from '@/lib/types';
 import type { Database } from '@/lib/database.types';
 import { toast } from 'sonner';
 import { validateProduct, type FieldErrors } from '@/lib/products-utils';
 import { ImageUploader } from '@/components/dashboard/products/image-uploader';
 
-export type ProductWithAddons = Product & { product_addons: ProductAddon[] };
+export type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
 
-/** Temporary addon line in the product form — id is set for existing (persisted) addons */
-type FormAddon = { key: string; id?: string; name: string; price: string };
+/** Temporary option variety in the product form — id is set for persisted rows. */
+type FormChoice = { key: string; id?: string; name: string; price: string };
+
+/**
+ * Temporary option group in the product form.
+ *
+ * `required` and `single` are the merchant-facing switches the owner asked for
+ * («أحدد لكل خيار: نوع واحد أو متعدد + إلزامي أو اختياري»); they map to
+ * min_select / max_select on save. A multi group is written with a wide max —
+ * the server clamps it to however many varieties are actually available, so a
+ * sold-out variety can never make the group impossible to satisfy.
+ */
+type FormGroup = {
+  key: string;
+  id?: string;
+  name: string;
+  required: boolean;
+  single: boolean;
+  choices: FormChoice[];
+};
+
+/** max_select stored for a "multiple" group (see FormGroup). */
+const UNLIMITED_MAX = 99;
 
 function revalidateMenuCache(projectId: string) {
   void fetch('/api/revalidate-menu', {
@@ -51,14 +72,14 @@ export function ProductFormModal({
   projectId: string;
   currency: string;
   categories: Category[];
-  products: ProductWithAddons[];
+  products: ProductWithOptions[];
   /** المنتج الجاري تعديله — null = إنشاء جديد */
-  editing: ProductWithAddons | null;
+  editing: ProductWithOptions | null;
   onClose: () => void;
   /** (product, editingId|null) — يحدّث القائمة في الـ parent */
-  onSaved: (product: ProductWithAddons, editingId: string | null) => void;
+  onSaved: (product: ProductWithOptions, editingId: string | null) => void;
   /** طلب فتح تأكيد الحذف (زر الحذف داخل نموذج التعديل) */
-  onRequestDelete: (p: ProductWithAddons) => void;
+  onRequestDelete: (p: ProductWithOptions) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState(editing?.name ?? '');
@@ -72,13 +93,26 @@ export function ProductFormModal({
   // portions; is_available above remains their manual switch.
   const [stock, setStock] = useState(editing?.stock != null ? String(editing.stock) : '');
   const [imageUrl, setImageUrl] = useState(editing?.image_url ?? '');
-  const [formAddons, setFormAddons] = useState<FormAddon[]>(
-    (editing?.product_addons || []).map((a) => ({
-      key: `init_${a.id}`,
-      id: a.id,
-      name: a.name,
-      price: String(a.price),
-    }))
+  const [formGroups, setFormGroups] = useState<FormGroup[]>(
+    (editing?.option_groups || [])
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((g) => ({
+        key: `init_${g.id}`,
+        id: g.id,
+        name: g.name,
+        required: g.min_select >= 1,
+        single: g.max_select <= 1,
+        choices: (g.option_choices ?? [])
+          .slice()
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((c) => ({
+            key: `init_${c.id}`,
+            id: c.id,
+            name: c.name,
+            price: String(c.price),
+          })),
+      }))
   );
 
   // Validation errors
@@ -88,27 +122,60 @@ export function ProductFormModal({
   const [showQuickCat, setShowQuickCat] = useState(false);
   const [quickCatName, setQuickCatName] = useState('');
 
-  const addonKeyRef = useRef(0);
-  const nextAddonKey = useCallback(() => {
-    addonKeyRef.current += 1;
-    return `addon_${addonKeyRef.current}`;
+  const formKeyRef = useRef(0);
+  const nextFormKey = useCallback((prefix: string) => {
+    formKeyRef.current += 1;
+    return `${prefix}_${formKeyRef.current}`;
   }, []);
 
-  function addFormAddon() {
-    setFormAddons((prev) => [
+  function addFormGroup() {
+    setFormGroups((prev) => [
       ...prev,
-      { key: nextAddonKey(), name: '', price: '0.500' },
+      {
+        key: nextFormKey('group'),
+        name: '',
+        required: true,
+        single: true,
+        // Start with one empty variety so the merchant sees the shape immediately.
+        choices: [{ key: nextFormKey('choice'), name: '', price: '0' }],
+      },
     ]);
   }
 
-  function updateFormAddon(key: string, field: 'name' | 'price', value: string) {
-    setFormAddons((prev) =>
-      prev.map((a) => (a.key === key ? { ...a, [field]: value } : a))
+  function updateFormGroup(key: string, patch: Partial<Pick<FormGroup, 'name' | 'required' | 'single'>>) {
+    setFormGroups((prev) => prev.map((g) => (g.key === key ? { ...g, ...patch } : g)));
+  }
+
+  function removeFormGroup(key: string) {
+    setFormGroups((prev) => prev.filter((g) => g.key !== key));
+  }
+
+  function addFormChoice(groupKey: string) {
+    setFormGroups((prev) =>
+      prev.map((g) =>
+        g.key === groupKey
+          ? { ...g, choices: [...g.choices, { key: nextFormKey('choice'), name: '', price: '0' }] }
+          : g
+      )
     );
   }
 
-  function removeFormAddon(key: string) {
-    setFormAddons((prev) => prev.filter((a) => a.key !== key));
+  function updateFormChoice(groupKey: string, choiceKey: string, field: 'name' | 'price', value: string) {
+    setFormGroups((prev) =>
+      prev.map((g) =>
+        g.key === groupKey
+          ? { ...g, choices: g.choices.map((c) => (c.key === choiceKey ? { ...c, [field]: value } : c)) }
+          : g
+      )
+    );
+  }
+
+  function removeFormChoice(groupKey: string, choiceKey: string) {
+    setFormGroups((prev) =>
+      prev.map((g) =>
+        g.key === groupKey ? { ...g, choices: g.choices.filter((c) => c.key !== choiceKey) } : g
+      )
+    );
   }
 
   // ----- Inline Quick Category -----
@@ -144,21 +211,49 @@ export function ProductFormModal({
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
-    // Validate addon prices FIRST — abort on any invalid one (no silent drops)
-    for (const a of formAddons) {
-      if (!a.name.trim()) continue;
-      const addonPrice = Number(a.price);
-      if (!Number.isFinite(addonPrice) || addonPrice < 0) {
-        toast.error(`سعر الإضافة «${a.name.trim()}» غير صالح`);
+    // ── Option groups ────────────────────────────────────────────────────
+    // A group with no varieties would render nothing on the menu, so an empty
+    // one is rejected instead of being saved as dead weight. A completely
+    // untouched row (no name, no varieties) is just ignored.
+    const cleanGroups: {
+      name: string;
+      min_select: number;
+      max_select: number;
+      choices: { name: string; price: number }[];
+    }[] = [];
+    for (const g of formGroups) {
+      const groupName = g.name.trim();
+      const choices = g.choices.filter((c) => c.name.trim().length > 0);
+      if (!groupName && choices.length === 0) continue;
+      if (!groupName) {
+        toast.error('اكتب اسم الخيار');
         return;
       }
+      if (choices.length === 0) {
+        toast.error(`أضف نوعاً واحداً على الأقل في «${groupName}»`);
+        return;
+      }
+      for (const c of choices) {
+        const choicePrice = Number(c.price);
+        if (!Number.isFinite(choicePrice) || choicePrice < 0) {
+          toast.error(`سعر «${c.name.trim()}» غير صالح`);
+          return;
+        }
+      }
+      cleanGroups.push({
+        name: groupName,
+        min_select: g.required ? 1 : 0,
+        max_select: g.single ? 1 : UNLIMITED_MAX,
+        choices: choices.map((c) => ({
+          name: c.name.trim(),
+          price: money(Number(c.price), currencyDecimals(currency)),
+        })),
+      });
     }
 
     const parsedPrice = Number(price);
 
     // Stock must be a whole, non-negative count — or empty for untracked.
-    // Rejecting here keeps the DB check constraint from surfacing as a
-    // generic «فشل الإضافة».
     if (stock.trim()) {
       const n = Number(stock);
       if (!Number.isInteger(n) || n < 0) {
@@ -169,6 +264,59 @@ export function ProductFormModal({
 
     setLoading(true);
     const supabase = createClient();
+
+    /**
+     * Replace a product's whole option tree.
+     *
+     * Wholesale replace, not a diff: the tree is tiny, deleting a group cascades
+     * its varieties, and nothing durable references a choice id — an order line
+     * stores a name+price SNAPSHOT — so a diff would cost three loops and buy
+     * nothing. Varieties are written available; the form has no per-variety
+     * sold-out switch (the old addon editor did not either).
+     */
+    async function persistOptions(productId: string): Promise<boolean> {
+      const { error: delErr } = await supabase
+        .from('option_groups')
+        .delete()
+        .eq('product_id', productId);
+      if (delErr) {
+        console.error('[Products] Failed to clear option groups:', delErr);
+        return false;
+      }
+      for (let gi = 0; gi < cleanGroups.length; gi++) {
+        const g = cleanGroups[gi];
+        const { data: groupRow, error: groupErr } = await supabase
+          .from('option_groups')
+          .insert({
+            product_id: productId,
+            name: g.name,
+            min_select: g.min_select,
+            max_select: g.max_select,
+            sort_order: gi,
+          })
+          .select('id')
+          .single();
+        if (groupErr || !groupRow) {
+          console.error('[Products] Failed to insert option group:', groupErr);
+          return false;
+        }
+        const { error: choiceErr } = await supabase.from('option_choices').insert(
+          g.choices.map((c, ci) => ({
+            group_id: groupRow.id,
+            name: c.name,
+            price: c.price,
+            is_available: true,
+            sort_order: ci,
+          }))
+        );
+        if (choiceErr) {
+          console.error('[Products] Failed to insert option varieties:', choiceErr);
+          return false;
+        }
+      }
+      return true;
+    }
+
     try {
       const updatePayload: Database['public']['Tables']['products']['Update'] = {
         name: name.trim(),
@@ -181,22 +329,13 @@ export function ProductFormModal({
         stock: parseStockInput(stock),
       };
 
-      const processedAddons: { id?: string; name: string; price: number }[] =
-        formAddons
-          .filter((a) => a.name.trim().length > 0)
-          .map((a) => ({
-            id: a.id,
-            name: a.name.trim(),
-            price: money(Number(a.price), currencyDecimals(currency)),
-          }));
-
       if (editing) {
         const { data, error } = await supabase
           .from('products')
           .update(updatePayload)
           .eq('id', editing.id)
           .eq('project_id', projectId)
-          .select('*, product_addons(*)')
+          .select('*, option_groups(*, option_choices(*))')
           .single();
 
         if (error || !data) {
@@ -204,7 +343,7 @@ export function ProductFormModal({
           return;
         }
 
-        // Verify the product still belongs to this project before touching addons
+        // Verify the product still belongs to this project before touching options
         const { data: owned } = await supabase
           .from('products')
           .select('id')
@@ -216,61 +355,19 @@ export function ProductFormModal({
           return;
         }
 
-        // Upsert addons: update in place (keeps id + is_available), insert new, delete removed
-        const currentAddons = editing.product_addons || [];
-        const keptIds = new Set(
-          processedAddons.filter((a): a is { id: string; name: string; price: number } => !!a.id).map((a) => a.id)
-        );
-        const removedAddons = currentAddons.filter((a) => !keptIds.has(a.id));
-
-        if (removedAddons.length > 0) {
-          const { error: deleteAddonErr } = await supabase
-            .from('product_addons')
-            .delete()
-            .eq('product_id', editing.id)
-            .in('id', removedAddons.map((a) => a.id));
-          if (deleteAddonErr) {
-            console.error('[Products] Failed to delete removed addons:', deleteAddonErr);
-            toast.error('فشل تحديث الإضافات');
-            return;
-          }
-        }
-
-        for (const a of processedAddons) {
-          if (a.id) {
-            const { error: updErr } = await supabase
-              .from('product_addons')
-              .update({ name: a.name, price: a.price })
-              .eq('product_id', editing.id)
-              .eq('id', a.id);
-            if (updErr) {
-              console.error('[Products] Failed to update addon:', updErr);
-              toast.error('فشل تحديث الإضافات');
-              return;
-            }
-          } else {
-            const { error: insErr } = await supabase.from('product_addons').insert({
-              product_id: editing.id,
-              name: a.name,
-              price: a.price,
-              is_available: true,
-            });
-            if (insErr) {
-              console.error('[Products] Failed to insert new addon:', insErr);
-              toast.error('فشل إضافة الإضافات');
-              return;
-            }
-          }
+        if (!(await persistOptions(editing.id))) {
+          toast.error('فشل تحديث الخيارات');
+          return;
         }
 
         const { data: refreshed } = await supabase
           .from('products')
-          .select('*, product_addons(*)')
+          .select('*, option_groups(*, option_choices(*))')
           .eq('id', editing.id)
           .single();
 
         if (refreshed) {
-          onSaved(refreshed as ProductWithAddons, editing.id);
+          onSaved(refreshed as ProductWithOptions, editing.id);
         }
         toast.success('تم تحديث المنتج');
         onClose();
@@ -300,7 +397,7 @@ export function ProductFormModal({
           return;
         }
 
-        // Verify the new product belongs to this project before adding addons
+        // Verify the new product belongs to this project before adding options
         const { data: owned } = await supabase
           .from('products')
           .select('id')
@@ -312,29 +409,18 @@ export function ProductFormModal({
           return;
         }
 
-        if (processedAddons.length > 0) {
-          const { error: insAddonErr } = await supabase.from('product_addons').insert(
-            processedAddons.map((a) => ({
-              product_id: data.id,
-              name: a.name,
-              price: a.price,
-              is_available: true,
-            }))
-          );
-          if (insAddonErr) {
-            console.error('[Products] Failed to insert addons:', insAddonErr);
-            toast.error('أُضيف المنتج لكن فشلت الإضافات');
-          }
+        if (!(await persistOptions(data.id))) {
+          toast.error('أُضيف المنتج لكن فشلت الخيارات');
         }
 
-        const { data: withAddons } = await supabase
+        const { data: withOptions } = await supabase
           .from('products')
-          .select('*, product_addons(*)')
+          .select('*, option_groups(*, option_choices(*))')
           .eq('id', data.id)
           .single();
 
         onSaved(
-          (withAddons ?? { ...data, product_addons: [] }) as ProductWithAddons,
+          (withOptions ?? { ...data, option_groups: [] }) as ProductWithOptions,
           null
         );
         toast.success('تمت إضافة المنتج');
@@ -348,6 +434,7 @@ export function ProductFormModal({
       setLoading(false);
     }
   }
+
 
   return (
     <Modal title={editing ? 'تعديل منتج' : 'منتج جديد'} onClose={onClose}>
@@ -505,58 +592,118 @@ export function ProductFormModal({
           productName={name.trim() || undefined}
         />
 
-        {/* ======== ADDONS ======== */}
+        {/* ======== OPTIONS — «خيارات» وكل خيار له «أنواع» بسعر لكل نوع ======== */}
         <fieldset className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <legend className="label mb-0">الإضافات <span className="text-[var(--color-text-muted)]">(اختياري)</span></legend>
+          <div className="mb-1 flex items-center justify-between">
+            <legend className="label mb-0">
+              الخيارات <span className="text-[var(--color-text-muted)]">(اختياري)</span>
+            </legend>
             <button
               type="button"
-              onClick={addFormAddon}
+              onClick={addFormGroup}
               className="btn btn-ghost btn-sm gap-1"
             >
               <Plus className="h-3.5 w-3.5" />
-              إضافة
+              خيار جديد
             </button>
           </div>
+          <p className="mb-3 text-[11.5px] leading-relaxed text-[var(--color-text-muted)]">
+            مثال: خيار «الحجم» وأنواعه صغير / وسط / كبير — ولكل نوع سعره.
+          </p>
 
-          {formAddons.length === 0 && (
+          {formGroups.length === 0 && (
             <p className="rounded-[var(--radius-md)] bg-[var(--color-surface)] px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
-              ما فيه إضافات. أضف إضافات مثل {`{حليب، صوص، جبنة إضافية}`}
+              ما فيه خيارات.
             </p>
           )}
 
-          {formAddons.map((addon) => (
+          {formGroups.map((group) => (
             <div
-              key={addon.key}
-              className="mb-2 flex items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] p-2"
+              key={group.key}
+              className="mb-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
             >
-              <input
-                className="input flex-1 text-sm"
-                placeholder="اسم الإضافة"
-                maxLength={50}
-                value={addon.name}
-                onChange={(e) => updateFormAddon(addon.key, 'name', e.target.value)}
-              />
-              <div className="relative w-24 shrink-0">
+              <div className="mb-2 flex items-center gap-2">
                 <input
-                  className="input w-full text-sm"
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  dir="ltr"
-                  inputMode="decimal"
-                  placeholder={`0.${'0'.repeat(currencyDecimals(currency))}`}
-                  value={addon.price}
-                  onChange={(e) => updateFormAddon(addon.key, 'price', e.target.value)}
+                  className="input flex-1 text-sm"
+                  placeholder="اسم الخيار (مثال: الحجم)"
+                  maxLength={50}
+                  value={group.name}
+                  onChange={(e) => updateFormGroup(group.key, { name: e.target.value })}
+                  aria-label="اسم الخيار"
                 />
+                <button
+                  type="button"
+                  onClick={() => removeFormGroup(group.key)}
+                  aria-label={`حذف الخيار ${group.name || ''}`.trim()}
+                  className="btn btn-ghost btn-sm shrink-0 text-[var(--color-danger)]"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
+
+              <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]">
+                <label className="flex min-h-[32px] cursor-pointer items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={group.single}
+                    onChange={(e) => updateFormGroup(group.key, { single: e.target.checked })}
+                  />
+                  يختار نوعاً واحداً
+                </label>
+                <label className="flex min-h-[32px] cursor-pointer items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={group.required}
+                    onChange={(e) => updateFormGroup(group.key, { required: e.target.checked })}
+                  />
+                  إلزامي
+                </label>
+              </div>
+
+              <p className="mb-1.5 text-[11.5px] font-semibold text-[var(--color-text-secondary)]">الأنواع</p>
+              {group.choices.map((choice) => (
+                <div key={choice.key} className="mb-2 flex items-center gap-2">
+                  <input
+                    className="input flex-1 text-sm"
+                    placeholder="اسم النوع (مثال: كبير)"
+                    maxLength={50}
+                    value={choice.name}
+                    onChange={(e) => updateFormChoice(group.key, choice.key, 'name', e.target.value)}
+                    aria-label="اسم النوع"
+                  />
+                  <div className="relative w-24 shrink-0">
+                    <input
+                      className="input w-full text-sm"
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      dir="ltr"
+                      inputMode="decimal"
+                      placeholder={`0.${'0'.repeat(currencyDecimals(currency))}`}
+                      value={choice.price}
+                      onChange={(e) => updateFormChoice(group.key, choice.key, 'price', e.target.value)}
+                      aria-label="سعر النوع"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeFormChoice(group.key, choice.key)}
+                    aria-label={`حذف النوع ${choice.name || ''}`.trim()}
+                    className="btn btn-ghost btn-sm shrink-0 text-[var(--color-danger)]"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
               <button
                 type="button"
-                onClick={() => removeFormAddon(addon.key)}
-                aria-label={`حذف الإضافة ${addon.name || ''}`.trim()}
-                className="btn btn-ghost btn-sm shrink-0 text-[var(--color-danger)]"
+                onClick={() => addFormChoice(group.key)}
+                className="btn btn-ghost btn-sm gap-1"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Plus className="h-3.5 w-3.5" />
+                نوع
               </button>
             </div>
           ))}

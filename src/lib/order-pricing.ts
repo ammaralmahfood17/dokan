@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@/lib/database.types';
-import type { OrderItemAddon, OrderType, PublicOrderItemInput } from '@/lib/types';
+import type { OrderItemOption, OrderType, ProductOptionGroup, PublicOrderItemInput } from '@/lib/types';
+import { validateOptionSelection, selectedChoices } from '@/lib/product-options';
 import { money, currencyDecimals } from '@/lib/utils';
 import { remainingStock } from '@/lib/product-stock';
 
@@ -11,7 +12,7 @@ export type ValidatedOrderLine = {
   product_name: string;
   quantity: number;
   unit_price: number;
-  addons: OrderItemAddon[];
+  addons: OrderItemOption[];
   notes: string | null;
 };
 
@@ -97,35 +98,34 @@ export async function createSecureOrder(
   // query time (each ~250ms Vercel→Supabase). Fetch ALL products and ALL
   // addons in two parallel queries instead, then resolve lines in memory.
   const productIds = [...new Set(items.map((i) => String(i.productId).trim()))];
-  const addonIds = [
-    ...new Set(
-      items.flatMap((i) =>
-        (Array.isArray(i.addonIds) ? i.addonIds : []).map((a) => String(a).trim())
-      )
-    ),
-  ];
 
-  const [productsRes, addonsRes] = await Promise.all([
+  // Option groups are fetched for EVERY requested product (not just the ids the
+  // customer sent), because the group rules — min_select / max_select — can only
+  // be enforced with the whole group in hand. The RPC re-validates all of this
+  // authoritatively; this pass exists to answer with a readable message.
+  const [productsRes, groupsRes] = await Promise.all([
     supabase
       .from('products')
       .select('id, name, price, is_available, stock, project_id')
       .in('id', productIds)
       .eq('project_id', projectId),
-    addonIds.length > 0
+    productIds.length > 0
       ? supabase
-          .from('product_addons')
-          .select('id, name, price, is_available, product_id')
-          .in('id', addonIds)
-          .eq('is_available', true)
+          .from('option_groups')
+          .select(
+            'id, product_id, name, min_select, max_select, sort_order, option_choices(id, name, price, is_available, sort_order)'
+          )
+          .in('product_id', productIds)
+          .order('sort_order', { ascending: true })
       : Promise.resolve({ data: [] as never[] }),
   ]);
   const productsById = new Map((productsRes.data ?? []).map((p) => [p.id, p]));
-  // Group addons by product so each line can validate its own set.
-  const addonsByProduct = new Map<string, NonNullable<typeof addonsRes.data>[number][]>();
-  for (const a of addonsRes.data ?? []) {
-    const list = addonsByProduct.get(a.product_id) ?? [];
-    list.push(a);
-    addonsByProduct.set(a.product_id, list);
+  // Group the option groups by product so each line validates against its own.
+  const groupsByProduct = new Map<string, ProductOptionGroup[]>();
+  for (const g of (groupsRes.data ?? []) as unknown as ProductOptionGroup[]) {
+    const list = groupsByProduct.get(g.product_id) ?? [];
+    list.push(g);
+    groupsByProduct.set(g.product_id, list);
   }
 
   for (const item of items) {
@@ -172,38 +172,25 @@ export async function createSecureOrder(
       };
     }
 
-    const addonIdsForLine = Array.isArray(item.addonIds) ? item.addonIds.map((a) => String(a).trim()) : [];
-    const addonDetails: OrderItemAddon[] = [];
-    let addonTotal = 0;
+    const optionIdsForLine = Array.isArray(item.optionIds) ? item.optionIds.map((a) => String(a).trim()) : [];
+    const lineGroups = groupsByProduct.get(product.id) ?? [];
 
-    if (addonIdsForLine.length > 0) {
-      // Only addons belonging to THIS product, from the pre-fetched set.
-      const productAddons = (addonsByProduct.get(product.id) ?? []).filter((a) =>
-        addonIdsForLine.includes(a.id)
-      );
-      const found = productAddons;
-
-      // Reject if any requested addon is missing or wrong product
-      if (found.length !== addonIdsForLine.length) {
-        return {
-          ok: false,
-          error: 'إضافة غير صالحة',
-          status: 400,
-        };
-      }
-
-      for (const addon of found) {
-        const price = money(Number(addon.price), decimals);
-        addonTotal = money(addonTotal + price, decimals);
-        addonDetails.push({
-          id: addon.id,
-          name: addon.name,
-          price,
-        });
-      }
+    // Same rules the RPC enforces, from the same module, so the UI and the
+    // server can never disagree about required/min/max.
+    const violation = validateOptionSelection(lineGroups, optionIdsForLine);
+    if (violation) {
+      return { ok: false, error: violation.message, status: 400 };
     }
 
-    const unitPrice = money(Number(product.price) + addonTotal, decimals);
+    const optionDetails: OrderItemOption[] = [];
+    let optionTotal = 0;
+    for (const choice of selectedChoices(lineGroups, optionIdsForLine)) {
+      const price = money(Number(choice.price), decimals);
+      optionTotal = money(optionTotal + price, decimals);
+      optionDetails.push({ id: choice.id, name: choice.name, price });
+    }
+
+    const unitPrice = money(Number(product.price) + optionTotal, decimals);
     const lineTotal = money(unitPrice * quantity, decimals);
     totalAmount = money(totalAmount + lineTotal, decimals);
 
@@ -212,7 +199,7 @@ export async function createSecureOrder(
       product_name: product.name,
       quantity,
       unit_price: unitPrice,
-      addons: addonDetails,
+      addons: optionDetails,
       notes: itemNotes.trim() || null,
     });
   }
@@ -265,8 +252,15 @@ export async function createSecureOrder(
     if (msg.includes('ITEM_UNAVAILABLE')) {
       return { ok: false, error: 'أحد الأصناف لم يعد متوفراً — حدّث القائمة', status: 409 };
     }
-    if (msg.includes('ADDON_UNAVAILABLE')) {
-      return { ok: false, error: 'إضافة لم تعد متوفرة — حدّث القائمة', status: 409 };
+    // Options (migration 20261006190000). The RPC re-checks the choice set and
+    // the group rules under a row lock, so a merchant edit between our read and
+    // the insert lands here — as a 409 telling the customer to refresh, not as a
+    // charge for something the kitchen cannot make.
+    if (msg.includes('OPTION_UNAVAILABLE')) {
+      return { ok: false, error: 'أحد الخيارات لم يعد متوفراً — حدّث القائمة', status: 409 };
+    }
+    if (msg.includes('OPTION_SELECTION_INVALID')) {
+      return { ok: false, error: 'اختيار الخيارات غير مكتمل — حدّث القائمة وأعد الاختيار', status: 409 };
     }
     // Stock ran out between our read and the insert (or another cart took the
     // last portions first). Same 409 family as the item-unavailable case.

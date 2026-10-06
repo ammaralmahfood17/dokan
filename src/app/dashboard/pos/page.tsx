@@ -2,9 +2,9 @@ import { redirect } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { getCurrentProject } from '@/lib/project';
 import { createClient } from '@/lib/supabase/server';
-import type { Product, ProductAddon } from '@/lib/types';
+import type { Product, ProductOptionGroup } from '@/lib/types';
 
-type ProductWithAddons = Product & { product_addons: ProductAddon[] };
+type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
 
 /**
  * Dynamic import: PosClient lives in its own JS chunk.
@@ -14,7 +14,7 @@ type ProductWithAddons = Product & { product_addons: ProductAddon[] };
 const PosClient = dynamic<{
   projectId: string;
   currency: string;
-  products: (Product & { product_addons: ProductAddon[] })[];
+  products: (Product & { option_groups: ProductOptionGroup[] })[];
   // UX-U12: تكرار المنتجات
   productFrequency?: Record<string, number>;
 }>(
@@ -86,7 +86,7 @@ export default async function PosPage() {
   const supabase = await createClient();
   const { data: products } = await supabase
     .from('products')
-    .select('*, product_addons(*)')
+    .select('*, option_groups(*, option_choices(*))')
     .eq('project_id', ctx.project.id)
     .order('sort_order');
 
@@ -111,7 +111,7 @@ export default async function PosPage() {
       projectId={ctx.project.id}
       currency={ctx.project.currency}
       products={
-        (products ?? []) as (Product & { product_addons: ProductAddon[] })[]
+        (products ?? []) as (Product & { option_groups: ProductOptionGroup[] })[]
       }
       productFrequency={frequency}
     />

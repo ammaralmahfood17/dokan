@@ -7,7 +7,7 @@
 import { Dispatch, SetStateAction, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { revalidateMenuCache } from '@/lib/products-utils';
-import type { ProductWithAddons } from '@/components/dashboard/products/product-card';
+import type { ProductWithOptions } from '@/components/dashboard/products/product-card';
 import { toast } from 'sonner';
 
 export function useProductBulk({
@@ -16,8 +16,8 @@ export function useProductBulk({
   setProducts,
 }: {
   projectId: string;
-  visibleProducts: ProductWithAddons[];
-  setProducts: Dispatch<SetStateAction<ProductWithAddons[]>>;
+  visibleProducts: ProductWithOptions[];
+  setProducts: Dispatch<SetStateAction<ProductWithOptions[]>>;
 }) {
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

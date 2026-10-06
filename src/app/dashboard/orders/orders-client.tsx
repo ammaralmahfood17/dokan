@@ -9,7 +9,7 @@ import {
   ORDER_TYPE_LABELS,
   type Order,
   type OrderItem,
-  type OrderItemAddon,
+  type OrderItemOption,
   type OrderStatus,
 } from '@/lib/types';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -555,7 +555,7 @@ export function OrdersClient({
                         <strong>{item.quantity}×</strong> {item.product_name}
                         {Array.isArray(item.addons) && item.addons.length > 0 && (
                           <span className="block text-xs text-[var(--color-text-muted)]">
-                            {(item.addons as OrderItemAddon[])
+                            {(item.addons as OrderItemOption[])
                               .map((a) => a.name)
                               .join(' · ')}
                           </span>

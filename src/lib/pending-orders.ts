@@ -12,7 +12,7 @@ export type PendingOrderPayload = {
   items: Array<{
     productId: string;
     quantity: number;
-    addonIds: string[];
+    optionIds: string[];
     notes?: string;
   }>;
 };

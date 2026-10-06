@@ -4,13 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState , useSyncExternalStor
 import { ShoppingBag, X, Check, Bell, FileText, Search, Languages } from 'lucide-react';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
 import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
+import {
+  availableChoices,
+  effectiveBounds,
+  selectedChoices,
+  validateOptionSelection,
+} from '@/lib/product-options';
 import { langOfText } from '@/lib/i18n';
 import type {
   CartLine,
   Category,
-  OrderItemAddon,
+  OrderItemOption,
   Product,
-  ProductAddon,
+  ProductOptionChoice,
+  ProductOptionGroup,
   Project,
   Table,
 } from '@/lib/types';
@@ -48,7 +55,7 @@ import {
 const BLUR_PLACEHOLDER =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMklEQVQ4T2NkYPj/n4EBBJgYKAQMFFiAKcBAUwsDUx0DxS5gYKA8DCh2AQNlYUBZCgDxpwgRg9RXOAAAAABJRU5ErkJggg==';
 
-type ProductWithAddons = Product & { product_addons: ProductAddon[] };
+type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
 
 /** UX-6: one-tap common item notes (drinks + food, Gulf phrasing). */
 const QUICK_NOTE_CHIPS = ['بدون سكر', 'بدون ثلج', 'ثلج على جنب', 'حار زيادة'];
@@ -73,12 +80,12 @@ export function MenuClient({
    */
 
   categories: Category[];
-  products: ProductWithAddons[];
+  products: ProductWithOptions[];
 }) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
-  const [picker, setPicker] = useState<ProductWithAddons | null>(null);
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [picker, setPicker] = useState<ProductWithOptions | null>(null);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [itemNotes, setItemNotes] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -147,7 +154,7 @@ export function MenuClient({
   const orderingEnabled = !requireToken || Boolean(tableToken);
 
   const displayName = useCallback(
-    (p: ProductWithAddons) =>
+    (p: ProductWithOptions) =>
       lang === 'en' && p.name_en ? p.name_en : p.name,
     [lang]
   );
@@ -234,9 +241,9 @@ export function MenuClient({
     }, 50);
   }, []);
 
-  function openProduct(p: ProductWithAddons) {
+  function openProduct(p: ProductWithOptions) {
     setPicker(p);
-    setSelectedAddons([]);
+    setSelectedOptions([]);
     setItemNotes('');
   }
 
@@ -255,19 +262,40 @@ export function MenuClient({
     });
   }
 
+  /** Single-choice groups replace; multi groups append up to their max. */
+  function toggleOption(group: ProductOptionGroup, choiceId: string) {
+    const bounds = effectiveBounds(group);
+    const groupIds = new Set(availableChoices(group).map((c) => c.id));
+    setSelectedOptions((prev) => {
+      if (prev.includes(choiceId)) return prev.filter((id) => id !== choiceId);
+      if (bounds.max === 1) {
+        return [...prev.filter((id) => !groupIds.has(id)), choiceId];
+      }
+      const picked = availableChoices(group).filter((c) => prev.includes(c.id)).length;
+      if (picked >= bounds.max) return prev; // at the group's max — ignore the tap
+      return [...prev, choiceId];
+    });
+  }
+
   function confirmAdd() {
     if (!picker) return;
-    const addons: OrderItemAddon[] = (picker.product_addons || [])
-      .filter((a) => selectedAddons.includes(a.id) && a.is_available)
-      .map((a) => ({
-        id: a.id,
-        name: a.name,
-        price: money(Number(a.price), currencyDecimals(currency)),
-      }));
-    const addonTotal = money(addons.reduce((s, a) => s + a.price, 0), currencyDecimals(currency));
-    const unitPrice = money(Number(picker.price) + addonTotal, currencyDecimals(currency));
-    const key = `${picker.id}:${addons
-      .map((a) => a.id)
+    const groups = picker.option_groups || [];
+    // The picker disables the button while this fails, but the check runs again
+    // here so a stale render can never add a half-configured line.
+    const violation = validateOptionSelection(groups, selectedOptions);
+    if (violation) {
+      toast.error(violation.message);
+      return;
+    }
+    const options: OrderItemOption[] = selectedChoices(groups, selectedOptions).map((c) => ({
+      id: c.id,
+      name: c.name,
+      price: money(Number(c.price), currencyDecimals(currency)),
+    }));
+    const optionTotal = money(options.reduce((s, o) => s + o.price, 0), currencyDecimals(currency));
+    const unitPrice = money(Number(picker.price) + optionTotal, currencyDecimals(currency));
+    const key = `${picker.id}:${options
+      .map((o) => o.id)
       .sort()
       .join(',')}:${itemNotes.trim()}`;
 
@@ -289,7 +317,7 @@ export function MenuClient({
           productName: picker.name,
           unitPrice,
           quantity: 1,
-          addons,
+          addons: options,
           notes: itemNotes.trim(),
         },
       ];
@@ -308,7 +336,7 @@ export function MenuClient({
   }
 
   // Quick-Add: add directly without addon picker
-  function quickAdd(p: ProductWithAddons) {
+  function quickAdd(p: ProductWithOptions) {
     // UX-6 guard: sold-out cards already block interaction, but the picker/
     // stepper paths must never queue an unavailable item (server would 400).
     // 0018: a tracked product with 0 portions left is sold out too.
@@ -320,7 +348,9 @@ export function MenuClient({
       toast.error('وصلت للكمية المتوفرة من هذا الصنف', { duration: 1600 });
       return;
     }
-    if ((p.product_addons || []).filter((a) => a.is_available).length > 0) {
+    // Any group with a pickable variety needs the picker — the customer has to
+    // choose before the line can be priced.
+    if ((p.option_groups || []).some((g) => availableChoices(g).length > 0)) {
       openProduct(p);
       return;
     }
@@ -392,7 +422,7 @@ export function MenuClient({
           items: cart.map((l) => ({
             productId: l.productId,
             quantity: l.quantity,
-            addonIds: l.addons.map((a) => a.id),
+            optionIds: l.addons.map((a) => a.id),
             notes: l.notes || undefined,
           })),
         }),
@@ -451,7 +481,7 @@ export function MenuClient({
           items: cart.map((l) => ({
             productId: l.productId,
             quantity: l.quantity,
-            addonIds: l.addons.map((a) => a.id),
+            optionIds: l.addons.map((a) => a.id),
             notes: l.notes || undefined,
           })),
         };
@@ -527,6 +557,26 @@ export function MenuClient({
   // ======== CART BAR BADGE ========
   const cartBadge = itemCount > 0;
 
+  // ---- Product picker: option groups, live total, and the one reason the
+  // "add" button is still disabled. All derived from the SAME rules module the
+  // server prices with, so the UI can never accept something the API rejects.
+  const pickerGroups = picker
+    ? (picker.option_groups || []).filter((g) => availableChoices(g).length > 0)
+    : [];
+  const pickerViolation = picker
+    ? validateOptionSelection(picker.option_groups || [], selectedOptions)
+    : null;
+  const pickerTotal = picker
+    ? money(
+        Number(picker.price) +
+          selectedChoices(picker.option_groups || [], selectedOptions).reduce(
+            (sum, c) => sum + Number(c.price),
+            0
+          ),
+        currencyDecimals(currency)
+      )
+    : 0;
+
   /** Total qty of this product across all cart lines (addon keys merged). */
   function qtyOf(productId: string) {
     return cart.filter((l) => l.productId === productId).reduce((s, l) => s + l.quantity, 0);
@@ -539,7 +589,7 @@ export function MenuClient({
   }
 
   /** Render a single product card — mockup: bordered grid card + stepper. */
-  function renderProduct(p: ProductWithAddons, isFirst = false) {
+  function renderProduct(p: ProductWithOptions, isFirst = false) {
     return (
       <MenuProductRow
         key={p.id}
@@ -810,41 +860,72 @@ export function MenuClient({
               {picker.description}
             </p>
           )}
-          <p className="mb-3 text-base font-bold" style={{ color: "var(--color-primary)" }}>
-            {formatMoney(Number(picker.price), currency)}
+          <p className="mb-3 text-base font-bold" style={{ color: "var(--color-primary)" }} aria-live="polite">
+            {formatMoney(pickerTotal, currency)}
           </p>
-          {(picker.product_addons || []).filter((a) => a.is_available).length > 0 && (
-            <div className="mb-4">
-              <p className="section-title">إضافات</p>
-              <ul className="space-y-2">
-                {(picker.product_addons || [])
-                  .filter((a) => a.is_available)
-                  .map((a) => (
-                    <label
-                      key={a.id}
-                      className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2.5 text-sm"
-                    >
-                      <span className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedAddons.includes(a.id)}
-                          onChange={(e) =>
-                            setSelectedAddons((prev) =>
-                              e.target.checked
-                                ? [...prev, a.id]
-                                : prev.filter((id) => id !== a.id)
-                            )
-                          }
-                          className="h-4 w-4"
-                        />
-                        {a.name}
-                      </span>
-                      <span className="text-xs text-[var(--color-text-secondary)]">
-                        +{formatMoney(Number(a.price), currency)}
-                      </span>
-                    </label>
-                  ))}
-              </ul>
+          {pickerGroups.length > 0 && (
+            <div className="mb-4 space-y-4">
+              {pickerGroups.map((group) => {
+                const choices = availableChoices(group);
+                const bounds = effectiveBounds(group);
+                const single = bounds.max === 1;
+                const pickedInGroup = choices.filter((c) => selectedOptions.includes(c.id)).length;
+                return (
+                  <div key={group.id} role={single ? 'radiogroup' : 'group'} aria-label={group.name}>
+                    <p className="section-title flex flex-wrap items-center gap-2">
+                      {group.name}
+                      {bounds.min >= 1 && (
+                        <span className="rounded-full bg-[var(--color-primary-tint)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-primary)]">
+                          إلزامي
+                        </span>
+                      )}
+                      {!single && (
+                        <span className="text-[11.5px] font-normal text-[var(--color-text-muted)]">
+                          {pickedInGroup}/{bounds.max} — اختر حتى {bounds.max}
+                        </span>
+                      )}
+                    </p>
+                    <ul className="space-y-2">
+                      {choices.map((choice) => {
+                        const on = selectedOptions.includes(choice.id);
+                        return (
+                          <li key={choice.id}>
+                            <button
+                              type="button"
+                              role={single ? 'radio' : 'checkbox'}
+                              aria-checked={on}
+                              onClick={() => toggleOption(group, choice.id)}
+                              className={`flex min-h-[48px] w-full items-center justify-between gap-2 rounded-[var(--radius-md)] border px-3 py-2.5 text-sm transition-colors ${
+                                on
+                                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)] font-semibold'
+                                  : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span
+                                  aria-hidden="true"
+                                  className={`flex h-4.5 w-4.5 items-center justify-center border ${
+                                    single ? 'rounded-full' : 'rounded-[4px]'
+                                  } ${on ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border-strong)]'}`}
+                                  style={{ height: '18px', width: '18px' }}
+                                >
+                                  {on && <Check className="h-3 w-3" />}
+                                </span>
+                                {choice.name}
+                              </span>
+                              <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
+                                {Number(choice.price) > 0
+                                  ? `+${formatMoney(Number(choice.price), currency)}`
+                                  : 'بدون زيادة'}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
             </div>
           )}
           <div className="field">
@@ -883,9 +964,19 @@ export function MenuClient({
             />
             <p className="hint">{itemNotes.length}/200</p>
           </div>
-          <Button block onClick={confirmAdd} style={{ background: "var(--color-primary)" }}>
+          <Button
+            block
+            disabled={pickerViolation !== null}
+            onClick={confirmAdd}
+            style={{ background: "var(--color-primary)" }}
+          >
             أضف إلى السلة
           </Button>
+          {pickerViolation && (
+            <p role="alert" className="mt-2 text-center text-[12.5px] font-semibold text-[var(--color-danger)]">
+              {pickerViolation.message}
+            </p>
+          )}
         </Sheet>
       )}
 
