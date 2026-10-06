@@ -172,3 +172,31 @@ describe('StatusChip tones meet 4.5:1 (WCAG 1.4.3)', () => {
     expect(delivered).toMatch(/color-text-secondary/);
   });
 });
+
+describe('the focus ring cannot be defeated by a control rule (audit T1 #1)', () => {
+  it('the control block does not declare outline: none', () => {
+    // This is not hypothetical: `outline: none` inside the UNLAYERED .input rule outranked the
+    // focus rule in @layer base (layers lose to unlayered rules at equal specificity), so the
+    // ring was invisible on every input while the skip link showed it. Measured in Chrome.
+    // Comments stripped: this very rule carries a comment explaining the removed declaration,
+    // and a naive match read the comment as the declaration (the same trap as the T1 #2 parser).
+    const block = rule('.input, .select, .textarea').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(block).not.toMatch(/outline\s*:\s*none/);
+  });
+
+  it('the ring declaration is top-level, not nested inside @layer', () => {
+    // It sat inside `@layer base { ... }` (indented) and lost the cascade to the unlayered
+    // `.input { outline: none }` at equal specificity. Unlayered + later in the file is what
+    // makes the ring win, so the rule that DECLARES it must start at column 0.
+    const topLevel = css.match(/^\*:focus-visible\s*\{([\s\S]*?)\n\}/m);
+    expect(topLevel, 'a top-level *:focus-visible rule must exist').toBeTruthy();
+    expect(topLevel![1]).toMatch(/outline:\s*2px solid var\(--color-primary\)/);
+
+    // A nested copy may only adjust transitions (the reduced-motion block does exactly that);
+    // it must never re-declare the ring, where an unlayered rule could outrank it again.
+    for (const nested of css.matchAll(/^[ \t]+\*:focus-visible\s*\{([\s\S]*?)\n\}/gm)) {
+      expect(nested[1], 'a nested rule must not (re)declare the ring').not.toMatch(/\boutline\s*:/);
+    }
+  });
+
+});
