@@ -7,8 +7,8 @@ import type { AnalyticsData, Range } from './page';
 
 const RANGES: { value: Range; label: string }[] = [
   { value: 'today', label: 'اليوم' },
-  { value: '7d', label: '٧ أيام' },
-  { value: '30d', label: '٣٠ يوم' },
+  { value: '7d', label: '7 أيام' },
+  { value: '30d', label: '30 يوم' },
 ];
 
 /** Percent change vs previous period; null when there's no baseline */

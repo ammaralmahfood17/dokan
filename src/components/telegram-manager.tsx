@@ -146,7 +146,7 @@ export function TelegramManager({ projectId }: { projectId: string }) {
         </Button>
       ) : (
         <div className="mt-3 rounded-[10px] border border-sky-200 bg-sky-50 p-3">
-          <p className="text-xs font-bold text-[var(--color-info)]">١. افتح تيليجرام واضغط الرابط:</p>
+          <p className="text-xs font-bold text-[var(--color-info)]">1. افتح تيليجرام واضغط الرابط:</p>
           <a
             href={pending.url}
             target="_blank"
@@ -156,7 +156,7 @@ export function TelegramManager({ projectId }: { projectId: string }) {
           >
             {pending.url}
           </a>
-          <p className="mt-2 text-xs font-bold text-[var(--color-info)]">٢. أو أرسل للبوت هذا الرمز:</p>
+          <p className="mt-2 text-xs font-bold text-[var(--color-info)]">2. أو أرسل للبوت هذا الرمز:</p>
           <p dir="ltr" className="mt-1 rounded-[var(--radius-md)] bg-white px-3 py-2 text-center font-mono text-sm font-bold">
             /start {pending.code}
           </p>

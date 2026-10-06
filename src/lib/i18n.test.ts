@@ -1,3 +1,4 @@
+import { readFileSync, globSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { langOfText } from './i18n';
 
@@ -39,5 +40,27 @@ describe('langOfText', () => {
     // a decision. Asserted so a future change to the rule has to be deliberate.
     expect(langOfText('24')).toBe('en');
     expect(langOfText('')).toBe('en');
+  });
+});
+
+describe('numerals are Latin everywhere (audit T1 #10, T1 #11)', () => {
+  it('no Arabic-Indic digits in user-facing source', () => {
+    // Arabic-Indic digits (٠١٢…) render inconsistently across the Gulf market's devices and fonts,
+    // and the product's own convention is Latin digits everywhere - a rule that had already drifted
+    // in five strings. `src/lib/utils.ts` is excluded on purpose: it holds the transliteration MAP
+    // (data, not copy) and a comment explaining the rule, which is not user-facing text.
+    const files = globSync('src/**/*.{ts,tsx}').filter(
+      (f) =>
+        !f.endsWith('.test.ts') &&
+        !f.endsWith('.test.tsx') &&
+        !f.endsWith('lib/utils.ts')
+    );
+    const offenders = files
+      .filter((f) => /[\u0660-\u0669]/.test(readFileSync(f, 'utf8')))
+      .map((f) => {
+        const hit = readFileSync(f, 'utf8').split('\n').findIndex((l) => /[\u0660-\u0669]/.test(l));
+        return `${f}:${hit + 1}`;
+      });
+    expect(offenders, 'use Latin digits in the UI (١٢٣ -> 123)').toEqual([]);
   });
 });

@@ -189,7 +189,7 @@ export function ProjectRowActions({
             title={
               canHardDelete
                 ? 'حذف المشروع المؤرشف نهائيًا'
-                : `متاح بعد ${deleteEligibleAt?.toLocaleDateString('ar-BH')}`
+                : `متاح بعد ${deleteEligibleAt?.toLocaleDateString('ar-BH-u-nu-latn')}`
             }
             className="btn btn-ghost btn-sm text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-50"
           >

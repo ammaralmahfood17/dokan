@@ -18,7 +18,7 @@ export function HourlySalesChart({
       <h2 className="mb-3.5 flex items-center justify-between font-display text-[14.5px] font-bold">
         المبيعات بالساعة
         <span className="text-[11px] font-normal text-[var(--color-text-secondary)]">
-          آخر ٧ ساعات
+          آخر 7 ساعات
         </span>
       </h2>
       {hourBuckets.every((b) => b.revenue === 0) ? (
