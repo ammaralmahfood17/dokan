@@ -22,10 +22,13 @@ const securityHeaders = [
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
   },
-  { key: 'X-XSS-Protection', value: '1; mode=block' },
+  // audit T1 #22: X-XSS-Protection removed. The header is obsolete - browsers dropped the XSS
+  // auditor, and block mode has been a liability rather than a control for years - and keeping it
+  // reads as "XSS is handled" when the actual controls are the CSP below and React's escaping.
+  // Dead security theatre is what makes the real posture hard to review. ci.yml now asserts its
+  // ABSENCE, so it cannot creep back.
   // F1: Content-Security-Policy. Next.js needs 'unsafe-inline'/'unsafe-eval'
-  // for its runtime scripts; Google Fonts (Cairo via next/font) needs
-  // fonts.googleapis.com (style) + fonts.gstatic.com (font data); Supabase
+  // for its runtime scripts; Supabase
   // is the API/WS origin; Sentry for error reporting. frame-ancestors 'none'
   // hardens against clickjacking on top of X-Frame-Options.
   {

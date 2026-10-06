@@ -141,10 +141,17 @@ jobs:
             const m = require('./.next/routes-manifest.json');
             const h = JSON.stringify(m.headers || '');
             const need = ['content-security-policy','strict-transport-security',
-                          'x-content-type-options','frame-ancestors'];
-            const missing = need.filter(k => !h.toLowerCase().includes(k));
+                          'x-content-type-options','frame-ancestors','referrer-policy'];
+            const lower = h.toLowerCase();
+            const missing = need.filter(k => !lower.includes(k));
             if (missing.length) { console.error('MISSING HEADERS:', missing); process.exit(1); }
-            console.log('ok — security headers present');
+            // audit T1 #22: the obsolete header must not creep back. It reads as "XSS is handled"
+            // while the real controls are the CSP and React's escaping.
+            if (lower.includes('x-xss-protection')) {
+              console.error('X-XSS-PROTECTION is back — obsolete, and it misrepresents the posture (audit T1 #22)');
+              process.exit(1);
+            }
+            console.log('ok — security headers present, none deprecated');
           "
 
   e2e-readiness:
