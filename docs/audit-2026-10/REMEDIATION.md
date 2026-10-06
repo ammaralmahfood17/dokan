@@ -129,7 +129,26 @@ person does not repeat them):
 | W3-T7 | T1 #13 / #14 dialog & alert misuse | **DONE** | `a75fff2`. The install prompt is a passive `role="status"`; `role="alert"` no longer CONTAINS the retry button and accordion - the assertion is its own sr-only live region |
 | W3-T8 | T1 #15 half-implemented tabs | **DONE** | `a75fff2`. `role="group"` + `aria-pressed` (filters over one region, matching the other filters in the app) |
 | W3-T9 | T1 #20 / #21 | **DONE** | `a75fff2`. `aria-busy` on the checkout CTA; the kitchen's page-wide click keeps a non-interactive role so it is not read as an affordance |
-| W3-T10 | the axe gate (decision 6) | **PARTIAL** | `e2e/a11y.spec.ts` + `playwright.a11y.config.ts` + `npm run a11y`. The main playwright config pins `channel: 'chrome'` (system Chrome), so the a11y config uses Playwright's bundled chromium - otherwise a CI gate would need Chrome installed in the runner. The spec SKIPS a route it was redirected away from rather than reporting a clean page it never reached. Evidence run below |
+| W3-T10 | the axe gate (decision 6) | **DONE** | `596a3cb`. `e2e/a11y.spec.ts` + `playwright.a11y.config.ts` + `npm run a11y`. **Results, bundled chromium, real runs:** production `https://dokanstore.xyz` -> `/login` PASS, `/register` PASS, `/estikana/menu/table-1` PASS. Local dev build -> same three PASS (4 passed / 2 skipped: no session for the authed routes). The main playwright config pins `channel: 'chrome'` (system Chrome), so the a11y config uses the bundled browser and changes nothing else |
+
+**The gate earned its keep before it was even finished - it found two real defects:**
+
+1. **The focus ring never reached a single input (audit T1 #1, still broken after the first fix).**
+   The computed style in Chrome read `outline: none` on a focused input while the skip link - which
+   has no competing rule - showed the new ring. `*:focus-visible` sat inside `@layer base`, and a
+   cascade layer LOSES to an unlayered author rule at equal specificity; `.input` declared
+   `outline: none`. So the one ring that must always win was the one that could always be
+   outranked. Fixed in `8344570` and re-measured: `input#email -> rgb(79, 70, 229) solid 2px`. A
+   unit test could not have caught this - it needed the computed value from a browser.
+2. **My own W1 Turnstile container had `aria-prohibited-attr` (serious).** `aria-label` on a `div`
+   with NO role is prohibited, so the label was dropped and the challenge announced unlabelled;
+   `role="group"` makes it legal (`ee59278`). Found on a dev-mode run, where the widget's empty
+   state is visible long enough to measure — production renders the iframe inside it, which is why
+   the live run passed.
+
+The spec also refuses to grade a page it never reached: a route the browser was redirected away
+from is SKIPPED with a named reason, and a route that did not RENDER fails with that wording
+(before this guard, a local 500 was reported as a `document-title` violation of the menu page).
 
 **Wave 3 gates:** `tsc` 0 - `lint` 0 (was 26 errors) - **vitest 209/209 (17 files)** - `build` 0 -
 `check-touch-targets` 0 - `check-public-write-gates` 0 - `env:check` 0.
