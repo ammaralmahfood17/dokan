@@ -252,3 +252,34 @@ here.
 `filter: 'project_id=eq.<id>'` to both subscriptions and re-run the probe; if the filter also
 suppresses the own-tenant event (the reason it was removed the first time), the correct fix is a
 Realtime **private** channel with `realtime.messages` RLS — not `postgres_changes`.
+
+---
+
+## 8. The accessibility gate (axe, owner decision 6)
+
+`axe` is BLOCKING on `/login`, `/register`, `/dashboard/pos`, `/dashboard/orders` and one public
+menu URL: zero `serious`/`critical` violations.
+
+```bash
+cd ~/dokan-v3
+npm run a11y                                             # target = E2E_BASE_URL or production
+E2E_BASE_URL=http://localhost:3000 E2E_MENU_PATH=/estikana/menu/table-1 npm run a11y
+```
+
+- It uses `playwright.a11y.config.ts` (Playwright's **bundled chromium**). The main
+  `playwright.config.ts` pins `channel: 'chrome'` — the system Google Chrome — which is right
+  for the e2e suite but would require installing Chrome into a CI runner.
+- One-time browser download: `npx playwright install chromium`.
+- The authenticated routes need a signed-in staff member; without one the spec **skips** rather
+  than reporting a clean page it never reached (a redirect to /login measured as "POS is clean"
+  is exactly the vacuous gate this finding is about).
+- `E2E_MENU_PATH` is the public menu URL owner decision 6 names; unset means that route is
+  skipped, never silently passed.
+
+Record the run here:
+
+```
+date: __________  target: ______________________  result: ______
+/login [ ]  /register [ ]  /dashboard/pos [ ]  /dashboard/orders [ ]  menu URL [ ]
+violations (serious+critical): ____   (must be 0)
+```

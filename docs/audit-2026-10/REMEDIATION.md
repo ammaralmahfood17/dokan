@@ -116,11 +116,36 @@ person does not repeat them):
    silently became "id\nINSERT 0 1". Every probe now writes a `.sql` file and passes values as
    psql variables (`:'items'`), which also removed a JSON-escaping trap.
 
-## Waves 3–6 — not started
+## Wave 3 — Accessibility, WCAG 2.2 AA
+
+| # | Task / finding | Status | Evidence |
+|---|---|---|---|
+| W3-T1 | T1 #1 focus indicator 1.47:1 (**Critical**) | **DONE** | `0e6f5f5`. Test written first and run RED (3 failures) -> GREEN. `outline: 2px solid var(--color-primary)` + offset: 6.29:1 on white, 5.97:1 on bg, and it survives forced-colors mode where a box-shadow is not painted at all |
+| W3-T2 | T1 #2 control boundaries 1.18:1 (**Critical**) | **DONE** | `0e6f5f5`. `--color-border-control: #767B74` on `.input/.select/.textarea`; the test measures > 3:1 on all three surfaces. Dividers (.card, tables) keep the hairline and that is asserted, so the fix cannot turn the UI heavy |
+| W3-T3 | T1 #3 twelve orphaned labels | **DONE** | `a75fff2`. jsx-a11y rules added; they surfaced **26 errors** (12 labels + 14 interactions) = the work list. All 12 now pair htmlFor/id, the group label became fieldset/legend. `npm run lint` 0 |
+| W3-T4 | T1 #4 badge contrast 4.34:1 | **DONE** | `0e6f5f5`. delivered -> text-secondary: **4.68:1**. The guard reads the COMPONENT (status-chip.tsx), not just globals.css - the reason this finding survived the first audit |
+| W3-T5 | T1 #6 modal focus in/out | **DONE** | `a75fff2`. Fallback focuses the panel (`tabIndex={-1}`) so a no-input dialog is still announced; the opener is remembered and refocused on unmount (WCAG 2.4.3) |
+| W3-T6 | T1 #7 44px touch targets | **DONE** | `a75fff2`. **Five** sites, not the three the audit named: the gate caught the POS quantity steppers at `h-11 w-10` (44x**40**) - the most-tapped controls in the app. `scripts/check-touch-targets.mjs` runs in CI (111 tsx files, clean) |
+| W3-T7 | T1 #13 / #14 dialog & alert misuse | **DONE** | `a75fff2`. The install prompt is a passive `role="status"`; `role="alert"` no longer CONTAINS the retry button and accordion - the assertion is its own sr-only live region |
+| W3-T8 | T1 #15 half-implemented tabs | **DONE** | `a75fff2`. `role="group"` + `aria-pressed` (filters over one region, matching the other filters in the app) |
+| W3-T9 | T1 #20 / #21 | **DONE** | `a75fff2`. `aria-busy` on the checkout CTA; the kitchen's page-wide click keeps a non-interactive role so it is not read as an affordance |
+| W3-T10 | the axe gate (decision 6) | **PARTIAL** | `e2e/a11y.spec.ts` + `playwright.a11y.config.ts` + `npm run a11y`. The main playwright config pins `channel: 'chrome'` (system Chrome), so the a11y config uses Playwright's bundled chromium - otherwise a CI gate would need Chrome installed in the runner. The spec SKIPS a route it was redirected away from rather than reporting a clean page it never reached. Evidence run below |
+
+**Wave 3 gates:** `tsc` 0 - `lint` 0 (was 26 errors) - **vitest 209/209 (17 files)** - `build` 0 -
+`check-touch-targets` 0 - `check-public-write-gates` 0 - `env:check` 0.
+
+**The interaction class is 14 findings the audit never counted.** The audit listed the 12
+labels (T1 #3) and the kitchen handler (T1 #20) but not the other 13 click-handler-on-a-div
+sites the same rule catches. Each was fixed by its honest shape rather than a
+`eslint-disable`: overlays got `role="presentation"` + an Escape path (the semantic dialog is
+the panel inside), the settings confirm dialog lost an inner `onClick={stopPropagation}` panel
+that existed only to cancel another handler, and the dropzone got `role="button"` + Enter/Space
+because it cannot BE a button - the hidden file input lives inside it.
+
+## Waves 4–6 — not started
 
 | Wave | Findings | Status |
 |---|---|---|
-| W3 accessibility | T1 #1–#4, #6, #7, #13–#15, #20, #21 + the blocking axe gate (decision 6) | TODO |
 | W4 design/i18n | T1 #8–#12, #16–#19 | TODO |
 | W5 SEO/headers/perf | T1 #5, #22 + CWV budget | TODO |
 | W6 hardening | T2 #13 (remainder), #14, #15 | TODO |
