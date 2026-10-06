@@ -3,11 +3,15 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getPublicSupabaseConfig } from '@/lib/env/public';
 
 /**
- * Refresh Supabase session cookies and enforce auth for protected routes.
- * 
- * PERFORMANCE: Uses getSession() (local cookie read, ~1ms) instead of
- * getUser() (Supabase Auth API call, 200-800ms). JWT signature is still
- * verified locally via the cookie parser.
+ * Refresh Supabase session cookies and perform a UX-level auth gate for protected
+ * routes.
+ *
+ * SECURITY MODEL (audit T2 #6): getSession() decodes the cookie WITHOUT verifying
+ * its signature — it is a fast local read, not an authorization decision. The
+ * redirect below is therefore a convenience for humans, NOT a boundary: a forged
+ * cookie can pass it. The real boundaries are (a) every server component's
+ * `getUser()` call via getCurrentProject(), and (b) PostgREST verifying the JWT
+ * signature and applying RLS. Never move an authorization check into this file.
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
