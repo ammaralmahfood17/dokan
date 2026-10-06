@@ -189,7 +189,7 @@ because it cannot BE a button - the hidden file input lives inside it.
 | # | Finding | Sev | Status | Evidence |
 |---|---|---|---|---|
 | T1 #8 | `lang` never updates for English menu content | **Major** | **DONE** | `dc8dbca`. An English product name sat inside an Arabic page with no `lang`, so a screen reader read it with the Arabic voice — on the product's public face. **Deviation from the plan, stated:** the plan marked these by the TOGGLE, and that premise is false here — a store named in Arabic is still Arabic with the toggle on EN. The marker follows the script of the text (`src/lib/i18n.ts`, 4 tests), and the toggle moves `document.documentElement.lang` while `dir` stays rtl |
-| T1 #9 | Radius scale inverted (`xl` 12px < `lg` 14px) | Minor | **DONE** | `f853f08` + `4033473`. `--radius-xl` 12 → 20 (option a). Guard written first and seen RED on the real values — `radius scale must ascend: [6,10,14,12]` — then GREEN. Blast radius: 12 call sites; a browser measured **20px at 100% and 200%** on the 8 reachable ones (7 landing + 1 storefront). The other 4 are the SAME token in states this run could not reach (settings deactivate modal, dashboard error boundary, skeletons) and are **not** claimed as verified. `DESIGN_SYSTEM.md` disagreed with the code (md 8/lg 10/xl 12) and was corrected; its `--radius-xs` row is flagged — no such token is declared or referenced anywhere |
+| T1 #9 | Radius scale inverted (`xl` 12px < `lg` 14px) | Minor | **DONE** | `f853f08` + `4033473`. `--radius-xl` 12 → 20 (option a). Guard written first and seen RED on the real values — `radius scale must ascend: [6,10,14,12]` — then GREEN. Blast radius: 12 call sites; a browser measured **20px at 100% and 200%** on the 8 reachable ones (7 landing + 1 storefront). The settings deactivate MODAL was measured in a later run (20px, `toEqual(['20px'])` passed) and the dashboard error boundary and the `loading.tsx` skeleton remain unmeasured — the guard binds the token, but they are not claimed as verified. `DESIGN_SYSTEM.md` disagreed with the code (md 8/lg 10/xl 12) and was corrected; its `--radius-xs` row is flagged — no such token is declared or referenced anywhere |
 | T1 #10 | Arabic-Indic numerals in UI strings | Minor | **DONE** | `1657e50`. 5 strings → Latin (`٧ أيام`, `٣٠ يوم`, `آخر ٧ ساعات`, `١.`, `٢.`). The guard is source-wide, so a sixth cannot appear: RED with the fixes stashed (`telegram-manager.tsx:149`, `hourly-sales-chart.tsx:21`, `analytics-client.tsx:10`), GREEN after. `src/lib/utils.ts` is excluded on purpose — it holds the transliteration MAP (data) and a comment about this rule |
 | T1 #11 | `toLocaleDateString('ar-BH')` without `-u-nu-latn` | Minor | **DONE** | `1657e50`. → `'ar-BH-u-nu-latn'` — one string, the smallest change that forces Latin numerals while the surrounding text stays Arabic |
 | T1 #12 | Print sheet missing `lang`; English `alt` | Minor | **DONE** | `fb37036`. The print window is a fresh document, so it declares its own: `<html lang="ar" dir="rtl">`. The printed QR alt went from `Table 3` to `رمز QR لطاولة 3` (written as escapes so no toolchain can mangle it) |
@@ -218,12 +218,17 @@ floor has no numeric-badge exception (a guard cannot see what a className is wri
 **Wave 5 gates:** `tsc` 0 · `lint` 0 · **vitest (the suite plus the 4 new jsonld tests)** · `build` 0 ·
 the four `check-*.mjs` gates 0 · `env:check` 0.
 
-**One real defect found while verifying, NOT in the 37:** the public menu route is classified SSG
-(`●`) with `generateStaticParams()` returning `[]` while the page awaits `searchParams` — so a
-LOCAL production-mode server answers `DYNAMIC_SERVER_USAGE` (500) for every menu URL. Production is
-unaffected (verified: an unknown slug returns 200 there) and the behaviour predates this branch (seen
-in Wave 3), but it is why the Wave 5 verification of T1 #5 ran against `next dev`. Recorded as a
-dated follow-up rather than absorbed.
+**One real defect found while verifying, NOT in the 37 — FIXED (`5e0f3b`).** The public menu route
+declared `generateStaticParams()` returning `[]` (classifying it SSG, `●`) while the page awaits
+`searchParams` for the table token, so a LOCAL production-mode build answered
+`DYNAMIC_SERVER_USAGE` (500) on every menu URL — from Wave 3 onward, and the reason the T1 #5
+verification had to run against `next dev`. Production was not visibly affected (an unknown slug
+returns 200), so it was never an outage; it was a route that could not be what it claimed. Now
+`export const dynamic = 'force-dynamic'`, verified on a production-mode build (four menu URLs,
+including `?k=deadbeef` and an unknown store, all 200) with the JSON-LD present in that same build.
+Trade-off recorded: no full-page ISR cache for the menu; the menu QUERY is still cached by its own
+`revalidate: 60`, and restoring the HTML cache means moving the token out of `searchParams` — a
+design change for the owner, not a silent refactor.
 
 ## Wave 6 — not started
 
