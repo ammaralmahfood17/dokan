@@ -200,3 +200,21 @@ describe('the focus ring cannot be defeated by a control rule (audit T1 #1)', ()
   });
 
 });
+
+describe('the radius scale is ascending (audit T1 #9)', () => {
+  it('sm < md < lg < xl, as every call site assumes', () => {
+    // The scale shipped with lg = 14px and xl = 12px: a SMALLER "xl" than "lg", which inverts the
+    // meaning of the token for every future contributor. 12px is Tailwind's own default for
+    // `rounded-xl`, so the rendering matched the utility while the token semantics were wrong.
+    const order = ['radius-sm', 'radius-md', 'radius-lg', 'radius-xl'];
+    // A local read, NOT the token() helper: token() resolves HEX COLOURS (`--x: #RRGGBB`), and
+    // asking it for a length would have thrown 'not found' instead of measuring anything.
+    const px = order.map((n) => {
+      const m = css.match(new RegExp(`--${n}:\\s*(\\d+)px`));
+      return m ? Number(m[1]) : NaN;
+    });
+    expect(px.every(Number.isFinite), `tokens not found: ${JSON.stringify(px)}`).toBe(true);
+    expect(px, `radius scale must ascend: ${JSON.stringify(px)}`).toEqual([...px].sort((a, b) => a - b));
+    expect(new Set(px).size, 'a duplicate radius is not a scale').toBe(px.length);
+  });
+});

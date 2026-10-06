@@ -78,7 +78,10 @@
   --radius-sm: 6px;
   --radius-md: 10px; /* v1.1 Calm Surface */
   --radius-lg: 14px; /* v1.1 Calm Surface */
-  --radius-xl: 12px;
+  /* audit T1 #9: this was 12px - a SMALLER "xl" than "lg", which inverts the scale for every
+     future reader. 12px also happens to be Tailwind's own default for rounded-xl, so the
+     rendering looked correct while the token meant the opposite of its name. */
+  --radius-xl: 20px;
   --radius-full: 999px;
 
   /* FIX-Z-001: z-index tokens — layering hierarchy (drawer < modal < toast) */
