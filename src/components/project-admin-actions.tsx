@@ -293,6 +293,9 @@ export function RecordPaymentButton({
   const [receipt, setReceipt] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  // Audit T2 #11: ONE key per payment attempt. A retry after a network hiccup reuses it, so the
+  // RPC answers with the first renewal instead of extending the subscription twice.
+  const [clientRequestId, setClientRequestId] = useState(() => crypto.randomUUID());
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -314,6 +317,7 @@ export function RecordPaymentButton({
           receipt: receipt.trim() || undefined,
           notes: notes.trim() || undefined,
           days: 30,
+          clientRequestId,
         }),
       });
       const data = await res.json();
@@ -337,7 +341,10 @@ export function RecordPaymentButton({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setClientRequestId(crypto.randomUUID());
+          setOpen(true);
+        }}
         className="btn btn-ghost btn-sm text-[var(--color-success)]"
       >
         <CreditCard className="h-3.5 w-3.5" />

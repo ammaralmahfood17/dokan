@@ -41,18 +41,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'محتوى الطلب غير صالح' }, { status: 400 });
     }
 
-    const { projectId, amount, method, receipt, notes, days } = body as {
+    const { projectId, amount, method, receipt, notes, days, clientRequestId } = body as {
       projectId?: string;
       amount?: number;
       method?: string;
       receipt?: string;
       notes?: string;
       days?: number;
+      clientRequestId?: string;
     };
 
     // Validate required fields
     if (!projectId || typeof projectId !== 'string' || !/^[0-9a-f-]{36}$/i.test(projectId)) {
       return NextResponse.json({ error: 'projectId مطلوب (UUID)' }, { status: 400 });
+    }
+    // Audit T2 #11: the operator's intent carries a key so a double-submitted form cannot
+    // record two payments and renew twice. Absent is allowed (a legacy caller), malformed is not.
+    if (
+      clientRequestId !== undefined &&
+      (typeof clientRequestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(clientRequestId))
+    ) {
+      return NextResponse.json({ error: 'clientRequestId غير صالح (UUID)' }, { status: 400 });
     }
     if (!amount || typeof amount !== 'number' || amount <= 0) {
       return NextResponse.json({ error: 'المبلغ مطلوب ويجب أن يكون أكبر من صفر' }, { status: 400 });
@@ -84,6 +93,9 @@ export async function POST(request: NextRequest) {
       p_notes: notes || null,
       p_days: renewalDays,
       p_caller_id: user.id,
+      // Idempotency (audit T2 #11): a repeat of the same key returns the existing renewal
+      // instead of recording a second payment.
+      p_client_request_id: clientRequestId ?? null,
     });
 
     if (error) {
