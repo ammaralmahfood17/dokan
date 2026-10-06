@@ -86,7 +86,13 @@ async function signIn(page: import('@playwright/test').Page) {
 const AUTHED_ROUTES = ['/dashboard/pos', '/dashboard/orders'];
 
 async function analyze(page: import('@playwright/test').Page, route: string) {
-  const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
+  // `load`, not `domcontentloaded`: the first run of the suite failed on the menu route and passed in
+  // isolation, i.e. axe was measuring a page before its stylesheet had settled (the route is dynamic
+  // now, so the first request pays a render). A gate that flakes is a gate people learn to ignore, so
+  // the wait is explicit and the readiness is asserted rather than hoped for.
+  const response = await page.goto(route, { waitUntil: 'load' });
+  await page.waitForFunction(() => document.styleSheets.length > 0);
+  await page.waitForTimeout(250); // let webfonts/inline styles settle before measuring
   // A redirect away from the requested route means we are measuring a different page.
   const landed = new URL(page.url()).pathname;
   // ...and an ERROR page is not the page under test either. Without this the gate read
