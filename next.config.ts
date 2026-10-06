@@ -41,7 +41,10 @@ const securityHeaders = [
       // sourcemaps, so production does not ship it any more.
       // challenges.cloudflare.com serves the Turnstile widget script (owner decision 7).
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://*.sentry.io https://challenges.cloudflare.com`,
-      // next/font self-hosts Cairo — the old fonts.googleapis.com allowance was dead.
+      // next/font is gone; the خط ثمانية faces are INLINED in the CSS as data: URIs
+      // (the Thmanyah licence permits web embedding only as part of a compiled
+      // product — see scripts/build-thmanyah-fonts.mjs), so the stylesheet itself
+      // needs no other origin.
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' blob: data: https://*.supabase.co",
       // SENTRY FIX (verified by the CSP census, 2026-10-05): the DSN host is
@@ -52,8 +55,15 @@ const securityHeaders = [
       // health check's browserMonitoring flag looked fine). "*.sentry.io" covers all
       // regions.
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://challenges.cloudflare.com",
-      // No third-party font origin: fonts.gstatic.com was dead too.
-      "font-src 'self'",
+      // data: is REQUIRED here, not a convenience loosening. The خط ثمانية licence allows
+      // embedding the font only as part of a compiled product, so every face is inlined in
+      // the stylesheet as a data: URI instead of being served as a file. The old value
+      // ("font-src 'self'") silently blocked all four faces — Chrome refused each one with
+      // «violates the following Content Security Policy directive: "font-src 'self'"», the
+      // @font-face rules reported status "error", and the entire product rendered in system
+      // fonts while every test stayed green.
+      // Still no third-party font origin: fonts.gstatic.com / fonts.googleapis.com stay dead.
+      "font-src 'self' data:",
       // Coverage the policy never declared: these fell back to default-src, which
       // happened to be 'self' — declaring them is explicit and blocks <object>/<embed>
       // outright. blob: on worker-src is required by Sentry's Replay compression worker.

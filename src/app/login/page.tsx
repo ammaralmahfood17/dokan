@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, Suspense, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { DokanMark } from '@/components/brand/dokan-mark';
 import { classifyAuthError } from '@/lib/auth-errors';
 import { ResendConfirmationButton } from '@/components/resend-confirmation-button';
 import { Button } from '@/components/ui/button';
@@ -170,7 +171,7 @@ export default function LoginPage() {
     <div className="storefront flex min-h-dvh items-center justify-center bg-[var(--color-bg)] px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white font-bold">د</div>
+          <DokanMark className="mx-auto mb-3 h-14 w-14" label="دكان" />
           <h1 className="text-xl font-bold">تسجيل الدخول</h1>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">مرحباً بك في دكان</p>
         </div>

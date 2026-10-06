@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     const { data: project, error: projErr } = await admin
       .from('projects')
-      .insert({ name, slug: finalSlug, currency: 'BHD', primary_color: '#4F46E5', is_active: true })
+      .insert({ name, slug: finalSlug, currency: 'BHD', primary_color: '#7047EB', is_active: true })
       .select('id, name, slug')
       .single();
     if (projErr || !project) {

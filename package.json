@@ -25,7 +25,6 @@
   },
   "//e2e": "WARNING: `npm run test:e2e` runs against dokanstore.xyz (PRODUCTION) and creates real users, projects and orders before cleaning up. It is deliberately NOT part of CI (see .github/workflows/ci.yml) so a push can never write into the live merchant's database. Run it deliberately, not on a timer.",
   "dependencies": {
-    "@fontsource-variable/cairo": "^5.3.0",
     "@sentry/nextjs": "^10.69.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.2",
