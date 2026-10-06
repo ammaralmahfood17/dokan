@@ -51,6 +51,16 @@ export default function manifest(): MetadataRoute.Manifest {
         form_factor: 'narrow',
         label: 'دكان — لوحة التحكم',
       },
+      // audit T1 #17: dark.png was a valid 750x1334 screenshot with no reference anywhere.
+      // (The product has no dark MODE - the tokens are light-only - so this is the dark-styled
+      // screenshot the store already shipped; registering it stops it being an orphan asset.)
+      {
+        src: '/screenshots/dark.png',
+        sizes: '750x1334',
+        type: 'image/png',
+        form_factor: 'narrow',
+        label: 'دكان — الوضع الليلي',
+      },
     ],
     shortcuts: [
       {
