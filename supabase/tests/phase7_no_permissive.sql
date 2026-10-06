@@ -82,10 +82,6 @@ SELECT is(
   'every foreign key in public has a covering index'
 );
 
-SELECT * FROM finish();
-
-ROLLBACK;
-
 -- W6-T2 (audit T2 #14): no FUTURE table or sequence in `public` may be handed to a web role.
 --
 -- This assertion is the permanent guard for the drift described in
@@ -111,3 +107,7 @@ SELECT is(
   0,
   'no default privilege grants future tables/sequences in public to anon or authenticated'
 );
+
+SELECT * FROM finish();
+
+ROLLBACK;
