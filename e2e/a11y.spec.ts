@@ -165,3 +165,23 @@ test('screenshot: the POS for the visual review', async ({ page }) => {
   await page.waitForTimeout(1200);
   await page.screenshot({ path: '/tmp/a11y-pos.png', fullPage: true });
 });
+
+// The plan's visual review names the products modal specifically - it is the audit's worst label
+// case (T1 #3), so the after-shape of that fix is worth an image and not just a lint result.
+test('screenshot: the products modal for the visual review', async ({ page }) => {
+  test.skip(!SEED, 'set A11Y_SEED=1 to seed a store and sign in');
+  await signIn(page);
+  await page.goto('/dashboard/products', { waitUntil: 'domcontentloaded' });
+  const add = page.getByRole('button', { name: /\u0645\u0646\u062a\u062c \u062c\u062f\u064a\u062f|\u0625\u0636\u0627\u0641\u0629 \u0645\u0646\u062a\u062c/ }).first();
+  if (await add.count()) {
+    await add.click();
+    await page.waitForTimeout(900); // the modal animates and lazy-mounts the form
+  }
+  // Measure it too: the modal is where the 12 orphaned labels and the fieldset/legend group live.
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  const blocking = results.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? ''));
+  await page.screenshot({ path: '/tmp/a11y-products-modal.png', fullPage: false });
+  expect(blocking, JSON.stringify(blocking.map((v) => ({ id: v.id, impact: v.impact })), null, 2)).toEqual([]);
+});
