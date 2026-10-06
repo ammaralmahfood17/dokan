@@ -230,11 +230,46 @@ Trade-off recorded: no full-page ISR cache for the menu; the menu QUERY is still
 `revalidate: 60`, and restoring the HTML cache means moving the token out of `searchParams` — a
 design change for the owner, not a silent refactor.
 
-## Wave 6 — not started
+## Wave 6 — readiness VERIFIED against the live DB and the code, not started
 
-| Wave | Findings | Status |
-|---|---|---|
-| W6 hardening | T2 #13 (remainder), #14, #15 | TODO |
+Every premise checked before writing a line, because the plan's premises are two revisions old.
+
+**W6-T1 (T2 #13 remainder) — READY, with one correction to the plan.**
+`order_sequences` **no longer exists** (`pg_tables`); the plan's migration that drops it would fail.
+The real remainder is `service_requests`: exists, **0 rows**, and no application code reads or writes
+it (references are only `database.types.ts`, `0000_init.sql`, two older migrations and a pgTAP test).
+So the work is: a migration that drops it, the pgTAP test updated, and `database.types.ts` regenerated.
+The dead routes part of this task was already done in W1 (decision 2).
+
+**W6-T2 (T2 #14) — READY.** `supabase/config.toml` has `[api]` with `# auto_expose_new_tables = false`
+commented out, so it is one line plus the `pg_default_acl` assertion. `supabase/tests/phase7_no_permissive.sql`
+currently has `plan(5)`; the new assertion makes it `plan(6)`. Verification is CI-only on this host
+(no Docker) - the same substitute already in `OPS-VERIFICATION` §1.
+
+**W6-T3 (T2 #15) — READY with Option A, and TWO gaps in the plan found while checking.**
+- `impersonation_sessions` holds **0 rows** → the plan's "delete existing active rows" step is a no-op.
+- `IMPERSONATION_TTL_MS` is 30 min in `src/lib/super-admin.ts`; → 15 min per A8.
+- Line 202 stores `super_admin_session: input.actorSession` — the actor's session INCLUDING its
+  `refresh_token`, which is the plaintext-at-rest problem. The target side already avoids this and the
+  DB proves the intended pattern: `impersonation_target_session_no_refresh CHECK (NOT (target_session ? 'refresh_token'))`
+  — mirror it for `super_admin_session`.
+- **Gap 1 (plan does not mention it):** `impersonation_max_duration CHECK (expires_at <= created_at + '00:30:05')`
+  caps the lifetime at 30 minutes. Shortening the TTL to 15 without updating this constraint leaves the
+  database still accepting a 30-minute row — the code would be stricter than the schema, which is exactly
+  the kind of gap this audit exists to close.
+- **Gap 2 (plan calls it "acceptable", and it is a behaviour change):** `endImpersonation()` returns the
+  stored `super_admin_session` "for cookie restoration". Option A removes the refresh token from that
+  payload, so the END path must be checked and updated to restore the admin's session without it (the
+  admin's own browser still holds its cookie; a re-login on expiry is the accepted cost).
+- `used_at` is not a column yet → the A8 single-use marker needs it added.
+- Only `src/lib/super-admin.ts` (and the generated types) touch this table, so the blast radius is known.
+
+**W6-T4 — owner-run, no repo work.** Checklist already written in `OPS-VERIFICATION` §5 and §?; the
+secret-rotation item explicitly covers anything pasted into a chat or a log.
+
+**Blocker that stays a blocker:** `npm run test:db` cannot run on this host (no docker group, `sudo`
+needs a password). The substitute is the CI `Fresh database · Security assertions` job, which is green
+on every head so far and runs the pgTAP files this wave adds to.
 
 ## Live production verification (2026-10-06, read-only unless stated)
 
