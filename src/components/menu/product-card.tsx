@@ -7,6 +7,7 @@
 // v1.1 Calm Surface: borders instead of shadows, indigo restricted to the
 // add control, tabular Latin numerals for the price.
 import Image from 'next/image';
+import { memo } from 'react';
 import { Check, Minus, Plus, X } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
 import { langOfText } from '@/lib/i18n';
@@ -19,7 +20,7 @@ const BLUR_PLACEHOLDER =
 
 export type MenuProduct = Product & { option_groups: ProductOptionGroup[] };
 
-export function MenuProductRow({
+function MenuProductRowBase({
   product,
   currency,
   isFirst,
@@ -38,7 +39,7 @@ export function MenuProductRow({
   /** Name in the active language (ar default, en when available + toggled). */
   displayName: string;
   onQuickAdd: (p: MenuProduct) => void;
-  onDecrement: () => void;
+  onDecrement: (p: MenuProduct) => void;
 }) {
   // UX-6: sold-out items stay visible, greyed, with a «غير متوفر» badge —
   // customers shouldn't conclude the store shrank when an item is marked
@@ -128,7 +129,7 @@ export function MenuProductRow({
           <div className="flex h-11 shrink-0 items-center overflow-hidden rounded-full bg-[var(--color-primary)] text-white">
             <button
               type="button"
-              onClick={onDecrement}
+              onClick={() => onDecrement(product)}
               aria-label={`إنقاص كمية ${displayName}`}
               className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-white/15"
             >
@@ -153,3 +154,11 @@ export function MenuProductRow({
     </div>
   );
 }
+
+/**
+ * Perf: memoised so a cart tap re-renders only the card it touched, not the
+ * whole grid. Safe because every prop is either a stable reference (product,
+ * the useCallback handlers) or a primitive that changes only for that card
+ * (quantity, lastAdded).
+ */
+export const MenuProductRow = memo(MenuProductRowBase);

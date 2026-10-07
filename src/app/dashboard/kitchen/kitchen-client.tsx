@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   buildTicket,
   STAGE_COLUMNS,
@@ -147,31 +147,52 @@ export function KitchenClient({
   });
 
   // ---------- Derived view ----------
+  // Perf: memoised on [orders, tab]. The board also re-renders once a minute on
+  // the clock tick (the «متأخر» badge needs minute granularity), and rebuilding
+  // every ticket + sorting + counting on that tick was pure busywork — the data
+  // had not changed.
+  const tickets = useMemo(() => orders.map(buildTicket), [orders]);
 
-  const tickets = orders.map(buildTicket);
+  const countByTab = useMemo(
+    () => ({
+      all: tickets.length,
+      dinein: tickets.filter((t) => t.order.type === 'dinein').length,
+      drivethru: tickets.filter((t) => t.order.type === 'drivethru').length,
+      walkin: tickets.filter((t) => t.order.type === 'walkin').length,
+    }),
+    [tickets]
+  );
 
-  const countByTab = {
-    all: tickets.length,
-    dinein: tickets.filter((t) => t.order.type === 'dinein').length,
-    drivethru: tickets.filter((t) => t.order.type === 'drivethru').length,
-    walkin: tickets.filter((t) => t.order.type === 'walkin').length,
-  };
+  const sorted = useMemo(() => {
+    const visible = tab === 'all' ? tickets : tickets.filter((t) => (t.order.type ?? null) === tab);
+    return [...visible].sort((a, b) => {
+      const ra = STAGE_RANK[a.order.status] ?? 0;
+      const rb = STAGE_RANK[b.order.status] ?? 0;
+      if (ra !== rb) return ra - rb;
+      return a.order.created_at.localeCompare(b.order.created_at);
+    });
+  }, [tickets, tab]);
 
-  const visibleTickets =
-    tab === 'all'
-      ? tickets
-      : tickets.filter((t) => (t.order.type ?? null) === tab);
+  // One pass instead of a filter per stage column.
+  const stageBuckets = useMemo(() => {
+    const m = new Map<string, typeof sorted>();
+    for (const t of sorted) {
+      const arr = m.get(t.order.status) ?? [];
+      arr.push(t);
+      m.set(t.order.status, arr);
+    }
+    return m;
+  }, [sorted]);
 
-  const sorted = [...visibleTickets].sort((a, b) => {
-    const ra = STAGE_RANK[a.order.status] ?? 0;
-    const rb = STAGE_RANK[b.order.status] ?? 0;
-    if (ra !== rb) return ra - rb;
-    return a.order.created_at.localeCompare(b.order.created_at);
-  });
-
-  const pendingCount = tickets.filter((t) => t.order.status === 'pending').length;
+  const pendingCount = useMemo(
+    () => tickets.filter((t) => t.order.status === 'pending').length,
+    [tickets]
+  );
   // UX-U15: إحصاء الذروة الحي — عدد قيد التحضير
-  const preparingCount = tickets.filter((t) => t.order.status === 'preparing').length;
+  const preparingCount = useMemo(
+    () => tickets.filter((t) => t.order.status === 'preparing').length,
+    [tickets]
+  );
 
   return (
     <div
@@ -331,7 +352,7 @@ export function KitchenClient({
           </div>
         ) : (
           STAGE_COLUMNS.map(([stage, label]) => {
-            const stageTickets = sorted.filter((t) => t.order.status === stage);
+            const stageTickets = stageBuckets.get(stage) ?? [];
             return (
               <section
                 key={stage}

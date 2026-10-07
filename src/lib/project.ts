@@ -31,22 +31,21 @@ export async function getCurrentProject(): Promise<ProjectContext | null> {
 
   if (!user) return null;
 
-  // Parallel queries: staff_members + projects together
-  const { data: membership } = await supabase
+  // One round-trip instead of two: embed the project in the membership row.
+  // This runs on EVERY protected page render, so the second sequential query
+  // was pure added latency on the whole dashboard.
+  const { data: membershipRow } = await supabase
     .from('staff_members')
-    .select('*')
+    .select('*, projects(*)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
-  if (!membership) return null;
+  if (!membershipRow) return null;
 
-  const { data: project } = await supabase
-    .from('projects')
-    .select('*')
-    .eq('id', membership.project_id)
-    .single();
+  const membership = membershipRow as unknown as StaffMember;
+  const project = (membershipRow as unknown as { projects: Project | null }).projects;
 
   if (!project) return null;
 

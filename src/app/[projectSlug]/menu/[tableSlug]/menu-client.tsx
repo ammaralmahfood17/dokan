@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState , useSyncExternalStore } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ShoppingBag, X, Check, Bell, FileText, Search, Languages } from 'lucide-react';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
 import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
@@ -34,7 +34,7 @@ const CartSheet = dynamic(() => import('@/components/menu/cart-sheet').then((m) 
   ssr: false,
 });
 import { OrderSuccessState } from '@/components/menu/order-success-state';
-import { MenuProductRow } from '@/components/menu/product-card';
+import { MenuProductRow, type MenuProduct } from '@/components/menu/product-card';
 // D7: offline indicator on the customer-facing menu (banner, not blocker).
 import { OfflineBanner } from '@/components/ui/offline-banner';
 
@@ -204,12 +204,24 @@ export function MenuClient({
 
   const currency = project.currency;
 
+  // Perf: the quick-add / stepper handlers read the cart through a ref, so their
+  // identity stays stable and React.memo on MenuProductRow can skip the cards
+  // that did not change. A callback closing over `cart` would get a new identity
+  // on every tap and re-render the entire grid.
+  const cartRef = useRef(cart);
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
+
+  // Perf: defer the search filter so typing never blocks on a large menu.
+  const deferredQuery = useDeferredValue(menuQuery);
+
   const filtered = useMemo(() => {
     let list = products;
     if (activeCategory !== 'all') {
       list = list.filter((p) => p.category_id === activeCategory);
     }
-    const q = menuQuery.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (q) {
       list = list.filter(
         (p) =>
@@ -218,7 +230,7 @@ export function MenuClient({
       );
     }
     return list;
-  }, [products, activeCategory, menuQuery]);
+  }, [products, activeCategory, deferredQuery]);
 
   // البحث يظهر فقط للمنيو الكبير (12+ منتج) — لا يزحم المنيو الصغير
   const showMenuSearch = products.length >= 12;
@@ -232,6 +244,35 @@ export function MenuClient({
     [cart]
   );
 
+  // Perf: O(1) quantity lookup per card. The old qtyOf(p.id) filtered the whole
+  // cart once per product on every render — O(P×lines) per cart change.
+  const cartQtyByProduct = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of cart) m.set(l.productId, (m.get(l.productId) ?? 0) + l.quantity);
+    return m;
+  }, [cart]);
+
+  // Perf: group once per (filtered, categories) change instead of running
+  // categories.some() + filtered.filter() inside the render map every render.
+  const productsByCategory = useMemo(() => {
+    const m = new Map<string, ProductWithOptions[]>();
+    for (const p of filtered) {
+      if (!p.category_id) continue; // uncategorized handled separately below
+      const arr = m.get(p.category_id) ?? [];
+      arr.push(p);
+      m.set(p.category_id, arr);
+    }
+    return m;
+  }, [filtered]);
+
+  const visibleCategories = useMemo(
+    () => categories.filter((c) => (productsByCategory.get(c.id)?.length ?? 0) > 0),
+    [categories, productsByCategory]
+  );
+
+  // Uncategorized products (category deleted → SET NULL): keep them visible.
+  const uncategorized = useMemo(() => filtered.filter((p) => !p.category_id), [filtered]);
+
   /** Scroll products into view when category changes (mobile smooth UX) */
   const handleCategoryChange = useCallback((catId: string | 'all') => {
     setActiveCategory(catId);
@@ -241,11 +282,11 @@ export function MenuClient({
     }, 50);
   }, []);
 
-  function openProduct(p: ProductWithOptions) {
+  const openProduct = useCallback((p: ProductWithOptions) => {
     setPicker(p);
     setSelectedOptions([]);
     setItemNotes('');
-  }
+  }, []);
 
   /** UX-6: append/remove a quick-note phrase, keeping the 200-char cap. */
   function toggleQuickNote(note: string) {
@@ -335,8 +376,11 @@ export function MenuClient({
     toast.success(alreadyInCart ? 'زادت الكمية' : 'أُضيف إلى السلة', { duration: 1200 });
   }
 
-  // Quick-Add: add directly without addon picker
-  function quickAdd(p: ProductWithOptions) {
+  // Quick-Add: add directly without addon picker.
+  // Memoised and cart-ref-based: an identity that changed with the cart would
+  // defeat MenuProductRow's memo and re-render every card on each tap.
+  const quickAdd = useCallback((p: ProductWithOptions) => {
+    const current = cartRef.current;
     // UX-6 guard: sold-out cards already block interaction, but the picker/
     // stepper paths must never queue an unavailable item (server would 400).
     // 0018: a tracked product with 0 portions left is sold out too.
@@ -344,7 +388,10 @@ export function MenuClient({
     // Stock cap — never let the cart hold more portions than remain. The
     // server rejects the WHOLE order at checkout otherwise, so catching it on
     // the stepper is the difference between a nudge and a failed checkout.
-    if (qtyOf(p.id) >= maxOrderableQty(p)) {
+    const inCart = current
+      .filter((l) => l.productId === p.id)
+      .reduce((s, l) => s + l.quantity, 0);
+    if (inCart >= maxOrderableQty(p)) {
       toast.error('وصلت للكمية المتوفرة من هذا الصنف', { duration: 1600 });
       return;
     }
@@ -355,8 +402,8 @@ export function MenuClient({
       return;
     }
     const key = `${p.id}::`;
-    const alreadyInCart = cart.some((l) => l.key === key);
-    const wasEmpty = cart.length === 0;
+    const alreadyInCart = current.some((l) => l.key === key);
+    const wasEmpty = current.length === 0;
     setCart((prev) => {
       const existing = prev.find((l) => l.key === key);
       if (existing) {
@@ -384,17 +431,26 @@ export function MenuClient({
     if (lastAddedTimer.current) clearTimeout(lastAddedTimer.current);
     lastAddedTimer.current = setTimeout(() => setLastAddedKey(null), 800);
     toast.success(alreadyInCart ? 'زادت الكمية' : 'أُضيف إلى السلة', { duration: 1200 });
-  }
+  }, [currency, openProduct]);
 
-  function updateQty(key: string, delta: number) {
+  const updateQty = useCallback((key: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((l) =>
-          l.key === key ? { ...l, quantity: l.quantity + delta } : l
-        )
+        .map((l) => (l.key === key ? { ...l, quantity: l.quantity + delta } : l))
         .filter((l) => l.quantity > 0)
     );
-  }
+  }, []);
+
+  /** Decrement the most recently added cart line for this product. Declared here
+   *  (a hook, so it must precede every early return) with a stable identity and
+   *  the product as its argument, so the memoised card needs no per-card closure. */
+  const decrementProduct = useCallback(
+    (p: MenuProduct) => {
+      const line = [...cartRef.current].reverse().find((l) => l.productId === p.id);
+      if (line) updateQty(line.key, -1);
+    },
+    [updateQty]
+  );
 
   async function placeOrder() {
     if (!cart.length) return;
@@ -577,17 +633,6 @@ export function MenuClient({
       )
     : 0;
 
-  /** Total qty of this product across all cart lines (addon keys merged). */
-  function qtyOf(productId: string) {
-    return cart.filter((l) => l.productId === productId).reduce((s, l) => s + l.quantity, 0);
-  }
-
-  /** Decrement the most recently added cart line for this product. */
-  function decrementProduct(productId: string) {
-    const line = [...cart].reverse().find((l) => l.productId === productId);
-    if (line) updateQty(line.key, -1);
-  }
-
   /** Render a single product card — mockup: bordered grid card + stepper. */
   function renderProduct(p: ProductWithOptions, isFirst = false) {
     return (
@@ -597,10 +642,10 @@ export function MenuClient({
         currency={currency}
         isFirst={isFirst}
         lastAdded={lastAddedKey === p.id}
-        quantity={qtyOf(p.id)}
+        quantity={cartQtyByProduct.get(p.id) ?? 0}
         displayName={displayName(p)}
         onQuickAdd={quickAdd}
-        onDecrement={() => decrementProduct(p.id)}
+        onDecrement={decrementProduct}
       />
     );
   }
@@ -779,8 +824,8 @@ export function MenuClient({
             {activeCategory === 'all' ? (
               /* All categories: group products under each category */
               <>
-                {categories.filter((c) => products.some((p) => p.category_id === c.id)).map((cat, catIdx) => {
-                  const catProducts = filtered.filter((p) => p.category_id === cat.id);
+                {visibleCategories.map((cat, catIdx) => {
+                  const catProducts = productsByCategory.get(cat.id) ?? [];
                   if (!catProducts.length) return null;
                   return (
                     <section key={cat.id} className="mb-6">
@@ -797,19 +842,17 @@ export function MenuClient({
                   );
                 })}
                 {/* Uncategorized products (category deleted → SET NULL): keep them visible */}
-                {products.some((p) => !p.category_id) && (
+                {uncategorized.length > 0 && (
                   <section className="mb-6">
                     <div className="mb-3">
                       <h2 className="font-display text-[15.5px] font-bold">بدون تصنيف</h2>
                       <p className="mt-0.5 text-[12.5px] text-[var(--color-text-tertiary)]">
-                        {products.filter((p) => !p.category_id).length}{' '}
-                        {products.filter((p) => !p.category_id).length === 1 ? 'صنف' : 'أصناف'}
+                        {uncategorized.length}{' '}
+                        {uncategorized.length === 1 ? 'صنف' : 'أصناف'}
                       </p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3">
-                      {products
-                        .filter((p) => !p.category_id)
-                        .map((p, idx) => renderProduct(p, idx === 0 && categories.length === 0))}
+                      {uncategorized.map((p, idx) => renderProduct(p, idx === 0 && categories.length === 0))}
                     </div>
                   </section>
                 )}
