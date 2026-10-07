@@ -392,6 +392,47 @@ describe('Bahrain day/hour keys', () => {
   });
 });
 
+describe('hour window is anchored to `now`, not to day start', () => {
+  // Regression, 2026-10-07: the dashboard page passed Bahrain MIDNIGHT as
+  // `now` instead of the current instant. The rollup was correct; the caller
+  // was not, and the hourly chart silently showed 12 ص–6 م for every merchant
+  // who opened the dashboard after midday. Nothing in the rollup's own unit
+  // tests could have caught it — the contract is at the call site.
+  const evening = Date.parse('2026-10-07T15:40:00Z'); // 18:40 Bahrain
+  const midnight = Date.parse('2026-10-07T00:00:00Z'); // 03:00 Bahrain
+
+  it('keys end at the current hour when given the real instant', () => {
+    expect(last7HourKeys(evening).at(-1)).toBe('2026-10-07T18');
+  });
+
+  it('keys would be 7 hours wrong if the caller passed day start', () => {
+    // Same instant, but anchored at midnight — this is the bug's fingerprint.
+    const wrong = last7HourKeys(midnight).at(-1);
+    expect(wrong).toBe('2026-10-07T03');
+    expect(wrong).not.toBe(last7HourKeys(evening).at(-1));
+  });
+
+  it('an order placed in the current hour lands in the chart', () => {
+    // 18:15 Bahrain — inside the last-hour bucket the merchant expects to see.
+    const order: OrderRow = {
+      id: 'now-1', status: 'delivered', total_amount: 12, type: 'dinein', order_number: 1,
+      created_at: new Date(Date.parse('2026-10-07T15:15:00Z')).toISOString(),
+      table_id: 't1', service_type: null, order_items: [],
+    };
+    const good = buildDashboardRollup({
+      ...datasets([order]), now: evening, ...labelMaps(evening),
+    });
+    expect(good.hourBuckets.at(-1)!.revenue).toBe(12);
+
+    // Anchored at midnight the same order falls outside every bucket: silent
+    // data loss in the chart.
+    const bad = buildDashboardRollup({
+      ...datasets([order]), now: midnight, ...labelMaps(midnight),
+    });
+    expect(bad.hourBuckets.some((h) => h.revenue === 12)).toBe(false);
+  });
+});
+
 describe('checklistFromRollup', () => {
   it('branding needs name + primary_color + slug', () => {
     const mk = (p: object) =>

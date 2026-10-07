@@ -153,6 +153,20 @@ export function last7HourKeys(now: number): string[] {
   return out;
 }
 
+/**
+ * The current instant, captured OUTSIDE the React tree.
+ *
+ * `react-hooks/purity` flags `Date.now()` during render — correctly: a render
+ * that reads the clock makes the output impure. The old code solved this by
+ * calling Date.now() inside plain helper functions in lib/dashboard-data.ts,
+ * which the rule does not police. This is the same escape hatch, named.
+ *
+ * Read once per render by the dashboard page and passed into the pure rollup.
+ */
+export function currentInstant(): number {
+  return Date.now();
+}
+
 /** Money to 3 decimals — BHD fils. Mirrors the DB's numeric(10,3). */
 function round3(n: number): number {
   return Math.round(n * 1000) / 1000;

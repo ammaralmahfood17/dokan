@@ -16,6 +16,7 @@ import type { ChecklistItem } from '@/lib/types';
 import {
   buildDashboardRollup,
   checklistFromRollup,
+  currentInstant,
   type OrderRow,
   type OpenOrder,
   type RecentOrder,
@@ -44,12 +45,12 @@ export default async function DashboardPage() {
     day: '2-digit',
   });
   const today = new Date(Date.parse(`${dayFmt.format(new Date())}T00:00:00+03:00`));
-  const yesterday = new Date(today.getTime() - 86_400_000);
-  const tomorrow = new Date(today.getTime() + 86_400_000);
   const weekAgo = new Date(today.getTime() - 6 * 86_400_000);
-  // Charts are labelled from `now`; the rollup takes it as an argument so the
-  // aggregation stays pure and testable at a fixed instant.
-  const now = today.getTime();
+  // `now` is the real current instant, NOT Bahrain midnight. The hourly chart
+  // shows the last 7 hours ending NOW (the old `buildHourBuckets` used
+  // `new Date()`); passing midnight here silently re-rendered the chart as
+  // 12 ص–6 م every time the dashboard was opened in the evening.
+  const now = currentInstant();
 
   // ONE parallel block replaces four sequential barriers (audit 2026-10-07,
   // measured: every query costs ~150ms regardless of shape, so what costs is
