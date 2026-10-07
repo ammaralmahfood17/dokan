@@ -54,19 +54,23 @@ const CORE = [
   { dir: 'thmanyahsans', file: 'thmanyahsans-Regular', family: 'thmanyah sans', weights: '400' },
   { dir: 'thmanyahsans', file: 'thmanyahsans-Medium', family: 'thmanyah sans', weights: '500 600' },
   { dir: 'thmanyahsans', file: 'thmanyahsans-Bold', family: 'thmanyah sans', weights: '700 800' },
-  {
-    dir: 'thmanyahserifdisplay',
-    file: 'thmanyahserifdisplay-Bold',
-    family: 'thmanyah serif display',
-    weights: '700 800',
-  },
 ];
 
-/** Long-form reading only (الترخيص/الخصوصية) — its own file so the app and the
- *  customer menu never download it. */
-const SERIF_TEXT = [
-  { dir: 'thmanyahseriftext', file: 'thmanyahseriftext-Regular', family: 'thmanyah serif text', weights: '400' },
-];
+/* The serif faces (thmanyah serif display, thmanyah serif text) are NO LONGER
+ * shipped. Owner decision 2026-10-07: the whole product uses ONE family —
+ * "thmanyah sans" — so no font on any page comes from a second family.
+ *
+ * This removes ~109KB of base64 (serif display, was render-blocking on every
+ * route) and ~107KB (serif text, legal pages only) from the product.
+ *
+ * The files themselves are untouched in the typeface source directory and stay
+ * licensed and unmodified — we simply do not embed them. Nothing is renamed or
+ * subsetted, so the licence is unaffected.
+ *
+ * globals.css points --font-display and --font-serif at "thmanyah sans", so
+ * every heading, the legal pages and the brand images all render in Thmanyah
+ * sans and every one of those class names keeps working unchanged.
+ */
 
 const NOTICE = `/* ==========================================================================
    خط ثمانية (Thmanyah Typeface) — © 2026 شركة ثمانية للنشر والتوزيع، جميع الحقوق محفوظة.
@@ -111,9 +115,4 @@ function build(entries, outFile, title) {
   );
 }
 
-build(CORE, 'src/app/fonts/thmanyah.css', 'UI + headings: sans 400/500-600/700-800, serif display 700-800');
-build(
-  SERIF_TEXT,
-  'src/app/fonts/thmanyah-text.css',
-  'Long-form reading: serif text 400 (legal pages only)'
-);
+build(CORE, 'src/app/fonts/thmanyah.css', 'UI: sans 400/500-600/700-800 (one family)');
