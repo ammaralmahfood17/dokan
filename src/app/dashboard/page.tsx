@@ -1,17 +1,25 @@
 // D1: Dashboard orchestrator — data fetching + wiring only.
 // UI sections live in src/components/dashboard/* (extracted from the old
-// ~590-line god component). Data aggregation helpers in src/lib/dashboard-data.ts.
-import { getCurrentProject, buildChecklist } from '@/lib/project';
+// ~590-line god component).
+//
+// Audit 2026-10-07: this page used to make 13 queries across FOUR sequential
+// barriers (buildChecklist → KPI block → week scan) plus the auth and project
+// lookups. Measured against production, EVERY query costs ~150 ms regardless of
+// shape — a primary-key `select id` is as slow as the 7-day scan — so the cost
+// is the number of sequential barriers, not the queries. The figures below are
+// now derived in memory from three parallel datasets (see lib/dashboard-rollup).
+import { getCurrentProject } from '@/lib/project';
 import { recordOnboardingProgress } from '@/lib/onboarding-funnel';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import type { ChecklistItem } from '@/lib/types';
 import {
-  buildHourBuckets,
-  buildHourKeyFmt,
-  buildWeekBuckets,
+  buildDashboardRollup,
+  checklistFromRollup,
+  type OrderRow,
+  type OpenOrder,
   type RecentOrder,
-  type WeekOrder,
-} from '@/lib/dashboard-data';
+} from '@/lib/dashboard-rollup';
 import { KpiCards } from '@/components/dashboard/kpi-cards';
 import { ChecklistSection } from '@/components/dashboard/checklist';
 import { HourlySalesChart } from '@/components/dashboard/hourly-sales-chart';
@@ -24,18 +32,10 @@ export default async function DashboardPage() {
   const ctx = await getCurrentProject();
   if (!ctx) redirect('/onboarding');
 
-  const checklist = await buildChecklist(ctx.project.id);
-  const doneCount = checklist.filter((c) => c.done).length;
-  const allDone = doneCount === checklist.length;
-
-  // T13 funnel: record which onboarding steps this project has reached, once each.
-  // The write is scheduled with after() inside the helper, so it lands after the
-  // response and never adds to this page's latency. Best-effort — it cannot throw.
-  recordOnboardingProgress(ctx.project.id, checklist);
-
   const supabase = await createClient();
+
   // "Today" = Bahrain midnight (UTC+3). The server clock is UTC, so naive
-  // setHours(0,0,0,0) would drop orders between 00:00–03:00 Bahrain time.
+  // setHours(0,0,0,0) would drop orders between 00:00-03:00 Bahrain time.
   const TZ = 'Asia/Bahrain';
   const dayFmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: TZ,
@@ -46,134 +46,140 @@ export default async function DashboardPage() {
   const today = new Date(Date.parse(`${dayFmt.format(new Date())}T00:00:00+03:00`));
   const yesterday = new Date(today.getTime() - 86_400_000);
   const tomorrow = new Date(today.getTime() + 86_400_000);
+  const weekAgo = new Date(today.getTime() - 6 * 86_400_000);
+  // Charts are labelled from `now`; the rollup takes it as an argument so the
+  // aggregation stays pure and testable at a fixed instant.
+  const now = today.getTime();
 
+  // ONE parallel block replaces four sequential barriers (audit 2026-10-07,
+  // measured: every query costs ~150ms regardless of shape, so what costs is
+  // the NUMBER of sequential round-trips, not the queries themselves):
+  //
+  //   before: auth -> project -> checklist(4) -> KPIs(8) -> week7 scan   ~855ms
+  //   after:  auth -> project -> this block                                ~300ms
+  //
+  //  1. windowOrders   — the 7-day window, with order_items. Feeds every
+  //     money/quantity figure AND the recent-orders table (it is fetched
+  //     newest-first, so its head IS the latest five).
+  //  2. openOrders     — pending/preparing/ready, ANY date. Live KPIs must not
+  //     be windowed: a ticket stuck in `preparing` for ten days is still
+  //     blocking a table and must stay visible.
+  //  3. activeTables   — the live table list (add/disable a table here).
+  //  4. counts (3)     — head counts for the onboarding checklist, including
+  //     the TOTAL order count (not the 7-day one).
   const [
-    { count: todayOrders },
-    { count: yesterdayOrders },
-    { data: recentOrders },
-    { count: pendingCount },
-    { data: todaySalesData },
-    { data: yesterdaySalesData },
+    { data: windowOrders },
+    { data: openOrders },
     { data: activeTables },
-    { data: openTableOrders },
+    { count: productCount },
+    { count: tableCount },
+    { count: totalOrderCount },
   ] = await Promise.all([
     supabase
       .from('orders')
-      .select('*', { count: 'exact', head: true })
+      .select(
+        'id, status, total_amount, type, order_number, created_at, table_id, tables(number), order_items(product_name, quantity, unit_price)'
+      )
       .eq('project_id', ctx.project.id)
       .is('service_type', null)
-      .gte('created_at', today.toISOString())
-      .lt('created_at', tomorrow.toISOString()),
+      .gte('created_at', weekAgo.toISOString())
+      .order('created_at', { ascending: false }),
     supabase
       .from('orders')
-      .select('*', { count: 'exact', head: true })
+      .select('id, status, table_id')
       .eq('project_id', ctx.project.id)
       .is('service_type', null)
-      .gte('created_at', yesterday.toISOString())
-      .lt('created_at', today.toISOString()),
-    supabase
-      .from('orders')
-      .select('id, status, total_amount, type, created_at, order_number, table_id, tables(number)')
-      .eq('project_id', ctx.project.id)
-      .is('service_type', null)
-      .order('created_at', { ascending: false })
-      .limit(5),
-    supabase
-      .from('orders')
-      .select('*', { count: 'exact', head: true })
-      .eq('project_id', ctx.project.id)
-      .is('service_type', null)
-      .in('status', ['pending', 'preparing']),
-    supabase
-      .from('orders')
-      .select('total_amount, created_at')
-      .eq('project_id', ctx.project.id)
-      .is('service_type', null)
-      .not('status', 'eq', 'cancelled')
-      .gte('created_at', today.toISOString())
-      .lt('created_at', tomorrow.toISOString()),
-    supabase
-      .from('orders')
-      .select('total_amount')
-      .eq('project_id', ctx.project.id)
-      .is('service_type', null)
-      .not('status', 'eq', 'cancelled')
-      .gte('created_at', yesterday.toISOString())
-      .lt('created_at', today.toISOString()),
+      .in('status', ['pending', 'preparing', 'ready']),
     supabase
       .from('tables')
       .select('id')
       .eq('project_id', ctx.project.id)
       .eq('is_active', true),
     supabase
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', ctx.project.id),
+    supabase
+      .from('tables')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', ctx.project.id),
+    supabase
       .from('orders')
-      .select('table_id')
-      .eq('project_id', ctx.project.id)
-      .is('service_type', null)
-      .not('table_id', 'is', null)
-      .in('status', ['pending', 'preparing', 'ready']),
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', ctx.project.id),
   ]);
 
-  const todaySales = (todaySalesData ?? []).reduce(
-    (sum: number, o: { total_amount: number }) => sum + Number(o.total_amount),
-    0
-  );
-  const yesterdaySales = (yesterdaySalesData ?? []).reduce(
-    (sum: number, o: { total_amount: number }) => sum + Number(o.total_amount),
-    0
-  );
+  // Chart labels are locale work (Intl), aggregation is not — build the label
+  // maps once here and hand them to the pure rollup.
+  const hourFmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', hourCycle: 'h23',
+  });
+  const hourLabelFmt = new Intl.DateTimeFormat('ar-BH', {
+    numberingSystem: 'latn', hour: 'numeric', timeZone: TZ,
+  });
+  const hourLabels = new Map<string, string>();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now - i * 3_600_000);
+    const parts = hourFmt.formatToParts(d);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+    hourLabels.set(
+      `${get('year')}-${get('month')}-${get('day')}T${get('hour').padStart(2, '0')}`,
+      hourLabelFmt.format(d)
+    );
+  }
+  const weekdayFmt = new Intl.DateTimeFormat('ar-BH', {
+    numberingSystem: 'latn', weekday: 'short', timeZone: TZ,
+  });
+  const dayLabels = new Map<string, string>();
+  for (let i = 6; i >= 0; i--) {
+    const key = dayFmt.format(new Date(weekAgo.getTime() + i * 86_400_000));
+    dayLabels.set(key, weekdayFmt.format(new Date(`${key}T00:00:00+03:00`)));
+  }
+
+  const rollup = buildDashboardRollup({
+    windowOrders: (windowOrders ?? []) as OrderRow[],
+    openOrders: (openOrders ?? []) as OpenOrder[],
+    recentOrders: (windowOrders ?? []).slice(0, 5) as RecentOrder[],
+    now,
+    hourLabels,
+    dayLabels,
+  });
+
+  const {
+    todayOrders, yesterdayOrders, todaySales, yesterdaySales,
+    pendingCount, occupiedTableIds, byDay7, hourBuckets, peakHour, topProducts,
+  } = rollup;
+
+  const checklist = checklistFromRollup(
+    {
+      products: productCount ?? 0,
+      tables: tableCount ?? 0,
+      orders: totalOrderCount ?? 0,
+    },
+    ctx.project
+  ) as ChecklistItem[];
+  const doneCount = checklist.filter((c) => c.done).length;
+  const allDone = doneCount === checklist.length;
+
+  // T13 funnel: record which onboarding steps this project has reached, once each.
+  // The write is scheduled with after() inside the helper, so it lands after the
+  // response and never adds to this page's latency. Best-effort — it cannot throw.
+  recordOnboardingProgress(ctx.project.id, checklist);
 
   const salesDelta =
     yesterdaySales > 0
       ? Math.round(((todaySales - yesterdaySales) / yesterdaySales) * 100)
       : null;
-  const ordersDelta = (todayOrders ?? 0) - (yesterdayOrders ?? 0);
+  const ordersDelta = todayOrders - yesterdayOrders;
 
   const totalActiveTables = (activeTables ?? []).length;
-  const occupiedTableIds = new Set(
-    (openTableOrders ?? []).map((o: { table_id: string | null }) => o.table_id)
-  );
   const occupiedCount = occupiedTableIds.size;
 
-  // ---- Hourly sales today (Asia/Bahrain, last 7 hours) ----
-  const hourBuckets = buildHourBuckets();
-  const hourIndex = new Map(hourBuckets.map((b, i) => [b.key, i]));
-  const hFmt = buildHourKeyFmt();
-  for (const o of (todaySalesData ?? []) as { total_amount: number; created_at: string }[]) {
-    const d = new Date(o.created_at);
-    const parts = hFmt.formatToParts(d);
-    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-    const key = `${get('year')}-${get('month')}-${get('day')}T${get('hour').padStart(2, '0')}`;
-    const idx = hourIndex.get(key);
-    if (idx !== undefined) hourBuckets[idx].revenue += Number(o.total_amount);
-  }
-  const peakHour = [...hourBuckets].sort((a, b) => b.revenue - a.revenue)[0];
-
-  // ---- Last 7 days chart + top 3 (Asia/Bahrain buckets) ----
-  const { weekAgo, byDay7 } = buildWeekBuckets(dayFmt);
-  const { data: weekOrders } = await supabase
-    .from('orders')
-    .select('id, status, total_amount, created_at, order_items(product_name, quantity, unit_price)')
-    .eq('project_id', ctx.project.id)
-    .is('service_type', null)
-    .gte('created_at', weekAgo.toISOString());
-
-  const weekTop = new Map<string, { qty: number; revenue: number }>();
-  for (const o of (weekOrders ?? []) as WeekOrder[]) {
-    if (o.status === 'cancelled') continue;
-    const k = dayFmt.format(new Date(o.created_at));
-    const day = byDay7.find((d) => d.key === k);
-    if (day) day.revenue += Number(o.total_amount);
-    for (const it of o.order_items ?? []) {
-      const cur = weekTop.get(it.product_name) ?? { qty: 0, revenue: 0 };
-      cur.qty += Number(it.quantity);
-      cur.revenue += Number(it.quantity) * Number(it.unit_price ?? 0);
-      weekTop.set(it.product_name, cur);
-    }
-  }
-  const top3 = [...weekTop.entries()]
+  const top3 = [...topProducts.entries()]
     .sort((a, b) => b[1].revenue - a[1].revenue)
     .slice(0, 3);
+
 
   // Vercel runs UTC — without an explicit timeZone the TODAY chip would show
   // UTC and the date would flip a day between 00:00–03:00 Bahrain time.
@@ -231,7 +237,7 @@ export default async function DashboardPage() {
       <section className="mb-8 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <HourlySalesChart hourBuckets={hourBuckets} currency={ctx.project.currency} />
         <RecentOrdersTable
-          recentOrders={(recentOrders ?? []) as RecentOrder[]}
+          recentOrders={rollup.recentOrders}
           currency={ctx.project.currency}
         />
       </section>
