@@ -1,6 +1,6 @@
 # Remediation tracker — 2026-10 frontend + backend audits
 
-Plan: `.hermes/plans/2026-10-05_235725-dokan-v3-full-remediation.md` (44 tasks, 6 waves).
+Plan: `.hermes/plans/2026-10-05_235725-dokan-full-remediation.md` (44 tasks, 6 waves).
 Branch: `fix/audit-remediation-20261005` · Base commit `5188588` · Last updated 2026-10-06 02:20 +03.
 Human-only steps: `docs/audit-2026-10/OPS-VERIFICATION.md`
 

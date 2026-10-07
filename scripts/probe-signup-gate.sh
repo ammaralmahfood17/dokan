@@ -2,7 +2,7 @@
 # Live verification of the signup CAPTCHA gate — one dev server at a time (Next refuses two
 # dev servers from the same directory: a lock file makes the second exit with code 0).
 set -u
-cd /home/ammar/dokan-v3
+cd /home/ammar/dokan
 
 kill_port() {
   local pids

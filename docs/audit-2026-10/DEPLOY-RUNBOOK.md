@@ -1,4 +1,4 @@
-# Deploy runbook — dokan-v3 audit remediation (owner item R1)
+# Deploy runbook — Dokan audit remediation (owner item R1)
 
 Ordered steps, each with a command and a verification. Do not skip a verification: every step here
 exists because a check found the problem it prevents. Rollback for each step is on the step.
@@ -70,7 +70,7 @@ step 5 carries none).
 ## 5. Non-destructive migrations — apply BEFORE the deploy
 
 ```bash
-cd ~/dokan-v3 && supabase link --project-ref <ref>      # once
+cd ~/dokan && supabase link --project-ref <ref>      # once
 supabase db push --dry-run                              # expect exactly: 20261006150000_default_acl_hardening.sql
 supabase db push                                        # applies it
 ```

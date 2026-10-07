@@ -21,7 +21,7 @@ sudo usermod -aG docker ammar        # then log out / back in
 npm run test:db                      # expect: all pgTAP plans OK
 
 # (b) run it yourself and keep the output
-cd ~/dokan-v3 && npm run test:db 2>&1 | tee /tmp/test-db.log
+cd ~/dokan && npm run test:db 2>&1 | tee /tmp/test-db.log
 
 # (c) let CI do it — the PR runs exactly this on a clean database
 #     .github/workflows/ci.yml → job `database-security` (supabase start + db reset + test db)
@@ -203,7 +203,7 @@ one confirmed user, membership in one of them), mirrors the app's subscription e
 deletes every fixture afterwards. Your live stores are never touched.
 
 ```bash
-cd ~/dokan-v3
+cd ~/dokan
 node scripts/realtime-probe.ts --dry-run        # prints the plan, creates nothing
 node scripts/realtime-probe.ts                  # production (keys from .env.local)
 node scripts/realtime-probe.ts --url http://127.0.0.1:54321 \
@@ -261,7 +261,7 @@ Realtime **private** channel with `realtime.messages` RLS — not `postgres_chan
 menu URL: zero `serious`/`critical` violations.
 
 ```bash
-cd ~/dokan-v3
+cd ~/dokan
 npm run a11y                                             # target = E2E_BASE_URL or production
 E2E_BASE_URL=http://localhost:3000 E2E_MENU_PATH=/estikana/menu/table-1 npm run a11y
 ```
@@ -310,11 +310,11 @@ date: __________  ld+json body: yes/no ____  old attribute count: ____  Rich Res
 ## 10. Weekly Core Web Vitals budget report (Wave 5 T3)
 
 Cron job `010c04282d5d` — "CWV budget report (weekly)" — runs **every Monday 09:00 (+03)** from
-`/home/ammar/dokan-v3`, delivery `local` (saved under `~/.hermes/cron/output/`). A breach opens a
+`/home/ammar/dokan`, delivery `local` (saved under `~/.hermes/cron/output/`). A breach opens a
 task, not a page.
 
 ```bash
-cd ~/dokan-v3 && node scripts/cwv-report.mjs            # exit 1 on a budget breach
+cd ~/dokan && node scripts/cwv-report.mjs            # exit 1 on a budget breach
 CWV_WINDOW_DAYS=30 node scripts/cwv-report.mjs          # a different window
 ```
 
