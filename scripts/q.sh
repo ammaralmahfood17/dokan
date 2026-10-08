@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Query helper for dokan-v3 live DB (transaction pooler URL from .env.local).
+# Query helper for the Dokan live DB (transaction pooler URL from .env.local).
 # Usage: bash scripts/q.sh "select 1"  |  bash scripts/q.sh -f file.sql
 set -euo pipefail
 cd "$(dirname "$0")/.."

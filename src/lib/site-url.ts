@@ -11,7 +11,7 @@ export function getSiteUrl(): string {
   );
 }
 
-/** Host without scheme, e.g. for link previews: "dokan-v3.vercel.app". */
+/** Host without scheme, e.g. for link previews: "dokan.vercel.app". */
 export function getSiteHost(): string {
   return getSiteUrl().replace(/^https?:\/\//, '');
 }

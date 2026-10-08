@@ -1,0 +1,345 @@
+# Remediation tracker — 2026-10 frontend + backend audits
+
+Plan: `.hermes/plans/2026-10-05_235725-dokan-full-remediation.md` (44 tasks, 6 waves).
+Branch: `fix/audit-remediation-20261005` · Base commit `5188588` · Last updated 2026-10-06 02:20 +03.
+Human-only steps: `docs/audit-2026-10/OPS-VERIFICATION.md`
+
+Statuses: **DONE** (shipped + verified) · **PARTIAL** (part shipped, part blocked) ·
+**TODO** · **RETRACTED** (finding was wrong) · **RE-SCOPED** (smaller/different than reported).
+
+## Owner decisions recorded
+
+| Date | Decision |
+|---|---|
+| 2026-10-06 | QR reprint is the owner's job; ship a banner until printed; `REQUIRE_TABLE_TOKEN` flips only after 48h of `token_present=false`. **No date-based flip.** |
+| 2026-10-06 | `bill`/`waiter`: **DELETE** both routes, tests, references — no token-gated variant. |
+| 2026-10-06 | Storefront `/<slug>` stops listing tables; shows the scan rule + one read-only browse link; legacy table URLs never 404. |
+| 2026-10-06 | axe is a **BLOCKING** CI gate (0 serious/critical) on `/login`, `/dashboard/pos`, checkout, one public menu URL. The two Criticals are non-negotiable. |
+| 2026-10-06 | **Email confirmation ON and CAPTCHA ON** — this SUPERSEDES the earlier "no confirmation, no CAPTCHA" accepted risk. Hosted settings verified by the owner. |
+| 2026-10-06 | five deployment variables must exist in Vercel (prod + preview); boot fails closed without them. |
+| 2026-10-06 | Amendments A1–A4 to the plan (preflight assertion, Referer/Sentry scrubbing, RPC-based resolution, bill/waiter deletion). |
+| 2026-10-06 | Amendments A5–A9: manual confirm + resend UI + unconfirmed-login path; rollout-window hardening; run the realtime probe BEFORE any realtime alarm code; impersonation Option A; W1+W2 are the floor and W3+ waits on their evidence. |
+| 2026-10-06 | Decision 3 = confirm-by-hand + resend (SMTP is not wired up yet); decision 4 = Turnstile. Implemented under the earlier 7/8 numbering. |
+
+## Wave 0 — Preflight
+
+| Task | Status | Evidence |
+|---|---|---|
+| W0-T1 baseline | **DONE** | `tsc` 0 · `lint --max-warnings 0` 0 · vitest 87/87 · `npm run build` clean |
+| W0-T2 tracker | **DONE** | this file |
+| W0-T3 live DB verification | **DONE** | `/tmp/audit-queries.sql`; results in §"Live production verification" |
+| **A1** token-format preflight | **DONE** | `select count(*) from public.tables where qrcode !~ '^[0-9a-f]{32}$'` → **0**; no uppercase, no wrong length, no duplicates → enforcement is safe to flip and `TOKEN_RE` matches the data |
+
+## Wave 1 — Security
+
+| # | Finding | Sev | Status | Evidence |
+|---|---|---|---|---|
+| 1 | T2 #1 table scan token never checked (anonymous cross-tenant write) | Critical | **DONE** (enforcement dark, by design) | `7f881e9`, `8f9a78c`, `06906ff`; migration ledger 26→27; pgTAP `phase6_table_token.sql`; live 403 / 404 / 200 |
+| 1b | Token must never enter route memory (**A3**) | Critical | **DONE** | `5ad613e`; resolution goes through `resolve_table_by_token`; no `select qrcode` in the route; live 200/404/403 after the rewrite |
+| 1c | Token must never reach Sentry or a Referer (**A2**) | Critical | **DONE** | `70c9668`; `src/lib/sentry-scrub.ts` + 19 tests + a source guardrail on all three runtimes (run RED first); `Referrer-Policy: no-referrer` on the menu subtree, `/login` unchanged — both live-verified |
+| 1d | Storefront published every table slug (decision 5) | Major | **DONE** | `470768c`; `/[slug]` shows the scan rule + 1 read-only link, 0 `?k=` in the HTML; legacy URL live `HTTP 200` with `orderingEnabled:false` |
+| 2 | T2 #2 no email verification, weak passwords | Major | **DONE** | password floor `0566dad` (10 chars, login deliberately still 6); confirmation + Turnstile `a0b32b3`/`6e1f772` + `65987ce`: live **400 missing token / 400 misconfigured secret / 503 fail-closed**, zero accounts created. Hosted Auth settings = owner item |
+| 3 | T2 #3 unauthenticated waiter/bill writes | Major | **DONE** (deleted per decision 2) | `b3aab0c`; both routes + their e2e cases + helpers removed; no gated variant |
+| 8 | T2 #8 `/api/health` leaks alert config | Minor | **DONE** | `c3e96f8`; live probe: no `integrations` key without `HEALTH_TOKEN` |
+| 9 | T2 #9 vitals write amplification | Minor | **DONE** | `3b35e6e`; 240→60/min + 512-byte cap |
+| 10 | T2 #10 push/subscribe unvalidated | Minor | **DONE** | `3b35e6e`; shape validation + 10/h/user |
+| 11 | Decision 1: merchant needs to know to reprint | — | **PARTIAL** | `02b03b2`; banner + `projects.qr_reprinted_at` (migration `20261006094000`, ledger 27→28, column grant asserted). The FLIP is an ops step — OPS-VERIFICATION §4 |
+| 12 | Decision 8: deployment variables | — | **DONE** | `a0b32b3`; `.env.example` (24 vars documented, `env:check` 0); prod-only required set; `VERCEL_ENV=production env:validate` exits 1 listing all five |
+| 4 | T2 #4 missing `order_items` index | Major | **RETRACTED** | index exists since `0006:81-82`; live query: **0 FKs without a covering index** |
+| 13 | T2 #13 dead objects | Minor | **RE-SCOPED** | `order_sequences` does not exist in production (dropped); `service_requests` (0 rows) + unused routes remain → W6-T1 |
+| 14 | T2 #14 default-privilege gap | Minor | **RE-SCOPED** | live `pg_default_acl` grants only to `postgres`+`service_role` → already closed; only the platform setting + assertion remain → W6-T2 |
+| — | **Extra**: non-JSON body → 500 on `/api/public/order` | Major | **DONE** | `208539b`; the repo's own `e2e/resilience.spec.ts` R1 documented it as KNOWN FAILING; now a 400 and the test passes |
+| — | **Extra**: register hint said 6 chars while the minimum is 10 | Minor | **DONE** | `6e1f772` |
+| — | **Extra**: a wrong `TURNSTILE_SECRET` reported as a Cloudflare outage | Major | **DONE** | `65987ce`; the response body is authoritative → `misconfigured` + ERROR-level Sentry; live-verified |
+| A5 | Confirmations ON with no SMTP: a merchant can sign up and then be permanently stuck | Major | **DONE** | `736800b`; `auth-errors.ts` (10 tests, resend offered for exactly one kind), login + register resend UI, `/api/auth/resend-confirmation` (3/15min per address, 10/h per IP, no enumeration answer), super-admin `POST /api/super-admin/confirm-user` + `/super-admin/users` + the new `user.confirm` audit action; password classes pinned as a conjunction; 19 route-level signup tests |
+| A6 | Rollout window: a supplied-but-wrong token was treated as “no token” and ACCEPTED | Major | **DONE** | `488e46e`; three-way split in the guard (absent / malformed = **always 404** / well-formed), tight tokenless budget 10/min + 60/h per project, Sentry warning per tokenless acceptance. Guardrail proven **RED** against the old guard (9 failures) → GREEN 24/24, then live: `'junk'`/`'table-1'`/`42` → 404 (was accepted), tokenless x11 → 400×10 then **429**, orders still at baseline 1 |
+| — | **Extra**: the same non-JSON → 500 as public/order on three UNAUTHENTICATED routes | Major | **DONE** (scope) | `d3999d4`; `/api/auth/signup`, `/api/auth/reset-password`, `/api/telegram/link` (×2) now 400. Found by the new signup route test. **14 further sites are behind a session** — listed below as a dated follow-up, not silently dropped |
+
+**Wave 1 exit criteria: met except the enforcement flip, which is blocked on the physical QR
+reprint.** Until then the fix ships dark: tokenless orders are accepted, recorded
+(`order_audit_logs.metadata.token_present`) and flagged to Sentry — and, since A6, bounded by a
+10/min + 60/h tokenless budget of their own. A supplied-but-wrong token is a 404 in the window
+too, so the window cannot be used as a bypass.
+
+**DONE 2026-10-06 (`49719bd`) — the body guard, all 12 remaining sites.** `await request.json()`
+throws on a non-JSON body and on an empty one, so those routes answered 500 + a Sentry event for
+input nobody validated: `onboarding/project`, `pos/order`, `pos/cancel`, `push/subscribe`,
+`push/unsubscribe`, `revalidate-menu`, `staff/notification-prefs`,
+`super-admin/{archive-project,create-project,hard-delete-project,impersonate}`,
+`telegram/webhook`. Each now reads with `.catch(() => null)` and rejects a non-object body - the
+shape the verified public order path shipped in W1, which also covers the literal JSON `null`
+(it parses fine and only fails later on destructuring). `telegram/webhook` keeps its ack-and-ignore
+contract because Telegram retries non-2xx. Guardrail `scripts/check-json-body-guard.mjs` (CI) was
+run RED first: it printed all twelve `file:line` sites, and passes now. Behaviour proven on three
+handlers with different dependencies — `src/app/api/body-guard.test.ts`, 15 tests, junk bodies give
+400 and never 500, with the auth layer mocked to throw if touched, so a junk body cannot reach a
+table. The other nine share the identical shape and are held by the gate.
+
+**Wave 1 gates:** `tsc` 0 · `lint` 0 · **vitest 187/187 (16 files)** · `build` 0 · `env:check` 0 ·
+`env:validate` 0 (dev) / exit 1 (production simulation).
+`npm run test:db` is **not executable on this host** (no docker group, sudo needs a password)
+→ substituted by the PR's CI job and **verified green on the final W1 head `282d7bc`**:
+`Fresh database · Security assertions` (supabase start + db reset + test db, incl.
+`phase6_table_token.sql`), `Typecheck · Lint · Build`, `E2E is configured (not executed)` —
+run 37385404716 was the first head, the pushed W1 head is the one recorded here.
+Permanent fix in OPS-VERIFICATION §1.
+
+## Wave 2 — Money path, data integrity, multi-tenant scale
+
+| # | Task / finding | Status | Evidence |
+|---|---|---|---|
+| W2-T1 | ~~Index `order_items`~~ (T2 #4) | **RETRACTED, replaced** | The indexes existed since `0006:81-82`. Replaced by a stronger gate: assertion 5 of `phase7_no_permissive.sql` fails CI when ANY foreign key in public lacks a covering index |
+| W2-T2 | T2 #5 Realtime tenant isolation | **DONE** | `505fae3`. Probe FIRST (`scripts/realtime-probe.ts`, see the finding below), then defence in depth: `src/lib/realtime-guard.ts` + 7 tests, the guard wired into `live-refresh.tsx` and the KDS (insert/update/delete), and `supabase/tests/phase7_realtime.sql` (4 assertions, one of them general: no published table without RLS) — validated 4/4 |
+| W2-T3 | T2 #6 middleware security model | **DONE** | `9c23070`. Comment states that `getSession()` is not an authorization decision and names the two real boundaries. Verified the only callers are the middleware fast path and the three routes that document it before forcing a server-side `getUser()` |
+| W2-T4 | T2 #7 Telegram link code 32 → 128 bits | **DONE** | `a06a087`. `generateLinkCode()` (32 hex, CSPRNG) + webhook pattern widened to `{6,32}` + 5 tests including two source guardrails |
+| W2-T5 | T2 #11 payment idempotency | **DONE** | `3043e39` (+ repair `20261006130000`). Live, throwaway project: same key twice → same expiry, ONE payment row; a new key extends normally. Ledger 28 → 31 |
+| W2-T6 | T2 #12 order-replay race | **DONE** | `e114106`. Live CONCURRENT test: A `replayed:false`; B blocked ~1.1s on the unique index then `replayed:true` with A's id; exactly 1 order row |
+| W2-T7 | T2 #5/#14 security suite | **DONE** | `62d2354`. `phase7_no_permissive.sql`, 5 class-level assertions, validated 5/5 against production inside a transaction with ROLLBACK |
+| W2-T8 | Guardrail: no undocumented service-role route | **DONE** | `0c29289`. `scripts/check-public-write-gates.mjs` + a CI step after Lint. First run: 26 routes checked, 16 service-role routes, all documented. Also fails on a STALE entry, which is why the bill/waiter entries are gone (decision 2 / A4) |
+
+**Wave 2 gates:** `tsc` 0 · `lint` 0 · **vitest 199/199 (17 files)** · `build` 0 · `env:check` 0 · the new
+`check-public-write-gates` step 0. `npm run test:db` still substituted by the PR's CI job.
+
+**Defects found and fixed WHILE verifying W2** (all mine or in my tooling, recorded so the next
+person does not repeat them):
+
+1. **I broke payments for a few minutes.** `20261006110000` was recorded as applied while its
+   `ALTER TABLE` / `CREATE INDEX` statements were missing from the file that ran: the file had
+   been regenerated by splitting the previous text on the first occurrence of
+   `DROP FUNCTION IF EXISTS public.record_payment_and_renew`, and that exact string also appears
+   inside the file's own ROLLBACK comment — so the split truncated the head away. The function
+   then referenced a column that did not exist, and **every manual payment failed at runtime**
+   (`column client_request_id does not exist`); PL/pgSQL resolves a body's SQL at first
+   execution, not at `CREATE`, which is why the migration itself reported success and the ledger
+   recorded it. Fixed by repairing `20261006110000` for fresh resets AND adding idempotent
+   `20261006130000` for the already-migrated database, with assertion blocks in both.
+2. A wrong `TURNSTILE_SECRET`... (see Wave 1) — this one is different: the first version of the
+   probe's own diagnostics used `'A ' || create_order_transactional(...)`, and `||` is the **JSONB
+   concatenation operator**, so the label was coerced to jsonb and the call failed with
+   `Token "A" is invalid` BEFORE the function ran. A test harness can fail in ways that look
+   exactly like a product bug.
+3. `psql -c` prints the command tag (`INSERT 0 1`) and re-interprets quoting; a captured id
+   silently became "id\nINSERT 0 1". Every probe now writes a `.sql` file and passes values as
+   psql variables (`:'items'`), which also removed a JSON-escaping trap.
+
+## Wave 3 — Accessibility, WCAG 2.2 AA
+
+| # | Task / finding | Status | Evidence |
+|---|---|---|---|
+| W3-T1 | T1 #1 focus indicator 1.47:1 (**Critical**) | **DONE** | `0e6f5f5`. Test written first and run RED (3 failures) -> GREEN. `outline: 2px solid var(--color-primary)` + offset: 6.29:1 on white, 5.97:1 on bg, and it survives forced-colors mode where a box-shadow is not painted at all |
+| W3-T2 | T1 #2 control boundaries 1.18:1 (**Critical**) | **DONE** | `0e6f5f5`. `--color-border-control: #767B74` on `.input/.select/.textarea`; the test measures > 3:1 on all three surfaces. Dividers (.card, tables) keep the hairline and that is asserted, so the fix cannot turn the UI heavy |
+| W3-T3 | T1 #3 twelve orphaned labels | **DONE** | `a75fff2`. jsx-a11y rules added; they surfaced **26 errors** (12 labels + 14 interactions) = the work list. All 12 now pair htmlFor/id, the group label became fieldset/legend. `npm run lint` 0 |
+| W3-T4 | T1 #4 badge contrast 4.34:1 | **DONE** | `0e6f5f5`. delivered -> text-secondary: **4.68:1**. The guard reads the COMPONENT (status-chip.tsx), not just globals.css - the reason this finding survived the first audit |
+| W3-T5 | T1 #6 modal focus in/out | **DONE** | `a75fff2`. Fallback focuses the panel (`tabIndex={-1}`) so a no-input dialog is still announced; the opener is remembered and refocused on unmount (WCAG 2.4.3) |
+| W3-T6 | T1 #7 44px touch targets | **DONE** | `a75fff2`. **Five** sites, not the three the audit named: the gate caught the POS quantity steppers at `h-11 w-10` (44x**40**) - the most-tapped controls in the app. `scripts/check-touch-targets.mjs` runs in CI (111 tsx files, clean) |
+| W3-T7 | T1 #13 dialog misuse on the install prompt | **DONE** | `a75fff2`. `role="dialog"` + `aria-label` on a passive banner announced a modal that does not exist; it is now `role="status"` + `aria-live="polite"` |
+| W3-T7 | T1 #14 `role="alert"` wrapping interactive content | **DONE** | `a75fff2`. The dashboard error page's alert contained the retry button and the details accordion, so their labels were re-announced on every update. The assertion now sits in its own `sr-only` live region, outside the interactive content |
+| W3-T8 | T1 #15 half-implemented tabs | **DONE** | `a75fff2`. `role="group"` + `aria-pressed` (filters over one region, matching the other filters in the app) |
+| W3-T9 | T1 #20 click handler on a non-interactive element | **DONE** | `a75fff2`. The kitchen's page-wide reset is not an affordance: it keeps `role="presentation"` with a key handler, and the other 13 sites the rule found got their honest shape (see the note below) |
+| W3-T9 | T1 #21 the busy CTA announced nothing | **DONE** | `a75fff2`. The POS checkout spinner is `aria-hidden` by design, so the button went silent while working; it now carries `aria-busy` |
+| W3-T10 | the axe gate (decision 6) | **DONE** | `596a3cb`. `e2e/a11y.spec.ts` + `playwright.a11y.config.ts` + `npm run a11y`. **Results, bundled chromium, real runs - production `https://dokanstore.xyz`, 8/8 PASSED:** `/login` - `/register` - `/estikana/menu/table-1` - `/dashboard/pos` - `/dashboard/orders` - the POS cart drawer (decision 6's "checkout") - the POS screenshot. That is every surface decision 6 names. `A11Y_SEED=1` seeds its own throwaway store (service-role client, the pattern the other e2e specs use), signs in with a real session cookie and deletes everything in `afterAll`; afterwards **0 leftover projects and 0 leftover test users** (asserted against production, not assumed). OFF by default, because `E2E_BASE_URL` defaults to production and the default has to be the safe one. The main playwright config pins `channel: 'chrome'` (system Chrome), so the a11y config uses the bundled browser and changes nothing else |
+
+**The gate earned its keep before it was even finished - it found two real defects:**
+
+1. **The focus ring never reached a single input (audit T1 #1, still broken after the first fix).**
+   The computed style in Chrome read `outline: none` on a focused input while the skip link - which
+   has no competing rule - showed the new ring. `*:focus-visible` sat inside `@layer base`, and a
+   cascade layer LOSES to an unlayered author rule at equal specificity; `.input` declared
+   `outline: none`. So the one ring that must always win was the one that could always be
+   outranked. Fixed in `8344570` and re-measured: `input#email -> rgb(79, 70, 229) solid 2px`. A
+   unit test could not have caught this - it needed the computed value from a browser.
+2. **My own W1 Turnstile container had `aria-prohibited-attr` (serious).** `aria-label` on a `div`
+   with NO role is prohibited, so the label was dropped and the challenge announced unlabelled;
+   `role="group"` makes it legal (`ee59278`). Found on a dev-mode run, where the widget's empty
+   state is visible long enough to measure — production renders the iframe inside it, which is why
+   the live run passed.
+
+The spec also refuses to grade a page it never reached: a route the browser was redirected away
+from is SKIPPED with a named reason, and a route that did not RENDER fails with that wording
+(before this guard, a local 500 was reported as a `document-title` violation of the menu page).
+
+**Two CI failures on this branch, both resolved, one of them a real trap:**
+
+- `npm ci` failed on BOTH jobs: `package.json` required `@axe-core/playwright` while the committed
+  `package-lock.json` predated the install. `npm ci` does not resolve - that is its value - so the
+  branch was broken in CI while green locally. Fixed by committing the lockfile (`d4225ba`).
+  Lesson: `git add -A <dirs>` is not a substitute for checking what a dependency install touched.
+- ~~`next build` failed in CI with `Module not found: Can't resolve
+  '@vercel/turbopack-next/internal/font/google/font'`~~ — **FIXED (`ae866b6`).** The build fetched
+  Cairo from Google Fonts at build time; it failed twice on CI for identical code, which is a red
+  pipeline for a reason nothing in the repository controlled. Cairo is self-hosted now
+  (`@fontsource-variable/cairo`, woff2 in the package, per-subset `unicode-range`) and
+  `scripts/check-hermetic-build.mjs` fails CI on any `next/font/google` import or Google font URL.
+  Proven: a build through a **dead proxy** succeeds, a browser run shows **0** requests to Google
+  with **2** woff2 from our own origin, and `font-family` still resolves to `"Cairo Variable"`.
+  (`scripts/check-font-delivery.mjs` asserts exactly that, so "self-hosted" cannot quietly come to
+  mean "no typeface at all".)
+
+**Wave 3 gates:** `tsc` 0 - `lint` 0 (was 26 errors) - **vitest 209/209 (17 files)** - `build` 0 -
+`check-touch-targets` 0 - `check-public-write-gates` 0 - `env:check` 0.
+
+**The interaction class is 14 findings the audit never counted.** The audit listed the 12
+labels (T1 #3) and the kitchen handler (T1 #20) but not the other 13 click-handler-on-a-div
+sites the same rule catches. Each was fixed by its honest shape rather than a
+`eslint-disable`: overlays got `role="presentation"` + an Escape path (the semantic dialog is
+the panel inside), the settings confirm dialog lost an inner `onClick={stopPropagation}` panel
+that existed only to cancel another handler, and the dropzone got `role="button"` + Enter/Space
+because it cannot BE a button - the hidden file input lives inside it.
+
+## Wave 4 — design, i18n and the Arabic legibility floor
+
+| # | Finding | Sev | Status | Evidence |
+|---|---|---|---|---|
+| T1 #8 | `lang` never updates for English menu content | **Major** | **DONE** | `dc8dbca`. An English product name sat inside an Arabic page with no `lang`, so a screen reader read it with the Arabic voice — on the product's public face. **Deviation from the plan, stated:** the plan marked these by the TOGGLE, and that premise is false here — a store named in Arabic is still Arabic with the toggle on EN. The marker follows the script of the text (`src/lib/i18n.ts`, 4 tests), and the toggle moves `document.documentElement.lang` while `dir` stays rtl |
+| T1 #9 | Radius scale inverted (`xl` 12px < `lg` 14px) | Minor | **DONE** | `f853f08` + `4033473`. `--radius-xl` 12 → 20 (option a). Guard written first and seen RED on the real values — `radius scale must ascend: [6,10,14,12]` — then GREEN. Blast radius: 12 call sites; a browser measured **20px at 100% and 200%** on the 8 reachable ones (7 landing + 1 storefront). The settings deactivate MODAL was measured in a later run (20px, `toEqual(['20px'])` passed) and the dashboard error boundary and the `loading.tsx` skeleton remain unmeasured — the guard binds the token, but they are not claimed as verified. `DESIGN_SYSTEM.md` disagreed with the code (md 8/lg 10/xl 12) and was corrected; its `--radius-xs` row is flagged — no such token is declared or referenced anywhere |
+| T1 #10 | Arabic-Indic numerals in UI strings | Minor | **DONE** | `1657e50`. 5 strings → Latin (`٧ أيام`, `٣٠ يوم`, `آخر ٧ ساعات`, `١.`, `٢.`). The guard is source-wide, so a sixth cannot appear: RED with the fixes stashed (`telegram-manager.tsx:149`, `hourly-sales-chart.tsx:21`, `analytics-client.tsx:10`), GREEN after. `src/lib/utils.ts` is excluded on purpose — it holds the transliteration MAP (data) and a comment about this rule |
+| T1 #11 | `toLocaleDateString('ar-BH')` without `-u-nu-latn` | Minor | **DONE** | `1657e50`. → `'ar-BH-u-nu-latn'` — one string, the smallest change that forces Latin numerals while the surrounding text stays Arabic |
+| T1 #12 | Print sheet missing `lang`; English `alt` | Minor | **DONE** | `fb37036`. The print window is a fresh document, so it declares its own: `<html lang="ar" dir="rtl">`. The printed QR alt went from `Table 3` to `رمز QR لطاولة 3` (written as escapes so no toolchain can mangle it) |
+| T1 #16 | `global-error` uses off-token colours | Minor | **DONE** | `6017781`. Cool slate → the warm tokens (#FAF9F6/#1F2320/#6B6F68), with a comment saying why the values are duplicated (it replaces the root layout and cannot read the tokens). It also declares its own viewport + `theme-color`, which it previously inherited from nothing |
+| T1 #17 | Dead `phone-mockup` class; unused `screenshots/dark.png` | Minor | **DONE** | `5f2adfc`. The class was verified undefined (no rule in globals.css, no other usage) and removed. `dark.png` was registered in the manifest's `screenshots` rather than deleted — deleting a shipped asset is the owner's call, and the install dialog now shows both |
+| T1 #18 | Title flashing ignores `prefers-reduced-motion` | Minor | **DONE** | `ca92488`. A 1 Hz `document.title` swap is motion the CSS kill-switch cannot reach (JS) and it fired while the tab was hidden — when nobody is looking. Under reduce: the title is set ONCE with no interval; a visible tab still alternates, a hidden one no longer works every second |
+| T1 #19 | 63 uses of 10px/11px text | Minor | **DONE** | `c566765`. The measured list is **65 across 29 files** (11px ×38, 10px ×25, **10.5px ×2** — which the plan's two-pattern grep missed), all raised to `text-[11.5px]`. Guard fails under 11.5px resolved from px OR rem: RED `expected [ …(65) ] to deeply equal []`, GREEN 0 hits. Verified in the browser, not just the source: **0px horizontal overflow and 0 rendered elements below the floor** at 100% AND 200% on the POS grid, the analytics (hourly chart) and the public product card. The floor is absolute — no unverifiable "11px for numeric badges" exception — and the tradeoff is documented in `DESIGN_SYSTEM.md` |
+
+**Wave 4 gates:** `tsc` 0 · `lint` 0 · **vitest 233/233 (19 files)** · `build` 0 ·
+`check-hermetic-build` 0 · `check-json-body-guard` 0 · `check-touch-targets` 0 ·
+`check-public-write-gates` 0 · `env:check` 0.
+
+**Two deviations from the plan, both deliberate and recorded above:** the `lang` marker follows the
+text's script rather than the toggle (the plan's premise was false in the code), and the legibility
+floor has no numeric-badge exception (a guard cannot see what a className is written on).
+
+## Wave 5 — SEO, headers and performance budgets
+
+| # | Finding | Sev | Status | Evidence |
+|---|---|---|---|---|
+| T1 #5 | Structured data is not structured data | **Major** | **DONE** | `8ac9c09`. The menu emitted the JSON-LD as a React PROP (`{...({ jsonLd } as object)}`), which React 19 renders as an attribute. **Verified on production before the fix:** `jsonLd="[object Object]"` in the DOM and `schema.org` appearing ONLY inside the React Flight payload, i.e. no `<script>` body at all — the finding, live. React agrees in its own words ("does not recognize the `jsonLd` prop on a DOM element"), and the test asserts the BUG so the old shape cannot be copied back. The fix uses `dangerouslySetInnerHTML` with `JSON.stringify` and the file's now-false "zero uses in this codebase" comment was corrected in the same commit. Verified in a SERVED page: a real body `{"@type":"Restaurant","name":"estikana",…}` and 0 occurrences of the old attribute. Production re-check is OPS §9 |
+| T1 #22 | Deprecated `X-XSS-Protection` | Minor | **DONE** | `d81802d`. Production sent `x-xss-protection: 1; mode=block` (captured before the change). Removed; the CI assertion that reads `.next/routes-manifest.json` now also requires `referrer-policy` and FAILS on the presence of the deprecated header — exercised against a manifest containing it (exit 1), while the real manifest reports `has x-xss-protection: false`. Live on the built server: 0 occurrences, all five required headers present. A stale CSP comment crediting `next/font` with needing Google Fonts was corrected in the same file |
+| W5-T3 | CWV table → a real budget | — | **DONE** | `scripts/cwv-report.mjs` (p75 per path over 7 days, budgets LCP ≤ 2500ms on `/<slug>/menu/*`, ≤ 1800ms on `/`, INP ≤ 200ms; exit 1 on a breach) + cron job `010c04282d5d` "CWV budget report (weekly)", Mondays 09:00, delivery `local`. **Baseline (2026-10-06):** 18 rows reported, **0 budgeted rows judged** — the public menu has < 20 LCP samples, so the script prints "a green run here means 'not measured', not 'fast'". Slowest rows are the dashboard routes (LCP p75 4261ms `/dashboard`, 3440ms `/dashboard/kitchen`, 2819ms `/dashboard/pos`), which have no agreed budget — recorded as an observation, not a breach |
+| W5-T4 | Headers + metadata verification | — | **DONE** | The five headers present and `x-xss-protection` absent on the built server. Production canonical = `https://dokanstore.xyz/estikana/menu/table-1` — the apex domain and **no `?k=`**, so the table token never reaches a crawler (`Referrer-Policy: no-referrer` on the menu subtree is the other half). `robots.txt` disallows `/dashboard`, `/api/` and `/super-admin` (production lists 3 rules; the branch's generated file lists 5, adding `/kitchen` and `/admin`) |
+
+**Wave 5 gates:** `tsc` 0 · `lint` 0 · **vitest (the suite plus the 4 new jsonld tests)** · `build` 0 ·
+the four `check-*.mjs` gates 0 · `env:check` 0.
+
+**One real defect found while verifying, NOT in the 37 — FIXED (`6febfa8`).** The public menu route
+declared `generateStaticParams()` returning `[]` (classifying it SSG, `●`) while the page awaits
+`searchParams` for the table token, so a LOCAL production-mode build answered
+`DYNAMIC_SERVER_USAGE` (500) on every menu URL — from Wave 3 onward, and the reason the T1 #5
+verification had to run against `next dev`. Production was not visibly affected (an unknown slug
+returns 200), so it was never an outage; it was a route that could not be what it claimed. Now
+`export const dynamic = 'force-dynamic'`, verified on a production-mode build (four menu URLs,
+including `?k=deadbeef` and an unknown store, all 200) with the JSON-LD present in that same build.
+Trade-off recorded: no full-page ISR cache for the menu; the menu QUERY is still cached by its own
+`revalidate: 60`, and restoring the HTML cache means moving the token out of `searchParams` — a
+design change for the owner, not a silent refactor.
+
+## Wave 6 — hardening and hygiene (COMPLETE)
+
+| # | Finding | Sev | Status | Evidence |
+|---|---|---|---|---|
+| T2 #13 | Dead schema | Minor | **DONE (re-scoped)** | `9135bdc`. The plan named `order_sequences` (already gone - the migration would have failed) and `service_requests`. The real remainder: 0 rows, no inbound FKs, no application reader or writer, and INSERT/UPDATE/DELETE granted to `authenticated` for nothing. Dropped with its `service_request_type` enum (used by no other column). The pgTAP index assertion followed 4 → 3, and the generated types were cleaned in the same commit. The migration was proven by running it inside a transaction against the real schema and rolling back. **Not applied to production: a table drop is the owner's call** |
+| T2 #14 | Default privileges | Minor | **DONE (drift, not a live hole)** | `a9f4855` + `18a6ad8`. The repository's `0000_init.sql:2019-2020` grants `anon` and `authenticated` ALL on FUTURE tables in `public` and nothing ever revoked it - yet production measures 0, so the live DB was cleaned OUTSIDE the repository and `supabase db reset` rebuilds the exposed version. **Environment clean, source dirty, invisible.** Fixed by revoking the `postgres`-owned defaults + asserting it permanently (`plan(5)` → `plan(6)`). CI proved it on a fresh DB. The first CI run FAILED with `planned 6 tests but ran 5` because the assertion landed after `finish()` - fixed (`18a6ad8`), which is the database job doing its job |
+| T2 #15 | Impersonation at rest | Minor | **DONE** | `628a6b0`. The super admin's own session was stored verbatim, refresh token included - a refreshable credential for the highest-privileged account, in a plaintext column. Option A: access token only (`impersonation_super_admin_session_no_refresh`, mirroring the target side's existing CHECK), TTL 30 → **15 minutes in the constraint too** (the schema must not accept what the code refuses), `used_at` making the marker single-use for real, and the END path restoring without a stored refresh token. Red/green proven in one transaction with savepoints. **Must ship WITH the deploy**: the old code inserts the token the new CHECK rejects |
+| W6-T4 | Secrets, backups, advisors | — | **DONE (documented, owner-run)** | `11d6102` → OPS §12: rotation list (with the reason: the tokens have been pasted into conversations during this work), a restore **drill** with the row-count comparison, Vercel preview protection, and the Advisor re-run to be pasted in after these migrations |
+
+**Wave 6 gates:** `tsc` 0 · `lint` 0 · **vitest 237/237 (20 files)** · `build` 0 · the four
+`check-*.mjs` gates 0 · `env:check` 0 · **CI 3/3 on every head**, including
+`Fresh database · Security assertions`, which is the only place the migrations and pgTAP are
+exercised on this host.
+
+**One self-inflicted incident, recorded because it is the kind of thing that must not be silent:** the
+first attempt at the T2 #15 transactional proof embedded `psql -c "insert …"` calls inside a generated
+`.sql` file. Each nested call runs in AUTOCOMMIT on its own connection, so its writes COMMIT while the
+outer transaction is still open and the final `rollback` never touches them. It left **4 rows in the
+production `impersonation_sessions` table**. They were found by counting rows afterwards (baseline 0),
+deleted by primary key (`DELETE 4`), and the table is verified back to 0 with no fake-token row left.
+The trap is recorded in the repo skill. **No other table was touched, and every other proof in this
+project ran inside a single psql session with savepoints.**
+
+## Live production verification (2026-10-06, read-only unless stated)
+
+- **26/26 → 28 migrations**, each `db push --dry-run` listed exactly one pending file: **no drift**.
+- **21/21 public tables RLS-enabled**; **0 permissive policies**; **0 SECURITY DEFINER without a
+  pinned `search_path`**; **0 function bodies using the spoofable `coalesce(auth.uid(), p_caller…)`**.
+- **0 foreign keys without a covering index** (80 indexes total).
+- `authenticated` holds **SELECT only** on `orders`/`order_items`; column-UPDATE limited to
+  `projects`(4 cols + `qr_reprinted_at`) and `staff_members`(2 notify cols) → no escalation path.
+- Realtime publication = `orders`, `order_items`. Cron: `expire_subscriptions` 03:00,
+  `retention-sweeps` 04:10.
+- Production volume is tiny — tables 2 · products 7 · orders 1 — so **this is pre-launch hardening,
+  not incident response**.
+- Two test orders were created during route verification and **deleted** (order + items + audit);
+  `orders` is back at its baseline count of 1. Zero `probe-audit@` users exist.
+
+## Corrections to the published audits
+
+1. **T2 #4 retracted.** A truncated `grep … | head -80` inventory was reported as a database fact.
+   Every "missing X" claim is now backed by a live query.
+2. **T2 #13 partially retracted** (`order_sequences` was already dropped).
+3. **T2 #14 re-scoped down** (the `postgres`-role gap was already closed).
+4. Three findings the audits AND the plan missed were found during execution and fixed:
+   the 500 on a non-JSON order body, the 6-vs-10 password hint, and the Turnstile
+   misconfiguration classification.
+5. Nothing else changed under live verification: T2 #8/#9/#10/#11/#12/#15 and Task 1 stand.
+
+## Open blockers
+
+| # | Blocker | Owner | Effect |
+|---|---|---|---|
+| 1 | **`sudo usermod -aG docker ammar`** (or run `npm run test:db` manually) | Ammar | The only gate that exercises the new SQL on a clean DB; CI covers it via the PR |
+| 2 | **Print + place the new QR sheets**, then set `REQUIRE_TABLE_TOKEN=true` | Ammar | The Critical stays dark until this happens |
+| 3 | Vercel: the five decision-8 variables (prod + preview) | Ammar | The deploy now FAILS to boot without them |
+| 4 | Hosted Supabase Auth: confirmations ON, min password 10, JWT 1800 + SMTP for the mail | Ammar | Signup is unusable without a working mail path |
+| 5 | Turnstile site + keys (`TURNSTILE_SECRET`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY`) | Ammar | Required in production; signup refuses without them |
+| 6 | Security/Performance Advisor output | Ammar | Could reveal something neither audit saw |
+
+## Notes that must survive a context loss
+
+- `.next/dev/types/validator.ts` caches the route manifest: after deleting a route, `tsc` and
+  `build` fail on the deleted module until `.next` is cleared.
+- `supabase gen types --db-url` needs Docker too — new columns/functions are hand-added to
+  `src/lib/database.types.ts` in the generator's exact style, each with a comment.
+- Next refuses two `next dev` servers from one directory (lock file): the second exits 0 and
+  leaves its port dead, so a probe against it returns curl `000`. Probe one server at a time.
+- `react-dom/server` renders under this repo's node vitest environment → presentational
+  components are testable with no new dependency.
+- `react-hooks/refs` rejects writing a ref during render; refresh refs inside an effect.
+
+
+---
+
+## Owner decisions, round 2 (2026-10-06) — D1–D4
+
+### D1 — W6-T1 (`service_requests` drop): DEFERRED
+The migration is out of the deploy set: `docs/audit-2026-10/DEFERRED-DDL/20261006140000_drop_dead_schema.sql`,
+with a README stating the two companion changes to restore with it. The two side-changes it came with
+are reverted here so the suite agrees with the schema that still exists:
+- `supabase/tests/phase4_5_advisor_hardening.sql` — back to four indexes (count 4).
+- `src/lib/database.types.ts` — the `service_requests` block and both `service_request_type` entries restored.
+Re-evaluate **7 days after the deploy** (OPS-VERIFICATION §13). T2 #13's row in the wave table above
+therefore reads DEFERRED, not DONE.
+
+### D2 — W6-T3 (impersonation constraints): apply IMMEDIATELY AFTER the deploy
+Order, and the reason, are in `DEPLOY-RUNBOOK.md` step 7 and `MIGRATION-MANIFEST.md`. Asked whether it
+can be made backward-compatible instead: `ADD CONSTRAINT … NOT VALID` only spares EXISTING rows and
+still enforces new inserts, so the old code's refresh-token insert would fail anyway; with 0 rows
+there is nothing to spare. Verify with the four-constraint + `used_at` queries in the manifest.
+Both new constraints now carry `DROP CONSTRAINT IF EXISTS` before the `ADD`, so a re-run is safe.
+
+### D3 — public menu: cached, token out of the render
+`src/app/[projectSlug]/menu/[tableSlug]/page.tsx` no longer reads `searchParams`, and is
+`revalidate = 60` + `dynamic = 'force-static'`; the token is read client-side from the URL and enforced
+server-side by `/api/public/order`. On-demand invalidation is unchanged (`menu-${projectId}` tag,
+purged by `/api/revalidate-menu`, whose only writer is `src/lib/products-utils.ts` — the single write
+path the decision required).
+
+**The first measurement failed, and that is why `force-static` is there.** Without it Next built its
+router state tree from the request URL and emitted the token into the React Flight payload
+(`"c":["","estikana","menu","table-1?k=<token>"]`), so the HTML differed with and without `?k=` and the
+token was in the page source. Measured, then fixed; `e2e/menu-cache.a11y.spec.ts` asserts both
+properties. `generateStaticParams` stays empty on purpose (a real list would put a database query in
+the build and break the hermetic CI gate), so paths are rendered on first request and cached after —
+the build classifies the route `ƒ` for that reason, not because it reads the request.
+
+### D4 — `REQUIRE_TABLE_TOKEN` stays false at deploy
+Flip gate and the daily query: `POST-DEPLOY-MONITORING.md`. Baseline at the time of writing:
+`token_present=true` = 1, `token_present=false` = 0 (`public.order_audit_logs`).

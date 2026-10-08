@@ -7,8 +7,10 @@ import type { Metadata, Viewport } from 'next';
 //   2. OFFLINE BUILD. next/font/google fetched from Google at BUILD time and broke CI twice
 //      with "Module not found: @vercel/turbopack-next/internal/font/google/font" — a build
 //      failure caused by something no file in this repo controls.
-// Cost, measured: ~415KB of base64 (five discrete static weights, and the licence forbids
-// subsetting). It is content-hashed and immutable-cached, so it is paid once per user.
+// Cost, measured: ~315KB of base64 (three weights of one family; the licence forbids
+// subsetting). Was ~425KB until the owner unified the product on "thmanyah sans" and
+// the two serif faces were dropped (2026-10-07). It is content-hashed and
+// immutable-cached, so it is paid once per user.
 // Rebuild: node scripts/build-thmanyah-fonts.mjs "<thmanyah typeface dir>"
 import './fonts/thmanyah.css';
 import { Toaster } from 'sonner';
@@ -163,7 +165,15 @@ export default function RootLayout({
           position="top-center"
           richColors
           dir="rtl"
-          toastOptions={{ actionButtonStyle: { minHeight: '44px' } }}
+          // Sonner ships its own system-font stack and injects it inline on the
+          // toast subtree, so toasts were the ONE piece of UI still rendering in
+          // a system font instead of thmanyah sans. Single-family decision
+          // (2026-10-07): give them the same family as the rest of the product.
+          style={{ fontFamily: 'var(--font-sans)' }}
+          toastOptions={{
+            actionButtonStyle: { minHeight: '44px' },
+            classNames: { toast: 'font-sans' },
+          }}
         />
         <ServiceWorkerRegister />
         <WebVitals />

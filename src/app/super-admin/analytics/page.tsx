@@ -30,25 +30,41 @@ type ProjectRow = {
   is_active: boolean;
 };
 
-/** Asia/Bahrain day bounds (Vercel runs UTC — never use server-local "today").
- *  daysAgoStart..daysAgoEndInclusive are whole Bahrain calendar days back from
- *  today (0 = today). Returns an ISO [start, end) window covering them. */
-function bahrainBounds(daysAgoStart: number, daysAgoEndInclusive: number): { start: string; end: string } {
-  const now = new Date();
-  // Convert to Bahrain wall-clock
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Bahrain',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const y = Number(parts.find((p) => p.type === 'year')!.value);
-  const m = Number(parts.find((p) => p.type === 'month')!.value);
-  const d = Number(parts.find((p) => p.type === 'day')!.value);
-  const todayStart = new Date(Date.UTC(y, m - 1, d)); // midnight Bahrain = this UTC instant
-  const start = new Date(todayStart.getTime() - daysAgoStart * 86400e3);
-  const end = new Date(todayStart.getTime() - daysAgoEndInclusive * 86400e3 + 86400e3);
-  return { start: start.toISOString(), end: end.toISOString() };
+/** Asia/Bahrain helpers (Vercel runs UTC — never use server-local "today").
+ *  Perf: the formatters are built ONCE here. They used to be constructed inside
+ *  the 14-day trend loop (14× per request) and inside bahrainBounds (14× more). */
+const bahrainDayFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Bahrain',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+const trendLabelFmt = new Intl.DateTimeFormat('ar', {
+  numberingSystem: 'latn',
+  timeZone: 'Asia/Bahrain',
+  day: 'numeric',
+  month: 'short',
+});
+const lastActiveFmt = new Intl.DateTimeFormat('ar', {
+  numberingSystem: 'latn',
+  timeZone: 'Asia/Bahrain',
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** Bahrain calendar-day key (YYYY-MM-DD) for an instant. */
+function bahrainDayKey(d: Date): string {
+  return bahrainDayFmt.format(d);
+}
+
+/** Bahrain day keys for the last `n` whole days, oldest → today (no DST in +03). */
+function bahrainDaysBack(n: number): string[] {
+  const out: string[] = [];
+  const now = Date.now();
+  for (let i = n - 1; i >= 0; i--) out.push(bahrainDayKey(new Date(now - i * 86400e3)));
+  return out;
 }
 
 const moneyFmt = new Intl.NumberFormat('ar', { numberingSystem: 'latn', maximumFractionDigits: 3 });
@@ -79,57 +95,59 @@ export default async function SuperAdminAnalyticsPage({
 
   const projRows = (projects ?? []) as unknown as ProjectRow[];
   const orderRows = (orders ?? []) as unknown as OrderRow[];
+  // The live query is capped at 5000 rows. It used to truncate SILENTLY — the
+  // headline totals would quietly under-report once the platform passed that
+  // volume. Surface it instead (and see the rollup note at the page foot).
+  const ordersCapped = orderRows.length >= 5000;
 
-  // ---------- Aggregate ----------
+  // ---------- Aggregate (single pass) ----------
+  // Perf: one loop builds the per-day buckets, the per-project rollup AND the
+  // all-time totals. The previous version re-filtered the whole order set once
+  // per trend day (14×N comparisons) and constructed an Intl formatter inside
+  // that loop.
   const activeCount = projRows.filter((p) => p.is_active).length;
-  const completedOrders = orderRows.filter((o) => o.status !== 'cancelled');
-  const totalRevenue = completedOrders.reduce((s, o) => s + Number(o.total_amount), 0);
-  const totalOrders = completedOrders.length;
 
-  const today = bahrainBounds(0, 0);
-  const week = bahrainBounds(6, 0); // last 7 days incl today
-  const month = bahrainBounds(29, 0); // last 30 days incl today
-
-  const sumBetween = (rows: OrderRow[], start: string, end: string) =>
-    rows
-      .filter((o) => o.status !== 'cancelled' && o.created_at >= start && o.created_at < end)
-      .reduce((s, o) => s + Number(o.total_amount), 0);
-
-  const revenueToday = sumBetween(completedOrders, today.start, today.end);
-  const revenueWeek = sumBetween(completedOrders, week.start, week.end);
-  const revenueMonth = sumBetween(completedOrders, month.start, month.end);
-
-  // Trend: last 14 days by Bahrain date
-  const trendDays: { label: string; revenue: number; orders: number }[] = [];
-  for (let i = 13; i >= 0; i--) {
-    const b = bahrainBounds(i, i);
-    const dayOrders = completedOrders.filter((o) => o.created_at >= b.start && o.created_at < b.end);
-    const label = new Intl.DateTimeFormat('ar', {
-      numberingSystem: 'latn',
-      timeZone: 'Asia/Bahrain',
-      day: 'numeric',
-      month: 'short',
-    }).format(new Date(b.start));
-    trendDays.push({
-      label,
-      revenue: dayOrders.reduce((s, o) => s + Number(o.total_amount), 0),
-      orders: dayOrders.length,
-    });
-  }
-  const maxTrend = Math.max(1, ...trendDays.map((t) => t.revenue));
-
-  // ---------- Per-project comparison ----------
+  const dayBuckets = new Map<string, { revenue: number; orders: number }>();
   const byProject = new Map<
     string,
     { revenue: number; orders: number; lastActive: string | null }
   >();
-  for (const o of completedOrders) {
+  let totalRevenue = 0;
+  let totalOrders = 0;
+
+  for (const o of orderRows) {
+    if (o.status === 'cancelled') continue;
+    const amount = Number(o.total_amount);
+    totalRevenue += amount;
+    totalOrders += 1;
+
+    const key = bahrainDayKey(new Date(o.created_at));
+    const day = dayBuckets.get(key) ?? { revenue: 0, orders: 0 };
+    day.revenue += amount;
+    day.orders += 1;
+    dayBuckets.set(key, day);
+
     const agg = byProject.get(o.project_id) ?? { revenue: 0, orders: 0, lastActive: null as string | null };
-    agg.revenue += Number(o.total_amount);
+    agg.revenue += amount;
     agg.orders += 1;
     if (!agg.lastActive || o.created_at > agg.lastActive) agg.lastActive = o.created_at;
     byProject.set(o.project_id, agg);
   }
+
+  const sumDays = (keys: string[]) =>
+    keys.reduce((s, k) => s + (dayBuckets.get(k)?.revenue ?? 0), 0);
+
+  const revenueToday = dayBuckets.get(bahrainDayKey(new Date()))?.revenue ?? 0;
+  const revenueWeek = sumDays(bahrainDaysBack(7)); // last 7 days incl today
+  const revenueMonth = sumDays(bahrainDaysBack(30)); // last 30 days incl today
+
+  // Trend: last 14 Bahrain days, oldest → today
+  const trendDays = bahrainDaysBack(14).map((k) => ({
+    label: trendLabelFmt.format(new Date(`${k}T00:00:00+03:00`)),
+    revenue: dayBuckets.get(k)?.revenue ?? 0,
+    orders: dayBuckets.get(k)?.orders ?? 0,
+  }));
+  const maxTrend = Math.max(1, ...trendDays.map((t) => t.revenue));
 
   const rows = projRows.map((p) => {
     const agg = byProject.get(p.id) ?? { revenue: 0, orders: 0, lastActive: null };
@@ -145,15 +163,6 @@ export default async function SuperAdminAnalyticsPage({
     const vb = b[sortBy] ?? 0;
     const cmp = typeof va === 'string' ? String(va).localeCompare(String(vb)) : (va as number) - (vb as number);
     return dir === 'asc' ? cmp : -cmp;
-  });
-
-  const lastActiveFmt = new Intl.DateTimeFormat('ar', {
-      numberingSystem: 'latn',
-    timeZone: 'Asia/Bahrain',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
   });
 
   const sortHref = (key: 'revenue' | 'orders' | 'aov' | 'lastActive') =>
@@ -267,9 +276,18 @@ export default async function SuperAdminAnalyticsPage({
         </table>
       </div>
 
+      {ordersCapped && (
+        <div
+          role="alert"
+          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warn)]/30 bg-[var(--color-warn-tint)] px-3 py-2 text-[12px] font-semibold text-[var(--color-warn)]"
+        >
+          تنبيه: وصل الاستعلام إلى سقف 5000 طلب — الأرقام أدناه ناقصة. مطلوب جدول تجميع (rollup) الآن.
+        </div>
+      )}
       <p className="mt-4 text-[11.5px] text-[var(--color-text-muted)]">
-        قرار الأداء الموثق: عند ~30 مشروعًا الاستعلام المباشر كافٍ. عند نمو الحجم لمئات
-        المشاريع/آلاف الطلبات، تُستبدل هذه الصفحة بجدول تجميع مجدول (rollup) دون إعادة كتابة.
+        قرار الأداء الموثق: استعلام مباشر محدود بـ5000 طلب لكل صفحة. بعد تجاوز هذا الحجم
+        تُستبدل هذه الصفحة بجدول تجميع مجدول (rollup) دون إعادة كتابة — والتحذير أعلاه
+        يظهر لحظة بلوغ السقف بدل الاقتطاع الصامت.
       </p>
     </div>
   );

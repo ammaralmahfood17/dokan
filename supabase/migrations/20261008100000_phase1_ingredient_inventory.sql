@@ -90,6 +90,23 @@ CREATE INDEX inventory_movements_project_created_idx
 CREATE UNIQUE INDEX inventory_movements_order_once_idx
   ON public.inventory_movements(order_id, ingredient_id, movement_type)
   WHERE order_id IS NOT NULL AND movement_type IN ('consume', 'restore');
+-- One index per FOREIGN KEY column, leading. supabase/tests/phase7_no_permissive.sql
+-- asserts "every foreign key in public has a covering index" and it reads
+-- pg_index.indkey[0], so a composite FK is only covered when an index STARTS with
+-- that column. Without these, every foreign-key check on the four new tables is a
+-- sequential scan. (The test failed with 1 uncovered FK on CI.)
+CREATE INDEX ingredients_supplier_project_idx
+  ON public.ingredients(supplier_id, project_id);
+CREATE INDEX product_ingredients_product_project_idx
+  ON public.product_ingredients(product_id, project_id);
+CREATE INDEX product_ingredients_ingredient_project_idx
+  ON public.product_ingredients(ingredient_id, project_id);
+CREATE INDEX inventory_movements_ingredient_project_idx
+  ON public.inventory_movements(ingredient_id, project_id);
+CREATE INDEX inventory_movements_order_id_idx
+  ON public.inventory_movements(order_id);
+CREATE INDEX inventory_movements_actor_user_id_idx
+  ON public.inventory_movements(actor_user_id);
 
 ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ingredients ENABLE ROW LEVEL SECURITY;
@@ -102,7 +119,13 @@ REVOKE ALL ON public.suppliers, public.ingredients,
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.suppliers TO authenticated;
 GRANT SELECT ON public.ingredients, public.product_ingredients,
   public.inventory_movements TO authenticated;
-GRANT INSERT (project_id, name, unit, reorder_point, supplier_id, supplier_sku)
+-- `id` is granted because the column-level grant below lists columns explicitly, and a
+-- column grant is an ALLOW-list: an INSERT naming any other column is rejected. The UI
+-- relies on the DEFAULT gen_random_uuid() and never sends an id, but the pgtap suite
+-- seeds deterministic ids, and Supabase clients may send one. Without it in this list,
+-- "manager can add an ingredient without setting its balance directly" fails on
+-- permission denied for column id.
+GRANT INSERT (id, project_id, name, unit, reorder_point, supplier_id, supplier_sku)
   ON public.ingredients TO authenticated;
 GRANT UPDATE (name, reorder_point, supplier_id, supplier_sku)
   ON public.ingredients TO authenticated;

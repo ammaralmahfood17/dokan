@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Post-deploy smoke checks for dokan-v3 — owner deliverables R2.
+# Post-deploy smoke checks for Dokan — owner deliverables R2.
 #
 # Read-only EXCEPT the two order checks, which are gated behind SMOKE_ALLOW_WRITES=1 because they
 # create a real order in whatever store you point them at. Run them against a test store, or accept

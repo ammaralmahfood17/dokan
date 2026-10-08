@@ -72,18 +72,28 @@
   --color-info-tint: #F0F9FF;
 
   /* Typography — خط ثمانية (Thmanyah Typeface).
-     The role mapping is the foundry's own (دليل جماليات خط ثمانية):
-       thmanyah Sans           → الشاشات الرقمية (UI)
-       thmanyah Serif Display  → العناوين
-       thmanyah Serif Text     → النصوص الطويلة
+     ONE family for the whole product (owner decision 2026-10-07):
+       thmanyah Sans → every screen: UI, headings, long-form reading.
+     The foundry's own role mapping offered Serif Display for headings and
+     Serif Text for long-form, but those two faces are no longer embedded —
+     they cost ~216KB of base64 (render-blocking on every route) and the owner
+     chose a single family instead. The variables below keep the semantic names
+     so headings and .legal-prose still ask for a "display"/"serif" role and
+     simply resolve to thmanyah sans.
      Weights: the family ships five discrete weights and the UI asks for
      semibold (600) constantly, so each face declares a RANGE (500-600 = Medium,
      700-800 = Bold) — see scripts/build-thmanyah-fonts.mjs.
      The faces are INLINED in src/app/fonts/thmanyah.css as data: URIs. That is
      deliberate and licence-mandated: no font file is served from a URL. */
   --font-sans: "thmanyah sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "thmanyah serif display", "thmanyah sans", ui-serif, serif;
-  --font-serif: "thmanyah serif text", "thmanyah serif display", ui-serif, serif;
+  /* One family for the whole product (owner decision 2026-10-07). The serif faces
+     are no longer embedded: --font-display and --font-serif both resolve to
+     "thmanyah sans" so every heading, the legal pages and the brand images stay
+     in Thmanyah while the serif ~216KB of base64 leaves the product. The class
+     names (font-display / font-serif) are kept as semantic aliases so no
+     component has to change. */
+  --font-display: "thmanyah sans", ui-serif, serif;
+  --font-serif: "thmanyah sans", ui-serif, serif;
   --font-mono: "thmanyah sans", ui-monospace, monospace;
 
   /* Radius — small by intent; full-round reads "consumer" */
@@ -161,7 +171,7 @@
     color: var(--color-text);
   }
 
-  /* Typography. Headings use the display family (thmanyah serif display), body and UI use
+  /* Typography. Headings ask for the display role (--font-display), body and UI use
      thmanyah sans — that split is the foundry's own role mapping, not a preference. The old
      comment here claimed "-0.01em on display-size headings"; no such rule was ever written
      (the only -0.01em in this file is a clamp() width in the marquee). */
@@ -628,8 +638,9 @@
   }
 }
 
-/* /terms + /privacy long-form reading — thmanyah serif text, imported only by those pages
-   (src/components/legal-page.tsx) so the app and the customer menu never download it. */
+/* /terms + /privacy long-form reading — the --font-serif role, which resolves to
+   "thmanyah sans" like everything else (single-family decision, 2026-10-07). The
+   separate serif-text CSS file that used to serve these pages is gone. */
 .legal-prose {
   font-family: var(--font-serif);
 }

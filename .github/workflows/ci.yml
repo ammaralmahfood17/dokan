@@ -1,6 +1,6 @@
 name: CI
 
-# Why this exists: dokan-v3 auto-deploys `master` straight to Vercel, and until
+# Why this exists: the Dokan repo auto-deploys `master` straight to Vercel, and until
 # 2026-09-26 there was NO automated verification at all — a broken commit shipped
 # to production silently. This is the gate that prevents a repeat.
 #

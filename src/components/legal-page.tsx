@@ -1,7 +1,7 @@
 import Link from 'next/link';
-// الرسمي للنصوص الطويلة: thmanyah serif text — its own CSS file, so this ~105KB is only
-// downloaded by whoever opens a legal page, never by the app or the customer menu.
-import '@/app/fonts/thmanyah-text.css';
+// Official typeface for long-form reading: thmanyah sans — the same family the
+// whole app renders in. There is no separate serif CSS file to import any more, so
+// legal pages no longer download an extra ~107KB of base64.
 
 /**
  * Shared legal-page shell (Arabic, RTL) for /terms and /privacy.
