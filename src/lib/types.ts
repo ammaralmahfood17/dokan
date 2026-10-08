@@ -72,6 +72,56 @@ export interface Product {
   created_at?: string;
 }
 
+export type IngredientUnit = 'g' | 'ml' | 'each';
+
+export interface Supplier {
+  id: string;
+  project_id: string;
+  name: string;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface Ingredient {
+  id: string;
+  project_id: string;
+  name: string;
+  unit: IngredientUnit;
+  quantity_on_hand: number;
+  reorder_point: number;
+  supplier_id: string | null;
+  supplier_sku: string | null;
+  created_at: string;
+}
+
+export interface ProductIngredient {
+  id: string;
+  project_id: string;
+  product_id: string;
+  ingredient_id: string;
+  quantity_per_product: number;
+  created_at: string;
+}
+
+export type InventoryMovementType = 'receive' | 'adjustment' | 'consume' | 'restore';
+
+export interface InventoryMovement {
+  id: string;
+  project_id: string;
+  ingredient_id: string;
+  order_id: string | null;
+  movement_type: InventoryMovementType;
+  quantity_delta: number;
+  stock_after: number;
+  unit: IngredientUnit;
+  notes: string | null;
+  actor_user_id: string | null;
+  created_at: string;
+}
+
 /**
  * A product can carry MANY option groups («خيارات»), and each group holds its
  * own varieties («أنواع») with their own price. This replaced the flat,

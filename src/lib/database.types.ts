@@ -117,6 +117,121 @@ export type Database = {
         }
         Relationships: []
       }
+      ingredients: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          project_id: string
+          quantity_on_hand: number
+          reorder_point: number
+          supplier_id: string | null
+          supplier_sku: string | null
+          unit: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          project_id: string
+          quantity_on_hand?: number
+          reorder_point?: number
+          supplier_id?: string | null
+          supplier_sku?: string | null
+          unit: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          project_id?: string
+          quantity_on_hand?: number
+          reorder_point?: number
+          supplier_id?: string | null
+          supplier_sku?: string | null
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredients_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingredients_supplier_project_fkey"
+            columns: ["supplier_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id", "project_id"]
+          },
+        ]
+      }
+      inventory_movements: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          ingredient_id: string
+          movement_type: string
+          notes: string | null
+          order_id: string | null
+          project_id: string
+          quantity_delta: number
+          stock_after: number
+          unit: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          ingredient_id: string
+          movement_type: string
+          notes?: string | null
+          order_id?: string | null
+          project_id: string
+          quantity_delta: number
+          stock_after: number
+          unit: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          ingredient_id?: string
+          movement_type?: string
+          notes?: string | null
+          order_id?: string | null
+          project_id?: string
+          quantity_delta?: number
+          stock_after?: number
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_movements_ingredient_project_fkey"
+            columns: ["ingredient_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "inventory_movements_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_movements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       onboarding_events: {
         Row: {
           created_at: string
@@ -203,6 +318,7 @@ export type Database = {
           id: string
           notes: string | null
           order_id: string
+          portion_stock_deducted: boolean
           product_id: string | null
           product_name: string
           quantity: number
@@ -214,6 +330,7 @@ export type Database = {
           id?: string
           notes?: string | null
           order_id: string
+          portion_stock_deducted?: boolean
           product_id?: string | null
           product_name: string
           quantity?: number
@@ -225,6 +342,7 @@ export type Database = {
           id?: string
           notes?: string | null
           order_id?: string
+          portion_stock_deducted?: boolean
           product_id?: string | null
           product_name?: string
           quantity?: number
@@ -384,6 +502,48 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "option_groups"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_ingredients: {
+        Row: {
+          created_at: string
+          id: string
+          ingredient_id: string
+          product_id: string
+          project_id: string
+          quantity_per_product: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ingredient_id: string
+          product_id: string
+          project_id: string
+          quantity_per_product: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ingredient_id?: string
+          product_id?: string
+          project_id?: string
+          quantity_per_product?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_ingredients_ingredient_project_fkey"
+            columns: ["ingredient_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "product_ingredients_product_project_fkey"
+            columns: ["product_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id", "project_id"]
           },
         ]
       }
@@ -632,6 +792,47 @@ export type Database = {
           },
         ]
       }
+      suppliers: {
+        Row: {
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          project_id: string
+        }
+        Insert: {
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          project_id: string
+        }
+        Update: {
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       super_admin_audit_log: {
         Row: {
           action: string
@@ -832,6 +1033,15 @@ export type Database = {
         }
         Returns: Json
       }
+      adjust_ingredient_stock: {
+        Args: {
+          p_ingredient_id: string
+          p_movement_type: string
+          p_notes?: string | null
+          p_quantity: number
+        }
+        Returns: Json
+      }
       create_order_transactional: {
         Args: {
           p_caller_user_id?: string
@@ -844,6 +1054,10 @@ export type Database = {
           p_total_amount: number
           p_type: string
         }
+        Returns: Json
+      }
+      replace_product_recipe: {
+        Args: { p_lines: Json; p_product_id: string }
         Returns: Json
       }
       expire_subscriptions: { Args: never; Returns: number }

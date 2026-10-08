@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Package,
+  Boxes,
   ClipboardList,
   ChefHat,
   Monitor,
@@ -33,6 +34,7 @@ const NAV_MAIN: NavItem[] = [
   { href: '/dashboard', label: 'الرئيسية', shortLabel: 'الرئيسية', icon: LayoutDashboard },
   { href: '/dashboard/analytics', label: 'الإحصائيات', shortLabel: 'إحصائيات', icon: BarChart3, roles: ['owner', 'manager'] },
   { href: '/dashboard/products', label: 'المنتجات', shortLabel: 'منتجات', icon: Package, roles: ['owner', 'manager'] },
+  { href: '/dashboard/inventory', label: 'المخزون', shortLabel: 'المخزون', icon: Boxes, roles: ['owner', 'manager'] },
   { href: '/dashboard/orders', label: 'الطلبات', shortLabel: 'طلبات', icon: ClipboardList },
   { href: '/dashboard/kitchen', label: 'شاشة المطبخ', shortLabel: 'مطبخ', icon: ChefHat },
   { href: '/dashboard/pos', label: 'نقطة البيع', shortLabel: 'POS', icon: Monitor },

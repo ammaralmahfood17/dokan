@@ -267,6 +267,9 @@ export async function createSecureOrder(
     if (msg.includes('OUT_OF_STOCK')) {
       return { ok: false, error: 'الكمية المطلوبة أكثر من المتوفر — حدّث القائمة', status: 409 };
     }
+    if (msg.includes('OUT_OF_INGREDIENT_STOCK')) {
+      return { ok: false, error: 'مخزون أحد المكونات غير كافٍ — حدّث القائمة', status: 409 };
+    }
     if (
       msg.includes('PRODUCT_NOT_FOUND') ||
       msg.includes('INVALID_LINE') ||
