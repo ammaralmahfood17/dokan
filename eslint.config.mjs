@@ -9,6 +9,12 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 export default defineConfig([
   ...nextVitals,
   {
+    // Scope the a11y rules to the same file set the preset registers the plugin for
+    // (`**/*.{js,jsx,mjs,ts,tsx,mts,cts}`). Without `files`, this object also covers files the
+    // `jsx-a11y` plugin is NOT registered for, and ESLint 9 then fails the WHOLE run with
+    // "A configuration object specifies rule jsx-a11y/… but could not find plugin jsx-a11y"
+    // (seen on a bare `eslint .`, which walks directories that hold none of these extensions).
+    files: ['**/*.{js,jsx,mjs,ts,tsx,mts,cts}'],
     rules: {
       // A <label> that is not programmatically associated with a control is decoration, not a
       // label: a screen reader announces "edit text" with no name.

@@ -39,3 +39,17 @@ export function buildRestaurantJsonLd({ name, url, image }: RestaurantInput): Re
     ...(image ? { image } : {}),
   };
 }
+
+/**
+ * Serialize structured data for a `<script type="application/ld+json">` body.
+ *
+ * `JSON.stringify` does NOT escape `<`, so a merchant-controlled value (the store name, which the
+ * owner types during onboarding) containing `</script><script>…` closed the tag and executed the
+ * rest as markup — stored XSS on every customer who scanned that table's QR, and the live CSP
+ * (`script-src 'self' 'unsafe-inline'`) does not stop inline payloads. Escaping `<` as `\u003c`
+ * is invisible to a JSON parser (`JSON.parse` returns the original string) and makes a breakout
+ * impossible. Reproduced before the fix by rendering this snippet: 2 `<script` tags in the output.
+ */
+export function serializeJsonLd(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}

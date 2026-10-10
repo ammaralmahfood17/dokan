@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
 import { describe, expect, it } from 'vitest';
-import { buildRestaurantJsonLd } from './jsonld';
+import { buildRestaurantJsonLd, serializeJsonLd } from './jsonld';
 
 /**
  * Audit T1 #5 — the structured data on the public menu was not structured data.
@@ -50,7 +50,7 @@ describe('JSON-LD emission (audit T1 #5)', () => {
       React.createElement('script', {
         type: 'application/ld+json',
         dangerouslySetInnerHTML: {
-          __html: JSON.stringify(buildRestaurantJsonLd({ name: 'X', url: 'https://x.test/x' })),
+          __html: serializeJsonLd(buildRestaurantJsonLd({ name: 'X', url: 'https://x.test/x' })),
         },
       })
     );
@@ -58,5 +58,34 @@ describe('JSON-LD emission (audit T1 #5)', () => {
     expect(html).toContain('type="application/ld+json"');
     expect(() => JSON.parse(body)).not.toThrow();
     expect(JSON.parse(body)).toMatchObject({ '@type': 'Restaurant', name: 'X' });
+  });
+
+  /**
+   * Bug hunt 2026-10-10 — stored XSS. `JSON.stringify` leaves `<` alone, so a store NAME closing
+   * the tag turned the rest of the payload into live markup for every customer who scanned that
+   * table's QR, and the production CSP allows inline scripts. The assertion is the invariant that
+   * matters: exactly ONE `<script` in the rendered output, and the hostile name still round-trips
+   * through a JSON parser unchanged.
+   */
+  it('escapes `<` so a store name cannot close the script tag (stored XSS)', () => {
+    const hostile = '</script><script>window.__PWNED=1</script>';
+    const html = renderToStaticMarkup(
+      React.createElement('script', {
+        type: 'application/ld+json',
+        dangerouslySetInnerHTML: {
+          __html: serializeJsonLd(buildRestaurantJsonLd({ name: hostile, url: 'https://x.test/x' })),
+        },
+      })
+    );
+    expect((html.match(/<script/g) ?? []).length).toBe(1);
+    expect(html).not.toContain('<script>window.__PWNED');
+    expect(html).toContain('\\u003c/script>');
+    const body = html.replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '');
+    expect(JSON.parse(body).name).toBe(hostile);
+  });
+
+  it('serializeJsonLd keeps ordinary payloads byte-identical to JSON.stringify', () => {
+    const ld = buildRestaurantJsonLd({ name: 'استكانة', url: 'https://dokanstore.xyz/estikana' });
+    expect(serializeJsonLd(ld)).toBe(JSON.stringify(ld));
   });
 });

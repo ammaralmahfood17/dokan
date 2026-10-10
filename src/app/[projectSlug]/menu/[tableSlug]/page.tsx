@@ -6,7 +6,7 @@ import { getSiteUrl } from '@/lib/site-url';
 import { getPublicProject } from '@/lib/public-project';
 import { MenuClient } from './menu-client';
 import type { Category, Product, ProductOptionGroup, Project, Table } from '@/lib/types';
-import { buildRestaurantJsonLd } from '@/lib/jsonld';
+import { buildRestaurantJsonLd, serializeJsonLd } from '@/lib/jsonld';
 import { isTableTokenRequired } from '@/lib/public-write-guard';
 
 // The page itself is DYNAMIC (no `export const revalidate`): the subscription
@@ -132,7 +132,7 @@ export default async function PublicMenuPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(
+          __html: serializeJsonLd(
             buildRestaurantJsonLd({
               name: project.name,
               url: `${getSiteUrl()}/${projectSlug}`,
