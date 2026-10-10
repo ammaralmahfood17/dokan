@@ -12,6 +12,9 @@ import {
   E2E_BASE_URL,
 } from './helpers';
 
+/** Table scan token: public orders are gated on it since REQUIRE_TABLE_TOKEN=true. */
+const TABLE_TOKEN = '78787878787878787878787878787878';
+
 /**
  * THE CUSTOMER JOURNEY — the public, UNAUTHENTICATED path a real diner takes:
  *   scan the table QR → browse the menu → add items (+ options) → adjust the
@@ -228,7 +231,7 @@ test.beforeAll(async ({ browser, playwright }) => {
 
   const { error: tErr } = await admin
     .from('tables')
-    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: `e2e-${runId}` });
+    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: TABLE_TOKEN });
   if (tErr) throw new Error(`seed table: ${tErr.message}`);
 
   // Cross-tenant fixture for the order-status probe. No owner, no menu.
@@ -271,7 +274,7 @@ test.afterAll(async () => {
  * ====================================================================== */
 test('1. scanning the table QR opens the store menu with the seeded products', async () => {
   // The QR on a table encodes exactly this path — no login, no dashboard.
-  const resp = await cust.goto(`/${slug}/menu/table-1`);
+  const resp = await cust.goto(`/${slug}/menu/table-1?k=${TABLE_TOKEN}`);
   expect(resp?.status()).toBe(200);
 
   // Store identity in the header.
@@ -558,7 +561,7 @@ test('5. a sold-out product cannot be added to the cart and orders for it 400 (n
   // success screen for step 7).
   menu2 = await custCtx.newPage();
   const soldOut = menu2.getByText('غير متوفر');
-  await gotoUntil(menu2, `/${slug}/menu/table-1`, soldOut, 60_000);
+  await gotoUntil(menu2, `/${slug}/menu/table-1?k=${TABLE_TOKEN}`, soldOut, 60_000);
 
   // Still listed (a shrinking menu confuses customers) but not orderable:
   // the add circle is replaced by an X and the card button is aria-disabled.
@@ -596,6 +599,7 @@ test('5. a sold-out product cannot be added to the cart and orders for it 400 (n
     data: {
       projectSlug: slug,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       items: [{ productId: plainProductId, quantity: 1 }],
     },
   });
@@ -613,6 +617,7 @@ test('5. a sold-out product cannot be added to the cart and orders for it 400 (n
     data: {
       projectSlug: slug,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       items: [{ productId: optionProductId, quantity: 1, optionIds: [optionId] }],
     },
   });
@@ -627,7 +632,7 @@ test('5. a sold-out product cannot be added to the cart and orders for it 400 (n
 test('6. an empty cart has no confirm button, and a emptied cart disables it', async () => {
   const page = menu2!;
   // A fresh menu visit: no cart, so no cart bar and no confirm button at all.
-  await page.goto(`/${slug}/menu/table-1`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`/${slug}/menu/table-1?k=${TABLE_TOKEN}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByText(plainProductName).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'تأكيد الطلب', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button').filter({ hasText: 'إتمام الطلب' })).toHaveCount(0);

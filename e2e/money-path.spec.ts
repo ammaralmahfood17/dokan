@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { createTestUser, cleanupTestUser, getAuthCookies, makeEmail, TEST_PASSWORD } from './helpers';
+import { admin, findProjectId, createTestUser, cleanupTestUser, getAuthCookies, makeEmail, TEST_PASSWORD } from './helpers';
 
 /**
  * THE MONEY PATH — full journey against production:
@@ -56,8 +56,17 @@ test('money path: signup → store → product → table → order → kitchen',
   await expect(page.getByText('طاولة 1').first()).toBeVisible({ timeout: 15_000 });
 
   // ---------- 5) PUBLIC MENU: place a real order ----------
+  // The table was created through the dashboard above, so read ITS scan token from the DB:
+  // the public order route enforces it (REQUIRE_TABLE_TOKEN=true), and without `?k=` the cart's
+  // confirm button reads «مسح الرمز» instead of «تأكيد الطلب».
+  const seedProjectId = await findProjectId(email);
+  const { data: seededTable } = await admin
+    .from('tables')
+    .select('qrcode')
+    .eq('project_id', seedProjectId!)
+    .single();
   const menu = await context.newPage();
-  const menuUrl = `/${slug}/menu/table-1`;
+  const menuUrl = `/${slug}/menu/table-1?k=${seededTable!.qrcode}`;
   const resp = await menu.goto(menuUrl);
   expect(resp?.status()).toBe(200);
   await expect(menu.getByText('قهوة عربية').first()).toBeVisible({ timeout: 20_000 });

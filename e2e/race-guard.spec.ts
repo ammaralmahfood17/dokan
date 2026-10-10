@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { createTestUser, cleanupTestUser, getAuthCookies, makeEmail, TEST_PASSWORD, admin, url, anonKey, E2E_BASE_URL } from './helpers';
+
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+/** Table scan token: public orders are gated on it since REQUIRE_TABLE_TOKEN=true. */
+const TABLE_TOKEN = 'd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1';
 
 /**
  * P1-1 (H1/H2 regression guard) + P2-7 (ready→delivered gap).
@@ -52,7 +56,7 @@ async function setupStore() {
 
   const { data: tbl } = await admin
     .from('tables')
-    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: 'x' })
+    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: TABLE_TOKEN })
     .select('id')
     .single();
   tableId = tbl!.id;
@@ -68,6 +72,7 @@ async function placeOrder(): Promise<{ orderId: string; orderNumber: number }> {
     body: JSON.stringify({
       projectSlug: slug,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       items: [{ productId: productId, quantity: 1, notes: '' }],
     }),
   });
@@ -185,7 +190,7 @@ test('tenant guard (F1): advancing another project’s order is rejected 42501',
     .single();
   const { data: otherTbl } = await admin
     .from('tables')
-    .insert({ project_id: otherProj!.id, number: 1, slug: 'table-1', is_active: true, qrcode: 'x' })
+    .insert({ project_id: otherProj!.id, number: 1, slug: 'table-1', is_active: true, qrcode: TABLE_TOKEN })
     .select('id')
     .single();
 
@@ -196,6 +201,7 @@ test('tenant guard (F1): advancing another project’s order is rejected 42501',
     body: JSON.stringify({
       projectSlug: `e2e-other-${runId}`,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       items: [{ productId: otherProd!.id, quantity: 1, notes: '' }],
     }),
   });

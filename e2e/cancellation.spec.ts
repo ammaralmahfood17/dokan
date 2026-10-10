@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { createTestUser, cleanupTestUser, makeEmail, TEST_PASSWORD, admin, url, anonKey, E2E_BASE_URL } from './helpers';
+
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+/** Table scan token: public orders are gated on it since REQUIRE_TABLE_TOKEN=true. */
+const TABLE_TOKEN = 'a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1';
 
 /**
  * P2-5 — order cancellation flow + TOCTOU protection.
@@ -28,6 +32,7 @@ async function placeOrder(): Promise<string> {
     body: JSON.stringify({
       projectSlug: slug,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       items: [{ productId: productId, quantity: 1, notes: '' }],
     }),
   });
@@ -70,7 +75,7 @@ test.beforeAll(async () => {
   productId = prod!.id;
   await admin
     .from('tables')
-    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: 'x' });
+    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: TABLE_TOKEN });
 
   authed = createClient(url, anonKey(), { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: sessData, error: se } = await authed.auth.signInWithPassword({ email, password: TEST_PASSWORD });

@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { createTestUser, cleanupTestUser, getAuthCookies, makeEmail, TEST_PASSWORD, admin, url, anonKey, E2E_BASE_URL } from './helpers';
+
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+/** Table scan token: public orders are gated on it since REQUIRE_TABLE_TOKEN=true. */
+const TABLE_TOKEN = 'f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1';
 
 /**
  * P1-2 — subscription enforcement regression guard (Phase 2).
@@ -55,7 +59,7 @@ test.beforeAll(async () => {
   productId = prod!.id;
   await admin
     .from('tables')
-    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: 'x' });
+    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: TABLE_TOKEN });
 
   authed = createClient(url, anonKey(), { auth: { persistSession: false, autoRefreshToken: false } });
   const { error: se } = await authed.auth.signInWithPassword({ email, password: TEST_PASSWORD });
@@ -90,6 +94,7 @@ test('expired subscription: dashboard blocked, public ordering blocked', async (
     body: JSON.stringify({
       projectSlug: slug,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       items: [{ productId: productId, quantity: 1, notes: '' }],
     }),
   });
@@ -141,6 +146,7 @@ test('renewal: owner self-renewal rejected, super admin renews and restores', as
     body: JSON.stringify({
       projectSlug: slug,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       items: [{ productId: productId, quantity: 1, notes: '' }],
     }),
   });

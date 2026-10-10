@@ -8,6 +8,9 @@ import {
   TEST_PASSWORD,
 } from './helpers';
 
+/** Table scan token: public orders are gated on it since REQUIRE_TABLE_TOKEN=true. */
+const TABLE_TOKEN = '56565656565656565656565656565656';
+
 /**
  * FULL FEATURE AUDIT — every surface of dokanstore.xyz exercised at least
  * once in one reportable pass:
@@ -85,7 +88,7 @@ test.beforeAll(async () => {
       project_id: projectId,
       number: 1,
       slug: 'a-1',
-      qrcode: Array.from({ length: 32 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join(''),
+      qrcode: TABLE_TOKEN,
       is_active: true,
     })
     .select('id')
@@ -242,7 +245,7 @@ test('C2 products: availability toggle syncs DB + menu cache (revalidate-menu)',
   // still listed but NOT orderable. The «غير متوفر» badge is rendered by
   // MenuClient after hydration, so this needs the browser, not raw HTML.
   const menu = await page.context().newPage();
-  await menu.goto(`/${slugA}/menu/a-1`, { waitUntil: 'domcontentloaded' });
+  await menu.goto(`/${slugA}/menu/a-1?k=${TABLE_TOKEN}`, { waitUntil: 'domcontentloaded' });
   await expect(menu.getByText('شاي فحص').first()).toBeVisible({ timeout: 30_000 });
   await expect(menu.getByText('غير متوفر').first()).toBeVisible({ timeout: 30_000 });
   // The add-to-cart affordance is gone, which is what actually stops ordering.
@@ -256,6 +259,7 @@ test('C2 products: availability toggle syncs DB + menu cache (revalidate-menu)',
     data: {
       projectSlug: slugA,
       tableSlug: 'a-1',
+      tableToken: TABLE_TOKEN,
       items: [{ productId, quantity: 1 }],
       // A real uuid: the route REJECTS a malformed idempotency key with 400
       // rather than ignoring it, and a 400 for the wrong reason would make
@@ -277,7 +281,7 @@ test('C2 products: availability toggle syncs DB + menu cache (revalidate-menu)',
   expect(dbNow!.is_available, 'DB toggle-back').toBe(true);
   expect((await request.post('/api/revalidate-menu', { data: { projectId }, headers: jar })).status()).toBe(200);
   const back = await page.context().newPage();
-  await back.goto(`/${slugA}/menu/a-1`, { waitUntil: 'domcontentloaded' });
+  await back.goto(`/${slugA}/menu/a-1?k=${TABLE_TOKEN}`, { waitUntil: 'domcontentloaded' });
   await expect(back.locator('[aria-label^="إضافة شاي فحص إلى السلة"]').first()).toBeVisible({
     timeout: 40_000,
   });
@@ -323,11 +327,11 @@ test('C5 notification prefs persist through the API (staff table truth)', async 
  * D) CUSTOMER JOURNEY — public order → status → waiter → bill
  * ====================================================================== */
 test('D1 public order: valid → order row; invalid → 400', async ({ request }) => {
-  const bad = await request.post('/api/public/order', { data: { projectSlug: slugA, tableSlug: 'a-1', items: [] } });
+  const bad = await request.post('/api/public/order', { data: { projectSlug: slugA, tableSlug: 'a-1', tableToken: TABLE_TOKEN, items: [] } });
   expect(bad.status()).toBe(400);
 
   const res = await request.post('/api/public/order', {
-    data: { projectSlug: slugA, tableSlug: 'a-1', items: [{ productId, quantity: 2 }], notes: 'فحص آلي' },
+    data: { projectSlug: slugA, tableSlug: 'a-1', tableToken: TABLE_TOKEN, items: [{ productId, quantity: 2 }], notes: 'فحص آلي' },
   });
   expect(res.status(), await res.text().catch(() => '')).toBe(200);
   const body = await res.json();
@@ -426,7 +430,7 @@ test('E3 deactivate → public order blocked → reactivate', async ({ page, req
   const deact = await page.request.post(`/api/super-admin/deactivate?projectId=${projectId}`, { data: {} });
   expect(deact.status(), await deact.text().catch(() => '')).toBe(200);
   const blocked = await request.post('/api/public/order', {
-    data: { projectSlug: slugA, tableSlug: 'a-1', items: [{ productId, quantity: 1 }] },
+    data: { projectSlug: slugA, tableSlug: 'a-1', tableToken: TABLE_TOKEN, items: [{ productId, quantity: 1 }] },
   });
   expect(blocked.status()).toBeGreaterThanOrEqual(400);
   // reactivate for teardown sanity

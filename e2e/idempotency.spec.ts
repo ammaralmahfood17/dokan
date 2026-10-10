@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { createTestUser, cleanupTestUser, makeEmail, admin, E2E_BASE_URL } from './helpers';
 
+/** Table scan token: public orders are gated on it since REQUIRE_TABLE_TOKEN=true. */
+const TABLE_TOKEN = 'b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1';
+
 /**
  * CRIT-3 (audit 2026-09-26) — offline retry must not create a second order.
  *
@@ -40,6 +43,7 @@ async function postOrder(clientRequestId?: string): Promise<OrderResponse> {
     body: JSON.stringify({
       projectSlug: slug,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       ...(clientRequestId ? { clientRequestId } : {}),
       items: [{ productId, quantity: 1, notes: '' }],
     }),
@@ -92,7 +96,7 @@ test.beforeAll(async () => {
   productId = prod!.id;
   await admin
     .from('tables')
-    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: 'x' });
+    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: TABLE_TOKEN });
 });
 
 test.afterAll(async () => {
@@ -170,6 +174,7 @@ test('a malformed clientRequestId is a clean 400, not a 500', async () => {
     body: JSON.stringify({
       projectSlug: slug,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       clientRequestId: 'not-a-uuid',
       items: [{ productId, quantity: 1, notes: '' }],
     }),

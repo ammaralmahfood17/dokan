@@ -8,6 +8,9 @@ import {
   admin,
 } from './helpers';
 
+/** Table scan token: public orders are gated on it since REQUIRE_TABLE_TOKEN=true. */
+const TABLE_TOKEN = '34343434343434343434343434343434';
+
 /**
  * Per-product stock («عدد الحصص», migration 0018).
  *
@@ -63,6 +66,7 @@ async function placeOrder(
     data: {
       projectSlug: slug,
       tableSlug,
+      tableToken: TABLE_TOKEN,
       items,
       notes: '',
       clientRequestId: crypto.randomUUID(),
@@ -79,6 +83,7 @@ async function placeOrderOk(
     data: {
       projectSlug: slug,
       tableSlug,
+      tableToken: TABLE_TOKEN,
       items,
       notes: '',
       clientRequestId: crypto.randomUUID(),
@@ -117,7 +122,7 @@ test.beforeAll(async () => {
     project_id: projectId,
     number: 1,
     slug: tableSlug,
-    qrcode: `e2e-stock-${runId}-qr`,
+    qrcode: TABLE_TOKEN,
     is_active: true,
   });
 
@@ -175,7 +180,7 @@ test('2. a tracked product at zero is sold out on the menu, and a low count show
   });
   console.log(`ℹ menu cache purge → ${purge.status()}`);
 
-  await page.goto(`/${slug}/menu/${tableSlug}`);
+  await page.goto(`/${slug}/menu/${tableSlug}?k=${TABLE_TOKEN}`);
 
   // The card's own accessible name encodes the sold-out state — a precise,
   // product-bound assertion rather than "some badge exists somewhere".

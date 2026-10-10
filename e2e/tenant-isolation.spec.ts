@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { createTestUser, cleanupTestUser, makeEmail, TEST_PASSWORD, admin, url, anonKey, E2E_BASE_URL } from './helpers';
+
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+/** Table scan token: public orders are gated on it since REQUIRE_TABLE_TOKEN=true. */
+const TABLE_TOKEN = '12121212121212121212121212121212';
 
 /**
  * P2-4 — TENANT ISOLATION (the audit's single most important missing test).
@@ -64,7 +68,7 @@ test.beforeAll(async () => {
   productBId = prodB!.id;
   const { data: tblB } = await admin
     .from('tables')
-    .insert({ project_id: projectBId, number: 1, slug: 'table-1', is_active: true, qrcode: 'x' })
+    .insert({ project_id: projectBId, number: 1, slug: 'table-1', is_active: true, qrcode: TABLE_TOKEN })
     .select('id')
     .single();
   tableBId = tblB!.id;
@@ -75,6 +79,7 @@ test.beforeAll(async () => {
     body: JSON.stringify({
       projectSlug: `e2e-iso-b-${runId}`,
       tableSlug: 'table-1',
+      tableToken: TABLE_TOKEN,
       items: [{ productId: productBId, quantity: 1, notes: '' }],
     }),
   });
