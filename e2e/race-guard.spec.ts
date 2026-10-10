@@ -5,6 +5,10 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /** Table scan token: public orders are gated on it since REQUIRE_TABLE_TOKEN=true. */
 const TABLE_TOKEN = 'd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1';
+/** `tables.qrcode` is GLOBALLY unique (`tables_qrcode_key`), so the second project in
+ *  the tenant-guard test needs its own token — reusing TABLE_TOKEN made the insert
+ *  violate the index (the error was ignored) and the order then 404'd. */
+const OTHER_TABLE_TOKEN = 'd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2';
 
 /**
  * P1-1 (H1/H2 regression guard) + P2-7 (ready→delivered gap).
@@ -190,7 +194,7 @@ test('tenant guard (F1): advancing another project’s order is rejected 42501',
     .single();
   const { data: otherTbl } = await admin
     .from('tables')
-    .insert({ project_id: otherProj!.id, number: 1, slug: 'table-1', is_active: true, qrcode: TABLE_TOKEN })
+    .insert({ project_id: otherProj!.id, number: 1, slug: 'table-1', is_active: true, qrcode: OTHER_TABLE_TOKEN })
     .select('id')
     .single();
 
@@ -201,7 +205,7 @@ test('tenant guard (F1): advancing another project’s order is rejected 42501',
     body: JSON.stringify({
       projectSlug: `e2e-other-${runId}`,
       tableSlug: 'table-1',
-      tableToken: TABLE_TOKEN,
+      tableToken: OTHER_TABLE_TOKEN,
       items: [{ productId: otherProd!.id, quantity: 1, notes: '' }],
     }),
   });
