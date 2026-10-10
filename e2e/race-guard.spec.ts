@@ -9,6 +9,8 @@ const TABLE_TOKEN = 'd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1';
  *  the tenant-guard test needs its own token — reusing TABLE_TOKEN made the insert
  *  violate the index (the error was ignored) and the order then 404'd. */
 const OTHER_TABLE_TOKEN = 'd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2';
+/** The throwaway second tenant (no created_by) — cleaned up explicitly in afterAll. */
+let otherProjectId = '';
 
 /**
  * P1-1 (H1/H2 regression guard) + P2-7 (ready→delivered gap).
@@ -98,6 +100,10 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await cleanupTestUser(email);
+  // The "other" tenant in the tenant-guard test has NO created_by, so cleanupTestUser cannot find
+  // it — without this line the suite leaves an orphan project in production (found one:
+  // e2e-other-943745). Everything under a project CASCADEs from `projects`, so one delete is enough.
+  if (otherProjectId) await admin.from('projects').delete().eq('id', otherProjectId);
 });
 
 test('race guard: happy path advances order + items atomically to delivered', async () => {
@@ -182,6 +188,7 @@ test('tenant guard (F1): advancing another project’s order is rejected 42501',
     .insert({ name: 'Other', slug: `e2e-other-${runId}`, currency: 'BHD', primary_color: '#4338CA', is_active: true })
     .select('id')
     .single();
+  otherProjectId = otherProj!.id;
   const { data: otherCat } = await admin
     .from('categories')
     .insert({ project_id: otherProj!.id, name: 't', sort_order: 0 })
