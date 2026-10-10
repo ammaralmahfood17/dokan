@@ -140,9 +140,18 @@ export async function GET(request: Request) {
     },
     {
       status: healthy ? 200 : 503,
-      // Never cache: a cached "ok" is worse than no health check at all.
       headers: {
-        'Cache-Control': 'no-store',
+        // P2 (audit 2026-10-10): uptime monitors hit this endpoint every minute and EVERY tick paid a
+        // DB round trip plus the env checks. `?light=1` is the mode built for exactly those callers
+        // (one trivial query), so the LIGHT answer is edge-cached for 30s with a 60s revalidation
+        // window — cheap, and at most 30s stale for a liveness signal.
+        //
+        // The full dependency breakdown deliberately stays `no-store`: caching an "ok" that outlives
+        // the outage it is supposed to report is worse than no health check at all. Point monitors at
+        // /api/health?light=1 to get the cached path.
+        'Cache-Control': light
+          ? 'public, s-maxage=30, stale-while-revalidate=60'
+          : 'no-store',
         'X-Robots-Tag': 'noindex, nofollow',
       },
     }

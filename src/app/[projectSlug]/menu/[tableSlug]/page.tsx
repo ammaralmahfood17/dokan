@@ -1,10 +1,10 @@
-import { notFound } from 'next/navigation';
 import { unstable_cache } from 'next/cache';
 import type { Metadata } from 'next';
 import { createAnonClient } from '@/lib/supabase/anon';
 import { getSiteUrl } from '@/lib/site-url';
 import { getPublicProject } from '@/lib/public-project';
 import { MenuClient } from './menu-client';
+import { Unavailable } from '@/components/menu/unavailable';
 import type { Category, Product, ProductOptionGroup, Project, Table } from '@/lib/types';
 import { buildRestaurantJsonLd, serializeJsonLd } from '@/lib/jsonld';
 import { isTableTokenRequired } from '@/lib/public-write-guard';
@@ -100,7 +100,9 @@ export default async function PublicMenuPage({
   const supabase = createAnonClient();
 
   const project = await getPublicProject(projectSlug);
-  if (!project) notFound();
+  // Rendered, not `notFound()`: inside a force-static route Next swallows notFound() and serves a
+  // blank 200 shell (measured live). See src/components/menu/unavailable.tsx.
+  if (!project) return <Unavailable kind="store" />;
 
   // Resolve active table inside project
   const { data: table } = await supabase
@@ -111,7 +113,7 @@ export default async function PublicMenuPage({
     .eq('is_active', true)
     .maybeSingle();
 
-  if (!table) notFound();
+  if (!table) return <Unavailable kind="table" />;
 
   // D3: the token is NOT resolved here any more - resolving it would make the render depend on the
   // request. The client reads it from the URL and the order endpoint enforces it. What the page
