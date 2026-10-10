@@ -20,6 +20,14 @@ export function ServiceWorkerRegister() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
 
+    // A FIRST-ever install is NOT an update. sw.js calls skipWaiting() on install
+    // and clients.claim() on activate, so a page that had NO controller becomes
+    // controlled and fires `controllerchange` as well — which used to show
+    // «تحديث متوفر» to every first-time visitor (a QR-scanner on a clean profile:
+    // measured on production, first load showed the toast, the reload did not).
+    // Only a page that ALREADY had a controller can be looking at a replacement.
+    const hadController = Boolean(navigator.serviceWorker.controller);
+
     const showUpdateToast = () => {
       toast('🔄 تحديث متوفر', {
         description: 'نسخة جديدة من دكان جاهزة — أعد تحميل الصفحة للاستخدام',
@@ -42,7 +50,12 @@ export function ServiceWorkerRegister() {
     };
 
     // New SW took control (skipWaiting fired) — prompt, don't auto-reload.
-    navigator.serviceWorker.addEventListener('controllerchange', showUpdateToast);
+    // Guarded: the first-ever install also fires this (see hadController above),
+    // and that is not an update.
+    const handleControllerChange = () => {
+      if (hadController) showUpdateToast();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 
     const handleMessage = (event: MessageEvent<unknown>) => {
       if (!isPendingOrderSyncMessage(event.data)) return;
@@ -63,7 +76,7 @@ export function ServiceWorkerRegister() {
       .catch(() => {}); // silent — PWA is progressive enhancement
 
     return () => {
-      navigator.serviceWorker.removeEventListener('controllerchange', showUpdateToast);
+      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
       navigator.serviceWorker.removeEventListener('message', handleMessage);
     };
   }, []);
