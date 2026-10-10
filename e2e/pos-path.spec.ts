@@ -9,6 +9,7 @@ import {
   url,
   anonKey,
 } from './helpers';
+import crypto from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -66,7 +67,7 @@ test.beforeAll(async () => {
 
   await admin
     .from('tables')
-    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: 'x' });
+    .insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: crypto.randomUUID().replace(/-/g, '') });
 
   authed = createClient(url, anonKey(), { auth: { persistSession: false, autoRefreshToken: false } });
   const { error: se } = await authed.auth.signInWithPassword({ email, password: TEST_PASSWORD });

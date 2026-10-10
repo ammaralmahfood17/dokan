@@ -8,6 +8,7 @@
  * is back to zero for that project. Run manually, not in CI.
  */
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { cleanupTestUser, makeEmail, TEST_PASSWORD } from '../helpers';
@@ -108,7 +109,8 @@ async function main(): Promise<void> {
     .select('id')
     .single();
   await admin.from('option_choices').insert({ group_id: optGroup!.id, name: 'a', price: 0.5, is_available: true, sort_order: 0 });
-  await admin.from('tables').insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: 'x' });
+  // tables.qrcode is globally unique — never reuse a constant across fixtures.
+  await admin.from('tables').insert({ project_id: projectId, number: 1, slug: 'table-1', is_active: true, qrcode: crypto.randomUUID().replace(/-/g, '') });
   const { data: order } = await admin
     .from('orders')
     .insert({ project_id: projectId, status: 'pending', total_amount: 1, notes: 'probe' })
