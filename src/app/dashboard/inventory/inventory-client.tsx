@@ -2,18 +2,20 @@
 
 import { useState, type FormEvent } from 'react';
 import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Pencil, Plus, Truck } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Modal } from '@/components/ui/modal';
-import { createClient } from '@/lib/supabase/client';
-import type { Json } from '@/lib/database.types';
+import {
+  MOVEMENT_LABELS,
+  UNIT_LABELS,
+  lowStockCount as countLowStock,
+  prevRecipeUses,
+  quantity,
+} from '@/lib/inventory';
+import { useInventoryActions } from '@/components/dashboard/inventory/use-inventory-actions';
 import type {
   Ingredient,
-  IngredientUnit,
   InventoryMovement,
-  InventoryMovementType,
   Product,
   ProductIngredient,
   Supplier,
@@ -21,23 +23,6 @@ import type {
 
 type ProductOption = Pick<Product, 'id' | 'project_id' | 'name' | 'name_en' | 'stock'>;
 type Tab = 'ingredients' | 'recipes' | 'suppliers' | 'history';
-
-const UNIT_LABELS: Record<IngredientUnit, string> = {
-  g: 'غرام',
-  ml: 'مل',
-  each: 'حبة',
-};
-
-const MOVEMENT_LABELS: Record<InventoryMovementType, string> = {
-  receive: 'استلام',
-  adjustment: 'تسوية',
-  consume: 'استهلاك طلب',
-  restore: 'إرجاع إلغاء',
-};
-
-function quantity(value: number | string) {
-  return Number(value).toLocaleString('en', { maximumFractionDigits: 3 });
-}
 
 export function InventoryClient({
   projectId,
@@ -54,7 +39,9 @@ export function InventoryClient({
   recipes: ProductIngredient[];
   movements: InventoryMovement[];
 }) {
-  const router = useRouter();
+  // The four writes + their validation live in the hook / lib/inventory.
+  const actions = useInventoryActions({ projectId });
+  const busy = actions.busy;
   const [tab, setTab] = useState<Tab>('ingredients');
   const [ingredientToEdit, setIngredientToEdit] = useState<Ingredient | null>(null);
   const [showIngredientForm, setShowIngredientForm] = useState(false);
@@ -63,11 +50,8 @@ export function InventoryClient({
   const [stockTarget, setStockTarget] = useState<Ingredient | null>(null);
   const [recipeProduct, setRecipeProduct] = useState<ProductOption | null>(null);
   const [recipeLines, setRecipeLines] = useState<{ ingredient_id: string; quantity: string }[]>([]);
-  const [busy, setBusy] = useState(false);
 
-  const lowStockCount = ingredients.filter(
-    (ingredient) => Number(ingredient.quantity_on_hand) <= Number(ingredient.reorder_point)
-  ).length;
+  const lowStockCount = countLowStock(ingredients);
 
   function openNewIngredient() {
     setIngredientToEdit(null);
@@ -86,160 +70,27 @@ export function InventoryClient({
     );
   }
 
+  /** Each action returns true when the write landed; this page owns the dialogs. */
   async function saveIngredient(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    const form = new FormData(event.currentTarget);
-    const name = String(form.get('name') ?? '').trim();
-    const reorderPoint = Number(form.get('reorder_point') ?? 0);
-    const supplierId = String(form.get('supplier_id') ?? '') || null;
-    const supplierSku = String(form.get('supplier_sku') ?? '').trim() || null;
-    const unit = String(form.get('unit') ?? 'g') as IngredientUnit;
-
-    if (!name || !Number.isFinite(reorderPoint) || reorderPoint < 0) {
-      toast.error('أدخل اسمًا ونقطة إعادة طلب صحيحة');
-      return;
+    if (await actions.saveIngredient(event, ingredientToEdit)) {
+      setShowIngredientForm(false);
+      setIngredientToEdit(null);
     }
-    if (!ingredientToEdit && !(['g', 'ml', 'each'] as string[]).includes(unit)) {
-      toast.error('وحدة القياس غير صالحة');
-      return;
-    }
-
-    setBusy(true);
-    const supabase = createClient();
-    const result = ingredientToEdit
-      ? await supabase
-          .from('ingredients')
-          .update({
-            name,
-            reorder_point: reorderPoint,
-            supplier_id: supplierId,
-            supplier_sku: supplierSku,
-          })
-          .eq('id', ingredientToEdit.id)
-          .eq('project_id', projectId)
-      : await supabase.from('ingredients').insert({
-          project_id: projectId,
-          name,
-          unit,
-          reorder_point: reorderPoint,
-          supplier_id: supplierId,
-          supplier_sku: supplierSku,
-        });
-    setBusy(false);
-
-    if (result.error) {
-      toast.error('تعذر حفظ المكوّن');
-      return;
-    }
-    toast.success(ingredientToEdit ? 'تم تحديث المكوّن' : 'تمت إضافة المكوّن');
-    setShowIngredientForm(false);
-    setIngredientToEdit(null);
-    router.refresh();
   }
 
   async function saveSupplier(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    const form = new FormData(event.currentTarget);
-    const name = String(form.get('name') ?? '').trim();
-    const contactName = String(form.get('contact_name') ?? '').trim() || null;
-    const email = String(form.get('email') ?? '').trim() || null;
-    const phone = String(form.get('phone') ?? '').trim() || null;
-    if (!name) {
-      toast.error('أدخل اسم المورّد');
-      return;
+    if (await actions.saveSupplier(event, supplierToEdit)) {
+      setShowSupplierForm(false);
+      setSupplierToEdit(null);
     }
-
-    setBusy(true);
-    const supabase = createClient();
-    const result = supplierToEdit
-      ? await supabase
-          .from('suppliers')
-          .update({ name, contact_name: contactName, email, phone })
-          .eq('id', supplierToEdit.id)
-          .eq('project_id', projectId)
-      : await supabase
-          .from('suppliers')
-          .insert({ project_id: projectId, name, contact_name: contactName, email, phone });
-    setBusy(false);
-
-    if (result.error) {
-      toast.error('تعذر حفظ بيانات المورّد');
-      return;
-    }
-    toast.success(supplierToEdit ? 'تم تحديث بيانات المورّد' : 'تمت إضافة المورّد');
-    setShowSupplierForm(false);
-    setSupplierToEdit(null);
-    router.refresh();
   }
 
   async function saveMovement(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!stockTarget || busy) return;
-    const form = new FormData(event.currentTarget);
-    const movementType = String(form.get('movement_type')) as 'receive' | 'adjustment';
-    const amount = Number(form.get('quantity'));
-    const notes = String(form.get('notes') ?? '').trim();
-    if (!Number.isFinite(amount) || amount === 0 || (movementType === 'receive' && amount < 0)) {
-      toast.error('أدخل كمية صحيحة؛ الاستلام يجب أن يكون موجبًا');
-      return;
-    }
-
-    setBusy(true);
-    const supabase = createClient();
-    const { error } = await supabase.rpc('adjust_ingredient_stock', {
-      p_ingredient_id: stockTarget.id,
-      p_movement_type: movementType,
-      p_quantity: amount,
-      p_notes: notes || null,
-    });
-    setBusy(false);
-    if (error) {
-      toast.error(
-        error.message.includes('INSUFFICIENT_INGREDIENT_STOCK')
-          ? 'لا يمكن أن يصبح الرصيد أقل من صفر'
-          : 'تعذر تسجيل حركة المخزون'
-      );
-      return;
-    }
-    toast.success('تم تحديث رصيد المخزون');
-    setStockTarget(null);
-    router.refresh();
+    if (await actions.saveMovement(event, stockTarget)) setStockTarget(null);
   }
 
   async function saveRecipe(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!recipeProduct || busy) return;
-    const lines = recipeLines.map((line) => ({
-      ingredient_id: line.ingredient_id,
-      quantity: Number(line.quantity),
-    }));
-    if (
-      lines.some(
-        (line) =>
-          !line.ingredient_id || !Number.isFinite(line.quantity) || line.quantity <= 0
-      ) ||
-      new Set(lines.map((line) => line.ingredient_id)).size !== lines.length
-    ) {
-      toast.error('أكمل كل المكوّنات والكميات، ولا تكرر المكوّن');
-      return;
-    }
-
-    setBusy(true);
-    const supabase = createClient();
-    const { error } = await supabase.rpc('replace_product_recipe', {
-      p_product_id: recipeProduct.id,
-      p_lines: lines as Json,
-    });
-    setBusy(false);
-    if (error) {
-      toast.error('تعذر حفظ الوصفة');
-      return;
-    }
-    toast.success(lines.length ? 'تم حفظ الوصفة' : 'تم إيقاف تتبّع مكونات المنتج');
-    setRecipeProduct(null);
-    router.refresh();
+    if (await actions.saveRecipe(event, recipeProduct, recipeLines)) setRecipeProduct(null);
   }
 
   return (
@@ -665,12 +516,4 @@ export function InventoryClient({
       )}
     </div>
   );
-}
-
-function prevRecipeUses(
-  lines: { ingredient_id: string; quantity: string }[],
-  currentIndex: number,
-  ingredientId: string
-) {
-  return lines.some((line, index) => index !== currentIndex && line.ingredient_id === ingredientId);
 }
