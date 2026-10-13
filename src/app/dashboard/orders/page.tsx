@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { getCurrentProject } from '@/lib/project';
 import { createClient } from '@/lib/supabase/server';
 import { OrdersClient } from './orders-client';
-import type { Order, OrderItem } from '@/lib/types';
+import { bahrainDayStart } from '@/lib/order-filters';
+import type { OrderRow } from '@/components/dashboard/orders/use-orders-feed';
 
 export default async function OrdersPage() {
   const ctx = await getCurrentProject();
@@ -21,13 +22,10 @@ export default async function OrdersPage() {
   // local day (which is why this page could flash another day's orders before
   // settling); with the server on the same boundary there is nothing to paper
   // over, and the merchant sees the right day on first paint.
-  const dayFmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Bahrain',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const today = new Date(Date.parse(`${dayFmt.format(new Date())}T00:00:00+03:00`));
+  // The boundary itself is `bahrainDayStart()` in lib/order-filters — the same
+  // function the client's day keys come from, so server and browser cannot
+  // disagree about which day "today" is (architecture review 2026-10-13).
+  const today = bahrainDayStart();
 
   // UX-report C1: a busy day silently truncated at 50 rows — day totals and
   // status counts were computed client-side from the first 50 orders only.
@@ -62,10 +60,7 @@ export default async function OrdersPage() {
     <OrdersClient
       projectId={ctx.project.id}
       currency={ctx.project.currency}
-      initialOrders={orders as unknown as (Order & {
-        tables?: { number: number; slug: string } | null;
-        order_items?: OrderItem[];
-      })[]}
+      initialOrders={orders as unknown as OrderRow[]}
     />
   );
 }
