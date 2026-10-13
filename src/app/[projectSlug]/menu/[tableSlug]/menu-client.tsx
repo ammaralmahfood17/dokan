@@ -11,6 +11,24 @@ import {
   validateOptionSelection,
 } from '@/lib/product-options';
 import { langOfText } from '@/lib/i18n';
+import {
+  addLine,
+  buildPickedLine,
+  buildQuickLine,
+  cartItemCount,
+  cartTotal,
+  categoriesWithProducts,
+  changeQuantity,
+  filterMenuProducts,
+  groupByCategory,
+  lastProductLineKey,
+  needsPicker,
+  productQtyInCart,
+  qtyByProduct,
+  toggleOptionSelection,
+  toggleQuickNoteText,
+  uncategorizedProducts,
+} from '@/lib/menu-cart';
 import type { CartLine, Category, OrderItemOption, Product, ProductOptionChoice, ProductOptionGroup, ProductWithOptions, Project, Table } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -206,62 +224,33 @@ export function MenuClient({
   // Perf: defer the search filter so typing never blocks on a large menu.
   const deferredQuery = useDeferredValue(menuQuery);
 
-  const filtered = useMemo(() => {
-    let list = products;
-    if (activeCategory !== 'all') {
-      list = list.filter((p) => p.category_id === activeCategory);
-    }
-    const q = deferredQuery.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.name_en ?? '').toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [products, activeCategory, deferredQuery]);
+  // The rule itself is `filterMenuProducts` in lib/menu-cart (pure, tested).
+  const filtered = useMemo(
+    () => filterMenuProducts(products, activeCategory, deferredQuery),
+    [products, activeCategory, deferredQuery]
+  );
 
   // البحث يظهر فقط للمنيو الكبير (12+ منتج) — لا يزحم المنيو الصغير
   const showMenuSearch = products.length >= 12;
 
-  const total = useMemo(
-    () => money(cart.reduce((s, l) => s + l.unitPrice * l.quantity, 0), currencyDecimals(currency)),
-    [cart, currency]
-  );
-  const itemCount = useMemo(
-    () => cart.reduce((s, l) => s + l.quantity, 0),
-    [cart]
-  );
+  const total = useMemo(() => cartTotal(cart, currency), [cart, currency]);
+  const itemCount = useMemo(() => cartItemCount(cart), [cart]);
 
   // Perf: O(1) quantity lookup per card. The old qtyOf(p.id) filtered the whole
   // cart once per product on every render — O(P×lines) per cart change.
-  const cartQtyByProduct = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const l of cart) m.set(l.productId, (m.get(l.productId) ?? 0) + l.quantity);
-    return m;
-  }, [cart]);
+  const cartQtyByProduct = useMemo(() => qtyByProduct(cart), [cart]);
 
   // Perf: group once per (filtered, categories) change instead of running
   // categories.some() + filtered.filter() inside the render map every render.
-  const productsByCategory = useMemo(() => {
-    const m = new Map<string, ProductWithOptions[]>();
-    for (const p of filtered) {
-      if (!p.category_id) continue; // uncategorized handled separately below
-      const arr = m.get(p.category_id) ?? [];
-      arr.push(p);
-      m.set(p.category_id, arr);
-    }
-    return m;
-  }, [filtered]);
+  const productsByCategory = useMemo(() => groupByCategory(filtered), [filtered]);
 
   const visibleCategories = useMemo(
-    () => categories.filter((c) => (productsByCategory.get(c.id)?.length ?? 0) > 0),
+    () => categoriesWithProducts(categories, productsByCategory),
     [categories, productsByCategory]
   );
 
   // Uncategorized products (category deleted → SET NULL): keep them visible.
-  const uncategorized = useMemo(() => filtered.filter((p) => !p.category_id), [filtered]);
+  const uncategorized = useMemo(() => uncategorizedProducts(filtered), [filtered]);
 
   /** Scroll products into view when category changes (mobile smooth UX) */
   const handleCategoryChange = useCallback((catId: string | 'all') => {
@@ -280,79 +269,30 @@ export function MenuClient({
 
   /** UX-6: append/remove a quick-note phrase, keeping the 200-char cap. */
   function toggleQuickNote(note: string) {
-    setItemNotes((prev) => {
-      if (prev.includes(note)) {
-        return prev
-          .replace(note, '')
-          .replace(/،،+/g, '،')
-          .replace(/^[،\s]+/, '')
-          .replace(/[،\s]+$/, '');
-      }
-      const next = prev.trim() ? `${prev}، ${note}` : note;
-      return next.length <= 200 ? next : prev;
-    });
+    setItemNotes((prev) => toggleQuickNoteText(prev, note));
   }
 
   /** Single-choice groups replace; multi groups append up to their max. */
   function toggleOption(group: ProductOptionGroup, choiceId: string) {
-    const bounds = effectiveBounds(group);
-    const groupIds = new Set(availableChoices(group).map((c) => c.id));
-    setSelectedOptions((prev) => {
-      if (prev.includes(choiceId)) return prev.filter((id) => id !== choiceId);
-      if (bounds.max === 1) {
-        return [...prev.filter((id) => !groupIds.has(id)), choiceId];
-      }
-      const picked = availableChoices(group).filter((c) => prev.includes(c.id)).length;
-      if (picked >= bounds.max) return prev; // at the group's max — ignore the tap
-      return [...prev, choiceId];
-    });
+    setSelectedOptions((prev) => toggleOptionSelection(prev, group, choiceId));
   }
 
   function confirmAdd() {
     if (!picker) return;
     const groups = picker.option_groups || [];
-    // The picker disables the button while this fails, but the check runs again
-    // here so a stale render can never add a half-configured line.
-    const violation = validateOptionSelection(groups, selectedOptions);
-    if (violation) {
-      toast.error(violation.message);
+    // Validation + pricing + the line key live in lib/menu-cart (pure, tested):
+    // a stale render can never add a half-configured line, and the quick-add path
+    // and this one must agree on what "the same line" means.
+    const built = buildPickedLine(picker, groups, selectedOptions, itemNotes, currency);
+    if (!built.ok) {
+      toast.error(built.message);
       return;
     }
-    const options: OrderItemOption[] = selectedChoices(groups, selectedOptions).map((c) => ({
-      id: c.id,
-      name: c.name,
-      price: money(Number(c.price), currencyDecimals(currency)),
-    }));
-    const optionTotal = money(options.reduce((s, o) => s + o.price, 0), currencyDecimals(currency));
-    const unitPrice = money(Number(picker.price) + optionTotal, currencyDecimals(currency));
-    const key = `${picker.id}:${options
-      .map((o) => o.id)
-      .sort()
-      .join(',')}:${itemNotes.trim()}`;
-
-    const alreadyInCart = cart.some((l) => l.key === key);
+    const { line } = built;
+    const alreadyInCart = cart.some((l) => l.key === line.key);
     const wasEmpty = cart.length === 0;
 
-    setCart((prev) => {
-      const existing = prev.find((l) => l.key === key);
-      if (existing) {
-        return prev.map((l) =>
-          l.key === key ? { ...l, quantity: l.quantity + 1 } : l
-        );
-      }
-      return [
-        ...prev,
-        {
-          key,
-          productId: picker.id,
-          productName: picker.name,
-          unitPrice,
-          quantity: 1,
-          addons: options,
-          notes: itemNotes.trim(),
-        },
-      ];
-    });
+    setCart((prev) => addLine(prev, line).lines);
     setPicker(null);
 
     // Auto-open the cart on the FIRST item so the customer can review + send.
@@ -378,42 +318,23 @@ export function MenuClient({
     // Stock cap — never let the cart hold more portions than remain. The
     // server rejects the WHOLE order at checkout otherwise, so catching it on
     // the stepper is the difference between a nudge and a failed checkout.
-    const inCart = current
-      .filter((l) => l.productId === p.id)
-      .reduce((s, l) => s + l.quantity, 0);
+    const inCart = productQtyInCart(current, p.id);
     if (inCart >= maxOrderableQty(p)) {
       toast.error('وصلت للكمية المتوفرة من هذا الصنف', { duration: 1600 });
       return;
     }
     // Any group with a pickable variety needs the picker — the customer has to
     // choose before the line can be priced.
-    if ((p.option_groups || []).some((g) => availableChoices(g).length > 0)) {
+    if (needsPicker(p)) {
       openProduct(p);
       return;
     }
-    const key = `${p.id}::`;
-    const alreadyInCart = current.some((l) => l.key === key);
+    // The line (and its key) come from lib/menu-cart, so a quick-add and a
+    // picker-add of the same product land on the SAME cart line.
+    const line = buildQuickLine(p, currency);
+    const alreadyInCart = current.some((l) => l.key === line.key);
     const wasEmpty = current.length === 0;
-    setCart((prev) => {
-      const existing = prev.find((l) => l.key === key);
-      if (existing) {
-        return prev.map((l) =>
-          l.key === key ? { ...l, quantity: l.quantity + 1 } : l
-        );
-      }
-      return [
-        ...prev,
-        {
-          key,
-          productId: p.id,
-          productName: p.name,
-          unitPrice: money(Number(p.price), currencyDecimals(currency)),
-          quantity: 1,
-          addons: [],
-          notes: '',
-        },
-      ];
-    });
+    setCart((prev) => addLine(prev, line).lines);
     // Auto-open the cart on the FIRST item (same UX as confirmAdd)
     if (wasEmpty) setCartOpen(true);
     // Visual feedback
@@ -424,11 +345,7 @@ export function MenuClient({
   }, [currency, openProduct]);
 
   const updateQty = useCallback((key: string, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((l) => (l.key === key ? { ...l, quantity: l.quantity + delta } : l))
-        .filter((l) => l.quantity > 0)
-    );
+    setCart((prev) => changeQuantity(prev, key, delta));
   }, []);
 
   /** Decrement the most recently added cart line for this product. Declared here
@@ -436,8 +353,8 @@ export function MenuClient({
    *  the product as its argument, so the memoised card needs no per-card closure. */
   const decrementProduct = useCallback(
     (p: MenuProduct) => {
-      const line = [...cartRef.current].reverse().find((l) => l.productId === p.id);
-      if (line) updateQty(line.key, -1);
+      const key = lastProductLineKey(cartRef.current, p.id);
+      if (key) updateQty(key, -1);
     },
     [updateQty]
   );
