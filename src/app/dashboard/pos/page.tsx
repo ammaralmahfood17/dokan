@@ -2,9 +2,8 @@ import { redirect } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { getCurrentProject } from '@/lib/project';
 import { createClient } from '@/lib/supabase/server';
-import type { Product, ProductOptionGroup } from '@/lib/types';
+import type { Product, ProductOptionGroup, ProductWithOptions } from '@/lib/types';
 
-type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
 
 /**
  * Dynamic import: PosClient lives in its own JS chunk.

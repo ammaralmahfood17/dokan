@@ -152,6 +152,14 @@ export interface ProductOptionGroup {
 }
 
 /**
+ * A product with its whole option tree attached — the shape the dashboard, the
+ * public menu and the POS all read and render. Declared ONCE here: it used to be
+ * re-declared identically in product-form-modal, menu-client, pos-client and
+ * pos/page (architecture review 2026-10-13).
+ */
+export type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
+
+/**
  * Snapshot of the chosen varieties stored on an order line. The FIELD that
  * carries it keeps the name `addons` because it mirrors the `order_items.addons`
  * column (renaming the column would ripple through the cart, the KDS, the POS

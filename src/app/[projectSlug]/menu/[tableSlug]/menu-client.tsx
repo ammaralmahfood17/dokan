@@ -11,16 +11,7 @@ import {
   validateOptionSelection,
 } from '@/lib/product-options';
 import { langOfText } from '@/lib/i18n';
-import type {
-  CartLine,
-  Category,
-  OrderItemOption,
-  Product,
-  ProductOptionChoice,
-  ProductOptionGroup,
-  Project,
-  Table,
-} from '@/lib/types';
+import type { CartLine, Category, OrderItemOption, Product, ProductOptionChoice, ProductOptionGroup, ProductWithOptions, Project, Table } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 // D2: extracted sections — bottom sheet + product row now live in
@@ -55,7 +46,6 @@ import {
 const BLUR_PLACEHOLDER =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMklEQVQ4T2NkYPj/n4EBBJgYKAQMFFiAKcBAUwsDUx0DxS5gYKA8DCh2AQNlYUBZCgDxpwgRg9RXOAAAAABJRU5ErkJggg==';
 
-type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
 
 /** UX-6: one-tap common item notes (drinks + food, Gulf phrasing). */
 const QUICK_NOTE_CHIPS = ['بدون سكر', 'بدون ثلج', 'ثلج على جنب', 'حار زيادة'];

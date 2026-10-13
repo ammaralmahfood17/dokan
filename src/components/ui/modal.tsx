@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { lockBodyScroll } from '@/lib/use-body-scroll-lock';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -105,20 +106,13 @@ export function Modal({ title, children, onClose }: ModalProps) {
     document.addEventListener('keydown', handleKeyDown);
 
     // Lock body scroll: fixed position + preserve scroll position
-    const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    document.body.style.overflowY = 'scroll'; // prevent layout shift
+    // Scroll lock (iOS-safe) — one implementation, lib/use-body-scroll-lock.
+    const unlockBody = lockBodyScroll(); // prevent layout shift
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       // Restore body scroll
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      document.body.style.overflowY = '';
-      window.scrollTo(0, scrollY);
+      unlockBody();
     };
   }, [handleKeyDown]);
 

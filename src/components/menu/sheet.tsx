@@ -3,6 +3,7 @@
 // D2: Bottom sheet with drag-to-dismiss — extracted from menu-client.tsx.
 // Generic dialog surface used by the product picker + cart on the public menu.
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { lockBodyScroll } from '@/lib/use-body-scroll-lock';
 import { GripHorizontal, X } from 'lucide-react';
 
 export function Sheet({
@@ -54,11 +55,8 @@ export function Sheet({
   // Scroll lock + keyboard listener + focus management — runs ONCE per mount.
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
-    const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    document.body.style.overflowY = 'scroll';
+    // Scroll lock (iOS-safe) — one implementation, lib/use-body-scroll-lock.
+    const unlockBody = lockBodyScroll();
 
     // Focus trap: move focus INTO the sheet on open so the first Tab lands
     // inside the dialog, not on background controls behind the overlay.
@@ -70,11 +68,7 @@ export function Sheet({
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      document.body.style.overflowY = '';
-      window.scrollTo(0, scrollY);
+      unlockBody();
       // Restore focus to whatever opened the sheet.
       previouslyFocused?.focus?.();
     };

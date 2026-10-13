@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lockBodyScroll } from '@/lib/use-body-scroll-lock';
 import { Check, Search, ShoppingBag, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
-import type { OrderType, Product, ProductOptionGroup } from '@/lib/types';
+import type { OrderType, Product, ProductOptionGroup, ProductWithOptions } from '@/lib/types';
 import {
   availableChoices,
   effectiveBounds,
@@ -18,7 +19,6 @@ import type { PosLine } from '@/components/pos/types';
 import { toast } from 'sonner';
 import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
 
-type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
 
 const ORDER_TYPES: [OrderType, string][] = [
   ['walkin', 'سفري'],
@@ -73,18 +73,11 @@ export function PosClient({
   useEffect(() => {
     if (!picker && !cartOpen) return;
     document.addEventListener('keydown', pickerKeyDown);
-    const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    document.body.style.overflowY = 'scroll';
+    // Scroll lock (iOS-safe) — one implementation, lib/use-body-scroll-lock.
+    const unlockBody = lockBodyScroll();
     return () => {
       document.removeEventListener('keydown', pickerKeyDown);
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      document.body.style.overflowY = '';
-      window.scrollTo(0, scrollY);
+      unlockBody();
     };
   }, [picker, cartOpen, pickerKeyDown]);
 
