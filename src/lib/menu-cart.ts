@@ -41,8 +41,13 @@ export function lineKey(productId: string, optionIds: readonly string[], notes: 
   return `${productId}:${[...optionIds].sort().join(',')}:${notes.trim()}`;
 }
 
-/** Cart total, rounded to the project currency's decimals. */
-export function cartTotal(lines: CartLine[], currency: string): number {
+/**
+ * Cart total, rounded to the project currency's decimals.
+ *
+ * Typed structurally, not on `CartLine`: the POS cart has its own line shape and
+ * must not grow a second, drifting definition of "total".
+ */
+export function cartTotal(lines: { unitPrice: number; quantity: number }[], currency: string): number {
   return money(
     lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0),
     currencyDecimals(currency)
@@ -50,7 +55,7 @@ export function cartTotal(lines: CartLine[], currency: string): number {
 }
 
 /** Number of units in the cart (not lines). */
-export function cartItemCount(lines: CartLine[]): number {
+export function cartItemCount(lines: { quantity: number }[]): number {
   return lines.reduce((sum, l) => sum + l.quantity, 0);
 }
 
@@ -60,14 +65,17 @@ export function cartItemCount(lines: CartLine[]): number {
  * The old `qtyOf(id)` filter ran once per product on every render, so a cart
  * change cost O(products × lines); the menu is rebuilt on every tap.
  */
-export function qtyByProduct(lines: CartLine[]): Map<string, number> {
+export function qtyByProduct(lines: { productId: string; quantity: number }[]): Map<string, number> {
   const byProduct = new Map<string, number>();
   for (const l of lines) byProduct.set(l.productId, (byProduct.get(l.productId) ?? 0) + l.quantity);
   return byProduct;
 }
 
 /** Units of ONE product currently in the cart. */
-export function productQtyInCart(lines: CartLine[], productId: string): number {
+export function productQtyInCart(
+  lines: { productId: string; quantity: number }[],
+  productId: string
+): number {
   return lines.filter((l) => l.productId === productId).reduce((sum, l) => sum + l.quantity, 0);
 }
 

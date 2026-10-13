@@ -17,7 +17,17 @@ import { CartPanel } from '@/components/pos/cart-panel';
 import { ProductCard } from '@/components/pos/product-card';
 import type { PosLine } from '@/components/pos/types';
 import { toast } from 'sonner';
-import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
+import { isSoldOut } from '@/lib/product-stock';
+import { cartTotal, needsPicker, productQtyInCart, toggleOptionSelection } from '@/lib/menu-cart';
+import {
+  addPosLine,
+  availablePosProducts,
+  buildPosLine,
+  changePosQty,
+  posStockCheck,
+  searchPosProducts,
+  setPosQty,
+} from '@/lib/pos-cart';
 
 
 const ORDER_TYPES: [OrderType, string][] = [
@@ -81,34 +91,18 @@ export function PosClient({
     };
   }, [picker, cartOpen, pickerKeyDown]);
 
+  // UX-U12: ترتيب الأكثر طلبًا أولًا (آخر 7 أيام) — يحافظ على sort_order كـ
+  // tiebreaker للاستقرار. القاعدة نفسها في lib/pos-cart (نقية ومختبَرة).
   const available = useMemo(
-    () =>
-      // UX-U12: ترتيب الأكثر طلبًا أولًا (آخر 7 أيام) — يحافظ على
-      // sort_order كـ tiebreaker للاستقرار
-      products
-        .filter((p) => !isSoldOut(p))
-        .slice()
-        .sort(
-          (a, b) =>
-            (productFrequency?.[b.id] ?? 0) - (productFrequency?.[a.id] ?? 0) ||
-            a.sort_order - b.sort_order
-        ),
+    () => availablePosProducts(products, productFrequency),
     [products, productFrequency]
   );
 
-  // Cashier search — filters by Arabic/English name; Enter quick-adds the top hit.
+  // Cashier search — filters by Arabic/English name; Enter quick-adds the top
+  // hit. `q` is kept for the empty state: "no match" and "no products" are
+  // different messages to a cashier.
   const q = query.trim().toLowerCase();
-  const filtered = useMemo(
-    () =>
-      q
-        ? available.filter(
-            (p) =>
-              p.name.toLowerCase().includes(q) ||
-              (p.name_en ?? '').toLowerCase().includes(q)
-          )
-        : available,
-    [available, q]
-  );
+  const filtered = useMemo(() => searchPosProducts(available, query), [available, query]);
 
   // Cashier keyboard shortcuts (desktop): "/" focuses search, Enter in the
   // search field quick-adds the top filtered product (addon products open the
@@ -138,10 +132,7 @@ export function PosClient({
     return () => document.removeEventListener('keydown', onKey);
   }, [picker, cartOpen]);
 
-  const total = useMemo(
-    () => money(lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0), currencyDecimals(currency)),
-    [lines, currency]
-  );
+  const total = useMemo(() => cartTotal(lines, currency), [lines, currency]);
 
   // ---- Picker: the groups that actually have a pickable variety, and the one
   // reason «إضافة للسلة» is still disabled. Same rules module as the API.
@@ -155,7 +146,7 @@ export function PosClient({
   function openProduct(p: ProductWithOptions) {
     // The picker is needed whenever the product has a group with a pickable
     // variety — the cashier must choose before the line can be priced.
-    if ((p.option_groups || []).some((g) => availableChoices(g).length > 0)) {
+    if (needsPicker(p)) {
       setPicker(p);
       setSelectedOptions([]);
     } else {
@@ -173,43 +164,15 @@ export function PosClient({
     // Stock (0018). A tracked product with nothing left reads as unavailable,
     // and no sale may exceed what remains — the server rejects the WHOLE order
     // at checkout, so it has to be caught here where the cashier can react.
-    if (isSoldOut(p)) {
-      if (!silent) toast.error('هذا الصنف غير متوفر');
+    // Guard + price + key live in lib/pos-cart (pure, tested). A miss here is a
+    // sale the SERVER rejects at checkout, in front of a queue.
+    const check = posStockCheck(p, productQtyInCart(lines, p.id), qty);
+    if (!check.ok) {
+      if (!silent) toast.error(check.message);
       return;
     }
-    const alreadyInCart = lines
-      .filter((l) => l.productId === p.id)
-      .reduce((s, l) => s + l.quantity, 0);
-    if (alreadyInCart + qty > maxOrderableQty(p)) {
-      if (!silent) toast.error('الكمية المطلوبة أكثر من المتوفر');
-      return;
-    }
-    const optionTotal = money(
-      selectedChoices(p.option_groups || [], optionIds).reduce((sum, c) => sum + Number(c.price), 0),
-      currencyDecimals(currency)
-    );
-    const unitPrice = money(Number(p.price) + optionTotal, currencyDecimals(currency));
-    const key = `${p.id}:${[...optionIds].sort().join(',')}`;
-    setLines((prev) => {
-      const existing = prev.find((l) => l.key === key);
-      if (existing) {
-        return prev.map((l) =>
-          l.key === key ? { ...l, quantity: l.quantity + qty } : l
-        );
-      }
-      return [
-        ...prev,
-        {
-          key,
-          productId: p.id,
-          productName: p.name,
-          unitPrice,
-          quantity: qty,
-          optionIds,
-          addonLabels,
-        },
-      ];
-    });
+    const line = buildPosLine(p, optionIds, addonLabels, qty, currency);
+    setLines((prev) => addPosLine(prev, line, qty));
     if (!silent) toast.success('تمت الإضافة إلى السلة');
     setPicker(null);
   }
@@ -229,17 +192,10 @@ export function PosClient({
     );
   }
 
-  /** Single-choice groups replace; multi groups append up to their max. */
+  /** Single-choice groups replace; multi groups append up to their max.
+   *  The menu's rule, shared — the two surfaces must not disagree. */
   function toggleOption(group: ProductOptionGroup, choiceId: string) {
-    const bounds = effectiveBounds(group);
-    const groupIds = new Set(availableChoices(group).map((c) => c.id));
-    setSelectedOptions((prev) => {
-      if (prev.includes(choiceId)) return prev.filter((id) => id !== choiceId);
-      if (bounds.max === 1) return [...prev.filter((id) => !groupIds.has(id)), choiceId];
-      const picked = availableChoices(group).filter((c) => prev.includes(c.id)).length;
-      if (picked >= bounds.max) return prev;
-      return [...prev, choiceId];
-    });
+    setSelectedOptions((prev) => toggleOptionSelection(prev, group, choiceId));
   }
 
   // ---------- Quick action: repeat last order ----------
@@ -295,19 +251,11 @@ export function PosClient({
   }, [repeatLoading, projectId, products]);
 
   function updateQty(key: string, delta: number) {
-    setLines((prev) =>
-      prev
-        .map((l) =>
-          l.key === key ? { ...l, quantity: l.quantity + delta } : l
-        )
-        .filter((l) => l.quantity > 0)
-    );
+    setLines((prev) => changePosQty(prev, key, delta));
   }
 
   function setQty(key: string, qty: number) {
-    setLines((prev) =>
-      prev.map((l) => (l.key === key ? { ...l, quantity: qty } : l))
-    );
+    setLines((prev) => setPosQty(prev, key, qty));
   }
 
   async function submit() {
