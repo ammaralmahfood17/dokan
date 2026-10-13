@@ -43,3 +43,34 @@ SELECT count(*) FROM information_schema.columns WHERE table_name='impersonation_
 INSERT INTO public.impersonation_sessions (super_admin_user_id, target_user_id, super_admin_session, target_session, expires_at)
 VALUES ('<a user id>', '<another user id>', '{"access_token":"a","refresh_token":"r"}'::jsonb, '{}'::jsonb, now() + interval '10 minutes');
 ```
+
+---
+
+## Migrations after this manifest (state as of 2026-10-13)
+
+The table at the top stops at the 2026-10-06 remediation set. Everything shipped since is listed
+here with the same facts: what it does, whether it is destructive, and its apply state — all
+verified against production, not inferred.
+
+| # | file | purpose | destructive | apply |
+|---|---|---|---|---|
+| 9 | `20261006190000_product_options.sql` | `option_groups` / `option_choices` + their RLS and grants; `create_order_transactional` repriced against option choices; flat addons retired (then dropped) | no (the dropped table held 0 rows) | **applied** — verified by the two tables' existence and the RPC's signature |
+| 10 | `20261006200000_drop_legacy_addons.sql` | drops the retired `product_addons` table | no (empty) | **applied** |
+| 11 | `20261008100000_phase1_ingredient_inventory.sql` | ingredient inventory: tables, ledger, four SECURITY DEFINER RPCs | no | **applied** — `adjust_ingredient_stock`, `replace_product_recipe` present in `pg_proc` |
+| 12 | `20261013120000_upsert_product_with_options.sql` | **new** — one transactional RPC replacing the product editor's ten un-transacted statements (architecture review 2026-10-13, finding P0) | no (a new function + its grants) | **applied 2026-10-13, BEFORE the code deploy — required**, because the deployed modal starts calling it the moment the build lands |
+
+### Verification for #12
+
+```sql
+-- exists, is SECURITY INVOKER, and is callable by exactly authenticated + service_role
+SELECT p.proname, p.prosecdef, p.proacl::text
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+ WHERE n.nspname = 'public' AND p.proname = 'upsert_product_with_options';
+-- expect: prosecdef = f; acl = {postgres=…,service_role=…,authenticated=…}  (no anon, no PUBLIC)
+```
+
+Behavioural proof (21 assertions) lives in `supabase/tests/phase8_product_upsert.sql` and runs in
+CI's fresh-database job. It was also executed once against **production inside a transaction that
+was rolled back in full** (21/21 ok, row counts unchanged afterwards) — the same "prove it on the
+real database, leave nothing behind" method used for the earlier audits.
+
