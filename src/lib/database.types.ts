@@ -1155,6 +1155,26 @@ export type Database = {
         Returns: boolean
       }
       unaccent: { Args: { "": string }; Returns: string }
+      // Hand-added 2026-10-13 (architecture review, finding P0): the product save path moved
+      // from ten un-transacted statements in the modal to this one RPC. The generator needs
+      // Docker (`npm run db:types`), unavailable on this host; a run elsewhere emits the
+      // same entry. Migration: 20261013120000_upsert_product_with_options.sql.
+      upsert_product_with_options: {
+        Args: {
+          p_category_id: string | null
+          p_description: string | null
+          p_groups: Json
+          p_image_url: string | null
+          p_is_available: boolean
+          p_name: string
+          p_name_en: string | null
+          p_price: number
+          p_product_id: string | null
+          p_project_id: string
+          p_stock: number | null
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "super_admin" | "owner" | "manager" | "staff"

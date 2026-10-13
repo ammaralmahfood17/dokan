@@ -6,17 +6,18 @@
 import { useCallback, useRef, useState, type FormEvent } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { formatMoney, money, currencyDecimals } from '@/lib/utils';
+import { currencyDecimals } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { Toggle } from '@/components/ui/toggle';
-import type { Category, Product, ProductOptionGroup } from '@/lib/types';
-import type { Database } from '@/lib/database.types';
+import type { Category, Product, ProductOptionGroup, ProductWithOptions } from '@/lib/types';
 import { toast } from 'sonner';
-import { validateProduct, type FieldErrors } from '@/lib/products-utils';
+import { validateProduct, revalidateMenuCache, type FieldErrors } from '@/lib/products-utils';
 import { ImageUploader } from '@/components/dashboard/products/image-uploader';
+import { saveProduct, validateStockInput } from '@/lib/product-form';
 
-export type ProductWithOptions = Product & { option_groups: ProductOptionGroup[] };
+/** Re-exported for existing importers; the type itself lives in lib/types. */
+export type { ProductWithOptions };
 
 /** Temporary option variety in the product form — id is set for persisted rows. */
 type FormChoice = { key: string; id?: string; name: string; price: string };
@@ -38,26 +39,6 @@ type FormGroup = {
   single: boolean;
   choices: FormChoice[];
 };
-
-/** max_select stored for a "multiple" group (see FormGroup). */
-const UNLIMITED_MAX = 99;
-
-function revalidateMenuCache(projectId: string) {
-  void fetch('/api/revalidate-menu', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectId }),
-  }).catch(() => {});
-}
-
-/** '' → null (untracked/unlimited). Otherwise the whole, non-negative count. */
-function parseStockInput(raw: string): number | null {
-  const t = raw.trim();
-  if (!t) return null;
-  const n = Number(t);
-  if (!Number.isFinite(n)) return null;
-  return Math.max(0, Math.trunc(n));
-}
 
 export function ProductFormModal({
   projectId,
@@ -205,228 +186,40 @@ export function ProductFormModal({
   }
 
   // ----- Save Product -----
-  async function saveProduct(e: FormEvent) {
+  // ONE call: lib/product-form validates and sends the product + its whole
+  // option tree to upsert_product_with_options, which commits atomically.
+  async function handleSaveProduct(e: FormEvent) {
     e.preventDefault();
     const errors = validateProduct(name, price);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
-    // ── Option groups ────────────────────────────────────────────────────
-    // A group with no varieties would render nothing on the menu, so an empty
-    // one is rejected instead of being saved as dead weight. A completely
-    // untouched row (no name, no varieties) is just ignored.
-    const cleanGroups: {
-      name: string;
-      min_select: number;
-      max_select: number;
-      choices: { name: string; price: number }[];
-    }[] = [];
-    for (const g of formGroups) {
-      const groupName = g.name.trim();
-      const choices = g.choices.filter((c) => c.name.trim().length > 0);
-      if (!groupName && choices.length === 0) continue;
-      if (!groupName) {
-        toast.error('اكتب اسم الخيار');
-        return;
-      }
-      if (choices.length === 0) {
-        toast.error(`أضف نوعاً واحداً على الأقل في «${groupName}»`);
-        return;
-      }
-      for (const c of choices) {
-        const choicePrice = Number(c.price);
-        if (!Number.isFinite(choicePrice) || choicePrice < 0) {
-          toast.error(`سعر «${c.name.trim()}» غير صالح`);
-          return;
-        }
-      }
-      cleanGroups.push({
-        name: groupName,
-        min_select: g.required ? 1 : 0,
-        max_select: g.single ? 1 : UNLIMITED_MAX,
-        choices: choices.map((c) => ({
-          name: c.name.trim(),
-          price: money(Number(c.price), currencyDecimals(currency)),
-        })),
-      });
-    }
-
-    const parsedPrice = Number(price);
-
-    // Stock must be a whole, non-negative count — or empty for untracked.
-    if (stock.trim()) {
-      const n = Number(stock);
-      if (!Number.isInteger(n) || n < 0) {
-        toast.error('عدد الحصص يجب أن يكون رقماً صحيحاً غير سالب');
-        return;
-      }
+    const stockCheck = validateStockInput(stock);
+    if (!stockCheck.ok) {
+      toast.error(stockCheck.message);
+      return;
     }
 
     setLoading(true);
     const supabase = createClient();
-
-    /**
-     * Replace a product's whole option tree.
-     *
-     * Wholesale replace, not a diff: the tree is tiny, deleting a group cascades
-     * its varieties, and nothing durable references a choice id — an order line
-     * stores a name+price SNAPSHOT — so a diff would cost three loops and buy
-     * nothing. Varieties are written available; the form has no per-variety
-     * sold-out switch (the old addon editor did not either).
-     */
-    async function persistOptions(productId: string): Promise<boolean> {
-      const { error: delErr } = await supabase
-        .from('option_groups')
-        .delete()
-        .eq('product_id', productId);
-      if (delErr) {
-        console.error('[Products] Failed to clear option groups:', delErr);
-        return false;
-      }
-      for (let gi = 0; gi < cleanGroups.length; gi++) {
-        const g = cleanGroups[gi];
-        const { data: groupRow, error: groupErr } = await supabase
-          .from('option_groups')
-          .insert({
-            product_id: productId,
-            name: g.name,
-            min_select: g.min_select,
-            max_select: g.max_select,
-            sort_order: gi,
-          })
-          .select('id')
-          .single();
-        if (groupErr || !groupRow) {
-          console.error('[Products] Failed to insert option group:', groupErr);
-          return false;
-        }
-        const { error: choiceErr } = await supabase.from('option_choices').insert(
-          g.choices.map((c, ci) => ({
-            group_id: groupRow.id,
-            name: c.name,
-            price: c.price,
-            is_available: true,
-            sort_order: ci,
-          }))
-        );
-        if (choiceErr) {
-          console.error('[Products] Failed to insert option varieties:', choiceErr);
-          return false;
-        }
-      }
-      return true;
-    }
-
     try {
-      const updatePayload: Database['public']['Tables']['products']['Update'] = {
-        name: name.trim(),
-        name_en: nameEn.trim() || null,
-        description: description.trim() || null,
-        price: money(parsedPrice, currencyDecimals(currency)),
-        category_id: categoryId || null,
-        is_available: isAvailable,
-        image_url: imageUrl.trim() || null,
-        stock: parseStockInput(stock),
-      };
+      const result = await saveProduct(supabase, {
+        projectId,
+        productId: editing?.id ?? null,
+        values: { name, nameEn, description, price, categoryId, isAvailable, imageUrl, stock },
+        groups: formGroups,
+        currency,
+      });
 
-      if (editing) {
-        const { data, error } = await supabase
-          .from('products')
-          .update(updatePayload)
-          .eq('id', editing.id)
-          .eq('project_id', projectId)
-          .select('*, option_groups(*, option_choices(*))')
-          .single();
-
-        if (error || !data) {
-          toast.error('فشل التحديث');
-          return;
-        }
-
-        // Verify the product still belongs to this project before touching options
-        const { data: owned } = await supabase
-          .from('products')
-          .select('id')
-          .eq('id', editing.id)
-          .eq('project_id', projectId)
-          .maybeSingle();
-        if (!owned) {
-          toast.error('لا يمكن تعديل هذا المنتج');
-          return;
-        }
-
-        if (!(await persistOptions(editing.id))) {
-          toast.error('فشل تحديث الخيارات');
-          return;
-        }
-
-        const { data: refreshed } = await supabase
-          .from('products')
-          .select('*, option_groups(*, option_choices(*))')
-          .eq('id', editing.id)
-          .single();
-
-        if (refreshed) {
-          onSaved(refreshed as ProductWithOptions, editing.id);
-        }
-        toast.success('تم تحديث المنتج');
-        onClose();
-        revalidateMenuCache(projectId);
-      } else {
-        const nextSortOrder = products.length ? Math.max(...products.map((p) => p.sort_order ?? 0)) + 1 : 0;
-        const insertPayload: Database['public']['Tables']['products']['Insert'] = {
-          project_id: projectId,
-          name: name.trim(),
-          name_en: nameEn.trim() || null,
-          description: description.trim() || null,
-          price: money(parsedPrice, currencyDecimals(currency)),
-          category_id: categoryId || null,
-          is_available: isAvailable,
-          image_url: imageUrl.trim() || null,
-          sort_order: nextSortOrder,
-          stock: parseStockInput(stock),
-        };
-        const { data, error } = await supabase
-          .from('products')
-          .insert(insertPayload)
-          .select('*')
-          .single();
-
-        if (error || !data) {
-          toast.error('فشل الإضافة');
-          return;
-        }
-
-        // Verify the new product belongs to this project before adding options
-        const { data: owned } = await supabase
-          .from('products')
-          .select('id')
-          .eq('id', data.id)
-          .eq('project_id', projectId)
-          .maybeSingle();
-        if (!owned) {
-          toast.error('فشل الإضافة');
-          return;
-        }
-
-        if (!(await persistOptions(data.id))) {
-          toast.error('أُضيف المنتج لكن فشلت الخيارات');
-        }
-
-        const { data: withOptions } = await supabase
-          .from('products')
-          .select('*, option_groups(*, option_choices(*))')
-          .eq('id', data.id)
-          .single();
-
-        onSaved(
-          (withOptions ?? { ...data, option_groups: [] }) as ProductWithOptions,
-          null
-        );
-        toast.success('تمت إضافة المنتج');
-        onClose();
-        revalidateMenuCache(projectId);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
       }
+
+      onSaved(result.product, editing?.id ?? null);
+      toast.success(editing ? 'تم تحديث المنتج' : 'تمت إضافة المنتج');
+      onClose();
+      revalidateMenuCache(projectId);
     } catch {
       console.error('[Products] saveProduct unexpected error');
       toast.error('خطأ غير متوقع — حاول مجددًا');
@@ -435,10 +228,9 @@ export function ProductFormModal({
     }
   }
 
-
   return (
     <Modal title={editing ? 'تعديل منتج' : 'منتج جديد'} onClose={onClose}>
-      <form onSubmit={saveProduct} className="space-y-5">
+      <form onSubmit={handleSaveProduct} className="space-y-5">
         {/* NAME + NAME EN (2-col) */}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="field">
