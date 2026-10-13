@@ -37,6 +37,10 @@ const ALLOW = {
   'api/super-admin/hard-delete-project': 'is_super_admin() + typed project name + audit log',
   'api/super-admin/record-payment': 'is_super_admin() + rate limit + idempotency key + audit log',
   'api/super-admin/renew': 'is_super_admin() + rate limit + audit log',
+  // Reached through withSuperAdmin (the wrapper builds the service-role client), so the
+  // three lines above it are enforced by the same gate: 401 → 403 is_super_admin() →
+  // throttle keyed on the admin's user id.
+  'api/super-admin/impersonate': 'is_super_admin() + rate limit + 30-min non-refreshable target session + audit log',
 };
 
 const files = execSync("git ls-files 'src/app/api/**/route.ts'").toString().trim().split('\n');
@@ -44,7 +48,11 @@ const keyOf = (f) => f.replace(/^src\/app\//, '').replace(/\/route\.ts$/, '');
 
 const serviceRole = [];
 for (const f of files) {
-  if (readFileSync(f, 'utf8').includes('createAdminClient')) serviceRole.push(keyOf(f));
+  const code = readFileSync(f, 'utf8');
+  // Either the route builds the service-role client itself, or it hands the work to
+  // withSuperAdmin() — which builds one and passes it in. Both are the same privilege, so
+  // both must be listed; the second form was invisible here until 2026-10-13.
+  if (code.includes('createAdminClient') || code.includes('withSuperAdmin(')) serviceRole.push(keyOf(f));
 }
 
 const undocumented = serviceRole.filter((k) => !ALLOW[k]);

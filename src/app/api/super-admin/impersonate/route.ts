@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
-import { limitSuperAdmin } from '@/lib/super-admin-rate-limit';
-import { createClient } from '@/lib/supabase/server';
+import { withSuperAdmin, readJsonBody } from '@/lib/api/handler';
 import {
   startImpersonation,
   logSuperAdminAction,
@@ -14,37 +13,20 @@ import type { Json } from '@/lib/database.types';
  * POST /api/super-admin/impersonate
  * Body: { targetUserId: string, projectId?: string }
  *
- * Super-admin only. Mints a non-refreshable target session capped at 30
- * minutes, stores the admin session for restoration, and writes an audit entry.
+ * Super-admin only. Mints a non-refreshable target session capped at 30 minutes,
+ * stores the admin session for restoration, and writes an audit entry.
+ *
+ * The error mapping is route-owned (an `onError` hook): an MFA-protected target
+ * is a 409 the operator should read, and a misconfigured JWT lifetime is a 503
+ * that must be alerted — neither is the shared 500.
  */
-export async function POST(request: NextRequest) {
-  try {
-    const userClient = await createClient();
-    const {
-      data: { user },
-    } = await userClient.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
+export const POST = withSuperAdmin(
+  'impersonate',
+  async (request, { userId, client }) => {
+    const parsed = await readJsonBody(request);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.body as { targetUserId?: string; projectId?: string };
 
-    const { data: isAdmin } = await userClient.rpc('is_super_admin');
-    if (!isAdmin) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 });
-
-    // Defence in depth: this route is gated by is_super_admin() and the
-    // underlying RPC is service_role-only, so the limit is not closing a live
-    // bypass — it stops a stolen admin session from hammering the endpoint
-    // (each call costs a getUser() + an is_super_admin() RPC before the work
-    // is even rejected). Keyed on the admin's user id, not their IP, so a shared
-    // office connection can't lock out a real admin.
-    const throttled = await limitSuperAdmin(request, user.id, 'impersonate');
-    if (throttled) return throttled;
-
-        // audit follow-up: a non-JSON body made request.json() throw and the catch-all
-    // answered 500 + Sentry noise for input nobody validated. Same shape as the
-    // verified public/order fix (W1).
-    const rawBody = await request.json().catch(() => null);
-    if (rawBody === null || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
-      return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
-    }
-    const body = rawBody as { targetUserId?: string; projectId?: string };
     if (!body.targetUserId || typeof body.targetUserId !== 'string') {
       return NextResponse.json({ error: 'targetUserId مطلوب' }, { status: 400 });
     }
@@ -52,18 +34,18 @@ export async function POST(request: NextRequest) {
     // Capture the admin's CURRENT session BEFORE swapping (restore on end).
     const {
       data: { session: adminSession },
-    } = await userClient.auth.getSession();
+    } = await client.auth.getSession();
     if (!adminSession) return NextResponse.json({ error: 'لا جلسة' }, { status: 500 });
 
     const result = await startImpersonation({
-      actorUserId: user.id,
+      actorUserId: userId,
       actorSession: adminSession as unknown as Json,
       targetUserId: body.targetUserId,
       targetProjectId: body.projectId ?? null,
     });
 
     await logSuperAdminAction({
-      actorUserId: user.id,
+      actorUserId: userId,
       action: 'impersonation.start',
       targetProjectId: body.projectId ?? null,
       targetUserId: body.targetUserId,
@@ -93,19 +75,25 @@ export async function POST(request: NextRequest) {
       maxAge: 12 * 60 * 60,
     });
     return response;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'unknown';
-    if (message.includes('MFA')) {
-      return NextResponse.json({ error: 'المستخدم مفعّل لديه MFA — لا يمكن انتحال الجلسة' }, { status: 409 });
-    }
-    if (message.includes('SUPABASE_JWT_EXPIRY_TOO_LONG')) {
+  },
+  {
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : 'unknown';
+      if (message.includes('MFA')) {
+        return NextResponse.json(
+          { error: 'المستخدم مفعّل لديه MFA — لا يمكن انتحال الجلسة' },
+          { status: 409 }
+        );
+      }
+      if (message.includes('SUPABASE_JWT_EXPIRY_TOO_LONG')) {
+        Sentry.captureException(err);
+        return NextResponse.json(
+          { error: 'وضع الدعم متوقف بأمان: يجب ضبط مدة JWT في Supabase على 1800 ثانية' },
+          { status: 503 }
+        );
+      }
       Sentry.captureException(err);
-      return NextResponse.json(
-        { error: 'وضع الدعم متوقف بأمان: يجب ضبط مدة JWT في Supabase على 1800 ثانية' },
-        { status: 503 }
-      );
-    }
-    Sentry.captureException(err);
-    return NextResponse.json({ error: 'فشل بدء الجلسة' }, { status: 500 });
+      return NextResponse.json({ error: 'فشل بدء الجلسة' }, { status: 500 });
+    },
   }
-}
+);
