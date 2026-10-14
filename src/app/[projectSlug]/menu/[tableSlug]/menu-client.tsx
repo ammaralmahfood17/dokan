@@ -43,6 +43,11 @@ const CartSheet = dynamic(() => import('@/components/menu/cart-sheet').then((m) 
   ssr: false,
 });
 import { OrderSuccessState } from '@/components/menu/order-success-state';
+import { MenuHeader } from '@/components/menu/menu-header';
+import { MenuCategoryPills } from '@/components/menu/menu-category-pills';
+import { MenuProductArea } from '@/components/menu/menu-product-area';
+import { MenuCartBar } from '@/components/menu/menu-cart-bar';
+import { ProductPickerSheet } from '@/components/menu/product-picker-sheet';
 import { MenuProductRow, type MenuProduct } from '@/components/menu/product-card';
 // D7: offline indicator on the customer-facing menu (banner, not blocker).
 import { OfflineBanner } from '@/components/ui/offline-banner';
@@ -209,6 +214,16 @@ export function MenuClient({
 
   // Ref for smooth-scrolling to products section
   const productsRef = useRef<HTMLDivElement>(null);
+
+  /** Language switch — the visible content changes language, so the document
+   *  must say which one it is (audit T1 #8, WCAG 3.1.2). dir stays rtl. */
+  const toggleLang = useCallback(() => {
+    setLang((l) => {
+      const next = l === 'ar' ? 'en' : 'ar';
+      document.documentElement.lang = next;
+      return next;
+    });
+  }, []);
 
   const currency = project.currency;
 
@@ -563,371 +578,67 @@ export function MenuClient({
       {/* D7: offline notice — replaces the full-screen blocker (design: the
           customer should still be able to browse the cached menu) */}
       <OfflineBanner />
-      {/* HEADER — brand mark + TABLE chip */}
-      <header
-        className="sticky top-0 z-[var(--z-sticky)] border-b border-[var(--color-border)] px-4 py-3.5 backdrop-blur-md"
-        style={{ background: 'color-mix(in srgb, var(--color-bg) 92%, transparent)' }}
-      >
-        <div className="mx-auto flex max-w-[480px] items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--color-text)] font-display text-[18px] font-bold text-[var(--color-bg)]"
-            >
-              {project.name.slice(0, 1)}
-            </div>
-            <div className="min-w-0">
-              <h1 lang={langOfText(project.name)} className="truncate font-display text-[17px] font-bold">
-                {project.name}
-              </h1>
-              <p className="text-[11.5px] text-[var(--color-text-secondary)]">
-                امسح واطلب من طاولتك
-              </p>
-            </div>
-          </div>
-          {/* Table chip */}
-          <div className="flex items-center gap-1.5">
-            <div className="rounded-full border border-[var(--color-border-strong)] px-3 py-1 font-mono text-[12px] font-semibold tabular-nums text-[var(--color-text-secondary)]">
-              {lang === 'en' ? 'Table' : 'طاولة'} <span dir="ltr">{String(table.number).padStart(2, '0')}</span>
-            </div>
-            <button
-              type="button"
-              disabled={busyAction !== null}
-              onClick={() => callService('waiter')}
-              className="min-h-[44px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-bold transition-colors hover:bg-[var(--color-bg)] disabled:opacity-50"
-            >
-              موظف
-            </button>
-            <button
-              type="button"
-              disabled={busyAction !== null}
-              onClick={() => callService('bill')}
-              className="min-h-[44px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-bold transition-colors hover:bg-[var(--color-bg)] disabled:opacity-50"
-            >
-              فاتورة
-            </button>
-          </div>
-        </div>
-      </header>
+      <MenuHeader
+        projectName={project.name}
+        tableNumber={table.number}
+        lang={lang}
+        busyAction={busyAction}
+        onCallService={callService}
+      />
 
-      {/* CATEGORIES — pills, active = primary (mockup) */}
+      {/* CATEGORIES — extracted component (wave 4 phase b) */}
       {categories.length > 0 && (
-        <div className="sticky top-[57px] z-[var(--z-sticky)] border-b border-[var(--color-border)] bg-[var(--color-bg)]">
-          {/* FIX-R-003: fade على الحواف يشير لوجود محتوى إضافي (scrollbar مخفي) */}
-          <div
-            className="mx-auto flex max-w-[480px] gap-2 overflow-x-auto px-3 pb-1 pt-1"
-            style={{
-              scrollbarWidth: 'none',
-              maskImage: 'linear-gradient(to left, transparent, black 24px)',
-              WebkitMaskImage: 'linear-gradient(to left, transparent, black 24px)',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => handleCategoryChange('all')}
-              className={`min-h-[44px] shrink-0 whitespace-nowrap rounded-full px-4 text-[13px] font-semibold transition-colors ${
-                activeCategory === 'all'
-                  ? 'bg-[var(--color-primary)] text-white'
-                  : 'border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-tertiary)] hover:text-[var(--color-text)]'
-              }`}
-            >
-              الكل
-            </button>
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => handleCategoryChange(c.id)}
-                className={`min-h-[44px] shrink-0 whitespace-nowrap rounded-full px-4 text-[13px] font-semibold transition-colors ${
-                  activeCategory === c.id
-                    ? 'bg-[var(--color-primary)] text-white'
-                    : 'border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-tertiary)] hover:text-[var(--color-text)]'
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-        </div>
+        <MenuCategoryPills
+          categories={categories}
+          activeCategory={activeCategory}
+          onSelect={handleCategoryChange}
+        />
       )}
 
-      {/* PRODUCTS — grouped by category */}
-      <main ref={productsRef} className="mx-auto max-w-lg px-3 py-4">
-        {/* Search + language toggle — search only for big menus */}
-        <div className="mb-4 flex items-center gap-2">
-          {showMenuSearch && (
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-              <input
-                type="search"
-                inputMode="search"
-                value={menuQuery}
-                onChange={(e) => setMenuQuery(e.target.value)}
-                placeholder="ابحث عن منتج…"
-                aria-label="ابحث في القائمة"
-                maxLength={60}
-                className="input min-h-[44px] w-full ps-10! pe-10!"
-                style={{ borderRadius: 'var(--radius-md)' }}
-              />
-              {menuQuery && (
-                <button
-                  type="button"
-                  onClick={() => setMenuQuery('')}
-                  aria-label="مسح البحث"
-                  className="absolute end-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-sunken)]"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          )}
-          {products.some((p) => p.name_en) && (
-            <button
-              type="button"
-              // audit T1 #8 (WCAG 3.1.2): the visible content switches language, so the document
-              // has to say which one it is. dir stays rtl - the layout is RTL-first by design.
-              onClick={() =>
-                setLang((l) => {
-                  const next = l === 'ar' ? 'en' : 'ar';
-                  document.documentElement.lang = next;
-                  return next;
-                })
-              }
-              aria-label={lang === 'ar' ? 'التبديل إلى الإنجليزية' : 'Switch to Arabic'}
-              aria-pressed={lang === 'en'}
-              className="flex h-[44px] shrink-0 items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-bold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)]"
-            >
-              <Languages className="h-4 w-4" />
-              {lang === 'ar' ? 'EN' : 'عربي'}
-            </button>
-          )}
-        </div>
-        {!filtered.length ? (
-          menuQuery.trim() ? (
-            /* v1.1 Calm Surface mockup — signature empty search state */
-            <div className="flex flex-col items-center gap-2.5 px-8 py-14 text-center">
-              <div className="mb-1 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--color-primary-tint)] text-[var(--color-primary)]">
-                <Search className="h-[22px] w-[22px]" />
-              </div>
-              <p className="text-[15px] font-bold">ما حصلنا شي يطابق بحثك</p>
-              <p className="max-w-[240px] text-[13px] text-[var(--color-text-secondary)]">
-                جرّب كلمة ثانية، أو تصفّح الأقسام من الأعلى
-              </p>
-              <button
-                type="button"
-                onClick={() => setMenuQuery('')}
-                className="mt-1.5 rounded-[var(--radius-md)] px-3 py-2 text-[13px] font-bold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary-tint)]"
-              >
-                مسح البحث
-              </button>
-            </div>
-          ) : (
-            <div className="card empty">
-              <h3>القائمة فارغة</h3>
-              <p className="text-sm">لا توجد منتجات متاحة حالياً.</p>
-            </div>
-          )
-        ) : (
-          <>
-            {activeCategory === 'all' ? (
-              /* All categories: group products under each category */
-              <>
-                {visibleCategories.map((cat, catIdx) => {
-                  const catProducts = productsByCategory.get(cat.id) ?? [];
-                  if (!catProducts.length) return null;
-                  return (
-                    <section key={cat.id} className="mb-6">
-                      <div className="mb-3">
-                        <h2 className="font-display text-[15.5px] font-bold">{cat.name}</h2>
-                        <p className="mt-0.5 text-[12.5px] text-[var(--color-text-tertiary)]">
-                          {catProducts.length} {catProducts.length === 1 ? 'صنف' : 'أصناف'}
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3">
-                        {catProducts.map((p, idx) => renderProduct(p, idx === 0 && catIdx === 0))}
-                      </div>
-                    </section>
-                  );
-                })}
-                {/* Uncategorized products (category deleted → SET NULL): keep them visible */}
-                {uncategorized.length > 0 && (
-                  <section className="mb-6">
-                    <div className="mb-3">
-                      <h2 className="font-display text-[15.5px] font-bold">بدون تصنيف</h2>
-                      <p className="mt-0.5 text-[12.5px] text-[var(--color-text-tertiary)]">
-                        {uncategorized.length}{' '}
-                        {uncategorized.length === 1 ? 'صنف' : 'أصناف'}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3">
-                      {uncategorized.map((p, idx) => renderProduct(p, idx === 0 && categories.length === 0))}
-                    </div>
-                  </section>
-                )}
-              </>
-            ) : (
-              /* Single category: flat list */
-              <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3">
-                {filtered.map((p, idx) => renderProduct(p, idx === 0))}
-              </div>
-            )}
-          </>
-        )}
-      </main>
+      <MenuProductArea
+        mainRef={productsRef}
+        showSearch={showMenuSearch}
+        query={menuQuery}
+        onQueryChange={setMenuQuery}
+        lang={lang}
+        showLangToggle={products.some((p) => p.name_en)}
+        onToggleLang={toggleLang}
+        filtered={filtered}
+        activeCategory={activeCategory}
+        visibleCategories={visibleCategories}
+        productsByCategory={productsByCategory}
+        uncategorized={uncategorized}
+        categories={categories}
+        renderProduct={renderProduct}
+      />
 
-      {/* CART FLOATING BAR — ink bar (mockup), primary accents */}
+      {/* CART FLOATING BAR — extracted component (wave 4 phase b) */}
       {cartBadge && (
-        <div className="fixed inset-x-0 bottom-0 z-[var(--z-sticky)] p-3 pb-safe-bottom">
-          <div className="mx-auto w-full max-w-[480px] px-1 pb-1">
-            <button
-              type="button"
-              onClick={() => setCartOpen(true)}
-              className="relative flex w-full items-center justify-between gap-3 rounded-[var(--radius-lg)] bg-[var(--color-text)] px-4 py-3 text-white shadow-float transition-transform active:scale-[0.98]"
-            >
-              <span className="flex items-center gap-2.5">
-                <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[var(--color-primary)] font-mono text-[12.5px] font-bold tabular-nums text-white">
-                  {itemCount}
-                </span>
-                <span className="text-[13.5px] font-semibold text-white/85">السلة</span>
-              </span>
-              <span className="flex items-center gap-3">
-                <span className="font-mono text-[14px] font-bold tabular-nums text-white" dir="ltr">
-                  {formatMoney(total, currency)}
-                </span>
-                <span className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-2.5 text-[13px] font-bold text-white">
-                  {orderingEnabled ? 'إتمام الطلب' : 'مسح الرمز'}
-                </span>
-              </span>
-            </button>
-          </div>
-        </div>
+        <MenuCartBar
+          itemCount={itemCount}
+          total={total}
+          currency={currency}
+          orderingEnabled={orderingEnabled}
+          onOpen={() => setCartOpen(true)}
+        />
       )}
 
-      {/* PRODUCT PICKER SHEET */}
+      {/* PRODUCT PICKER SHEET — extracted component (wave 4 phase b) */}
       {picker && (
-        <Sheet onClose={() => setPicker(null)} title={picker.name}>
-          {picker.description && (
-            <p className="mb-3 text-sm text-[var(--color-text-secondary)]">
-              {picker.description}
-            </p>
-          )}
-          <p className="mb-3 text-base font-bold" style={{ color: "var(--color-primary)" }} aria-live="polite">
-            {formatMoney(pickerTotal, currency)}
-          </p>
-          {pickerGroups.length > 0 && (
-            <div className="mb-4 space-y-4">
-              {pickerGroups.map((group) => {
-                const choices = availableChoices(group);
-                const bounds = effectiveBounds(group);
-                const single = bounds.max === 1;
-                const pickedInGroup = choices.filter((c) => selectedOptions.includes(c.id)).length;
-                return (
-                  <div key={group.id} role={single ? 'radiogroup' : 'group'} aria-label={group.name}>
-                    <p className="section-title flex flex-wrap items-center gap-2">
-                      {group.name}
-                      {bounds.min >= 1 && (
-                        <span className="rounded-full bg-[var(--color-primary-tint)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-primary)]">
-                          إلزامي
-                        </span>
-                      )}
-                      {!single && (
-                        <span className="text-[11.5px] font-normal text-[var(--color-text-muted)]">
-                          {pickedInGroup}/{bounds.max} — اختر حتى {bounds.max}
-                        </span>
-                      )}
-                    </p>
-                    <ul className="space-y-2">
-                      {choices.map((choice) => {
-                        const on = selectedOptions.includes(choice.id);
-                        return (
-                          <li key={choice.id}>
-                            <button
-                              type="button"
-                              role={single ? 'radio' : 'checkbox'}
-                              aria-checked={on}
-                              onClick={() => toggleOption(group, choice.id)}
-                              className={`flex min-h-[48px] w-full items-center justify-between gap-2 rounded-[var(--radius-md)] border px-3 py-2.5 text-sm transition-colors ${
-                                on
-                                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)] font-semibold'
-                                  : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]'
-                              }`}
-                            >
-                              <span className="flex items-center gap-2">
-                                <span
-                                  aria-hidden="true"
-                                  className={`flex h-4.5 w-4.5 items-center justify-center border ${
-                                    single ? 'rounded-full' : 'rounded-[4px]'
-                                  } ${on ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border-strong)]'}`}
-                                  style={{ height: '18px', width: '18px' }}
-                                >
-                                  {on && <Check className="h-3 w-3" />}
-                                </span>
-                                {choice.name}
-                              </span>
-                              <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
-                                {Number(choice.price) > 0
-                                  ? `+${formatMoney(Number(choice.price), currency)}`
-                                  : 'بدون زيادة'}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <div className="field">
-            <label htmlFor="item-notes" className="label">ملاحظة على الصنف</label>
-            {/* UX-6: quick-note chips — most common Gulf requests, one tap
-                each. Toggle adds/removes the phrase from the notes text. */}
-            <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="ملاحظات سريعة">
-              {QUICK_NOTE_CHIPS.map((note) => {
-                const on = itemNotes.includes(note);
-                return (
-                  <button
-                    key={note}
-                    type="button"
-                    onClick={() => toggleQuickNote(note)}
-                    aria-pressed={on}
-                    className={`min-h-[44px] rounded-full border px-3.5 text-[12.5px] font-semibold transition-colors ${
-                      on
-                        ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)] text-[var(--color-primary)]'
-                        : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                    }`}
-                  >
-                    {note}
-                  </button>
-                );
-              })}
-            </div>
-            <input
-              id="item-notes"
-              className="input"
-              value={itemNotes}
-              onChange={(e) => {
-                if (e.target.value.length <= 200) setItemNotes(e.target.value);
-              }}
-              placeholder="مثال: بدون سكر"
-              maxLength={200}
-            />
-            <p className="hint">{itemNotes.length}/200</p>
-          </div>
-          <Button
-            block
-            disabled={pickerViolation !== null}
-            onClick={confirmAdd}
-            style={{ background: "var(--color-primary)" }}
-          >
-            أضف إلى السلة
-          </Button>
-          {pickerViolation && (
-            <p role="alert" className="mt-2 text-center text-[12.5px] font-semibold text-[var(--color-danger)]">
-              {pickerViolation.message}
-            </p>
-          )}
-        </Sheet>
+        <ProductPickerSheet
+          picker={picker}
+          groups={pickerGroups}
+          selectedOptionIds={selectedOptions}
+          total={pickerTotal}
+          currency={currency}
+          notes={itemNotes}
+          onNotesChange={setItemNotes}
+          onToggleQuickNote={toggleQuickNote}
+          onToggleOption={toggleOption}
+          violation={pickerViolation}
+          onConfirm={confirmAdd}
+          onClose={() => setPicker(null)}
+        />
       )}
 
       {/* CART SHEET — FIX-C-003: extracted component */}
