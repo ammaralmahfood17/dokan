@@ -1061,6 +1061,14 @@ export type Database = {
         Returns: Json
       }
       expire_subscriptions: { Args: never; Returns: number }
+      // Hand-added 2026-10-14: the super-admin project creator resolves the owner by
+      // email through this service_role-only function instead of scanning 1000 Auth
+      // users (migration 20261014100000). `npm run db:types` needs Docker, so it is
+      // added by hand here, exactly like resolve_table_by_token above.
+      find_user_id_by_email: {
+        Args: { p_email: string }
+        Returns: string | null
+      }
       generate_basic_slug: { Args: { input: string }; Returns: string }
       has_project_role: {
         Args: { p_project_id: string; p_roles: string[] }

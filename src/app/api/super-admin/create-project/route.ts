@@ -29,9 +29,14 @@ export const POST = withSuperAdmin('create-project', async (request, { userId, a
   }
 
   // Owner must exist — no silent user creation from this surface.
-  const { data: users } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  const owner = users.users.find((u) => u.email?.toLowerCase() === ownerEmail);
-  if (!owner) {
+  //
+  // ONE indexed lookup instead of the 1000-user Auth-list scan this route used
+  // to do (architecture review 2026-10-13, P2). The Admin API has no
+  // "get user by email", so the lookup lives in a service_role-only function —
+  // a merchant must not be able to enumerate emails (migration 20261014100000,
+  // asserted by supabase/tests/phase9_admin_lookup.sql).
+  const { data: ownerId } = await admin.rpc('find_user_id_by_email', { p_email: ownerEmail });
+  if (!ownerId) {
     return NextResponse.json(
       { error: 'لا يوجد مستخدم بهذا الإيميل — أنشئه عبر التسجيل العادي أولًا' },
       { status: 404 }
@@ -67,7 +72,7 @@ export const POST = withSuperAdmin('create-project', async (request, { userId, a
   // Owner membership (same shape as onboarding).
   const { error: staffErr } = await admin.from('staff_members').insert({
     project_id: project.id,
-    user_id: owner.id,
+    user_id: ownerId,
     role: 'owner',
   });
   if (staffErr) {
@@ -80,7 +85,7 @@ export const POST = withSuperAdmin('create-project', async (request, { userId, a
     actorUserId: userId,
     action: 'project.create',
     targetProjectId: project.id,
-    targetUserId: owner.id,
+    targetUserId: ownerId,
     metadata: { projectName: name, slug: finalSlug, ownerEmail },
   });
 
