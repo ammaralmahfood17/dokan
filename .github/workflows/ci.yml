@@ -117,6 +117,20 @@ jobs:
       - name: Assert a production deploy cannot build without its required env
         run: node scripts/check-prod-env-gate.mjs
 
+      # 2026-10-14 (architecture review, wave 5): ARCHITECTURE.md claimed "14 route handlers"
+      # while 28 were on disk, and named a migrations file that does not exist. A document
+      # that contradicts the code teaches the next reader to distrust all of it, so the route
+      # table is checked against src/app/api instead of trusted.
+      - name: Assert ARCHITECTURE.md matches the app
+        run: node scripts/check-architecture-doc.mjs
+
+      # Same review: the migrations directory holds two naming eras (the squashed baseline and
+      # its 19 follow-ups use NNNN_, everything since 2026-10-06 is timestamped). Renaming the
+      # applied ones would break the ledger↔repo correspondence Supabase keeps by version, so
+      # the unification is forward-only and this is what keeps it that way.
+      - name: Assert new migrations use the timestamp convention
+        run: node scripts/check-migration-naming.mjs
+
       # Unit tests, BEFORE the build: a logic regression should fail in seconds
       # here rather than after a full Next build. `vitest run` exits non-zero on
       # a single failure, so there is no "expected failures" escape hatch here.
