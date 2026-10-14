@@ -83,21 +83,27 @@ export default async function PosPage() {
   if (!ctx) redirect('/onboarding');
 
   const supabase = await createClient();
-  const { data: products } = await supabase
-    .from('products')
-    .select('*, option_groups(*, option_choices(*))')
-    .eq('project_id', ctx.project.id)
-    .order('sort_order');
 
-  // UX-U12: تعلم المنتجات المتكررة — عدد طلبات آخر 7 أيام لكل منتج
-  // (يُستخدم لتصدر الأصناف الأكثر طلبًا في شبكة POS)
+  // ONE barrier for both reads: neither needs the other (both are keyed on the
+  // project id). In sequence the second cost a full round trip before the grid
+  // could render — and the POS is opened dozens of times a shift.
   const since = new Date(new Date().getTime() - 7 * 86400e3).toISOString();
-  const { data: orderRows } = await supabase
-    .from('orders')
-    .select('order_items(product_id)')
-    .eq('project_id', ctx.project.id)
-    .is('service_type', null)
-    .gte('created_at', since);
+  const [{ data: products }, { data: orderRows }] = await Promise.all([
+    supabase
+      .from('products')
+      .select('*, option_groups(*, option_choices(*))')
+      .eq('project_id', ctx.project.id)
+      .order('sort_order'),
+    // UX-U12: تعلم المنتجات المتكررة — عدد طلبات آخر 7 أيام لكل منتج
+    // (يُستخدم لتصدر الأصناف الأكثر طلبًا في شبكة POS)
+    supabase
+      .from('orders')
+      .select('order_items(product_id)')
+      .eq('project_id', ctx.project.id)
+      .is('service_type', null)
+      .gte('created_at', since),
+  ]);
+
   const frequency: Record<string, number> = {};
   for (const o of orderRows ?? []) {
     for (const it of (o as { order_items?: { product_id: string | null }[] }).order_items ?? []) {

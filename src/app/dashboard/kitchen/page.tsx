@@ -15,32 +15,42 @@ export default async function KitchenPage() {
   // dropped the OLDEST tickets on a busy shift, exactly the ones the cook
   // needs to see first. Matches the analytics collectOrders pattern.
   const PAGE = 1000;
-  const allOrders: unknown[] = [];
-  let from = 0;
-  for (;;) {
-    const { data } = await supabase
-      .from('orders')
-      .select('*, tables(number), order_items(*)')
-      .eq('project_id', ctx.project.id)
-      .in('status', ['pending', 'preparing', 'ready'])
-      .is('service_type', null)
-      .order('created_at', { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (!data || data.length === 0) break;
-    allOrders.push(...data);
-    if (data.length < PAGE) break;
-    from += PAGE;
-  }
 
-  // Open «طلب موظف / طلب فاتورة» rows — staff-facing, so the RLS policy on
-  // service_requests (project members) is the boundary; this client is the
-  // signed-in staff session, not the service role.
-  const { data: serviceRequests } = await supabase
-    .from('service_requests')
-    .select('id,type,created_at,table_id,tables(number)')
-    .eq('project_id', ctx.project.id)
-    .eq('is_resolved', false)
-    .order('created_at', { ascending: true });
+  // The ticket pages and the open service requests are INDEPENDENT reads, so
+  // they share one barrier. The paging loop stays sequential (page N decides
+  // whether page N+1 exists), but waiting for it before asking for the service
+  // requests added a whole round trip (~150ms) to every kitchen render.
+  const [allOrders, serviceRequestsResult] = await Promise.all([
+    (async () => {
+      const rows: unknown[] = [];
+      let from = 0;
+      for (;;) {
+        const { data } = await supabase
+          .from('orders')
+          .select('*, tables(number), order_items(*)')
+          .eq('project_id', ctx.project.id)
+          .in('status', ['pending', 'preparing', 'ready'])
+          .is('service_type', null)
+          .order('created_at', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (!data || data.length === 0) break;
+        rows.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      return rows;
+    })(),
+    // Open «طلب موظف / طلب فاتورة» rows — staff-facing, so the RLS policy on
+    // service_requests (project members) is the boundary; this client is the
+    // signed-in staff session, not the service role.
+    supabase
+      .from('service_requests')
+      .select('id,type,created_at,table_id,tables(number)')
+      .eq('project_id', ctx.project.id)
+      .eq('is_resolved', false)
+      .order('created_at', { ascending: true }),
+  ]);
+  const serviceRequests = serviceRequestsResult.data;
 
   return (
     <KitchenClient
