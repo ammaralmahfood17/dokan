@@ -13,6 +13,12 @@ import {
   quantity,
 } from '@/lib/inventory';
 import { useInventoryActions } from '@/components/dashboard/inventory/use-inventory-actions';
+import {
+  IngredientsTab,
+  MovementsHistoryTab,
+  RecipesTab,
+  SuppliersTab,
+} from '@/components/dashboard/inventory/inventory-tabs';
 import type {
   Ingredient,
   InventoryMovement,
@@ -155,181 +161,42 @@ export function InventoryClient({
         </div>
 
         {tab === 'ingredients' && (
-          <div className="divide-y divide-[var(--color-border)]">
-            {!ingredients.length ? (
-              <EmptyState
-                title="ما فيه مكونات مسجلة"
-                description="أضف المكونات أولًا، ثم اربطها بوصفات المنتجات لتفعيل الخصم التلقائي."
-                action={<Button onClick={openNewIngredient}><Plus className="h-4 w-4" />أضف أول مكوّن</Button>}
-              />
-            ) : ingredients.map((ingredient) => {
-              const low = Number(ingredient.quantity_on_hand) <= Number(ingredient.reorder_point);
-              const supplier = suppliers.find((item) => item.id === ingredient.supplier_id);
-              return (
-                <div key={ingredient.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-                  <div className="min-w-[180px] flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{ingredient.name}</span>
-                      {low && (
-                        <span className="rounded-full bg-[var(--color-danger-tint)] px-2 py-0.5 text-[11.5px] font-semibold text-[var(--color-danger)]">
-                          إعادة الطلب
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                      {supplier?.name ?? 'بدون مورّد'}
-                      {ingredient.supplier_sku ? ` · SKU ${ingredient.supplier_sku}` : ''}
-                    </div>
-                  </div>
-                  <div className="min-w-28">
-                    <div className="text-xs text-[var(--color-text-secondary)]">الرصيد</div>
-                    <div className="font-bold" dir="ltr">
-                      {quantity(ingredient.quantity_on_hand)} {UNIT_LABELS[ingredient.unit]}
-                    </div>
-                  </div>
-                  <div className="min-w-28">
-                    <div className="text-xs text-[var(--color-text-secondary)]">نقطة الطلب</div>
-                    <div className="font-semibold" dir="ltr">
-                      {quantity(ingredient.reorder_point)} {UNIT_LABELS[ingredient.unit]}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => setStockTarget(ingredient)}>
-                      <ArrowDownToLine className="h-4 w-4" />
-                      حركة مخزون
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`تعديل ${ingredient.name}`}
-                      onClick={() => {
-                        setIngredientToEdit(ingredient);
-                        setShowIngredientForm(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                      تعديل
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <IngredientsTab
+            ingredients={ingredients}
+            suppliers={suppliers}
+            onNewIngredient={openNewIngredient}
+            onOpenStockMovement={setStockTarget}
+            onEditIngredient={(ingredient) => {
+              setIngredientToEdit(ingredient);
+              setShowIngredientForm(true);
+            }}
+          />
         )}
 
         {tab === 'recipes' && (
-          <div className="divide-y divide-[var(--color-border)]">
-            {!products.length ? (
-              <EmptyState title="أضف منتجات أولًا" description="بعدها يمكنك ربط كل منتج بمكوناته وكمياتها." />
-            ) : products.map((product) => {
-              const lineCount = recipes.filter((line) => line.product_id === product.id).length;
-              return (
-                <div key={product.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-                  <div>
-                    <div className="font-bold">{product.name}</div>
-                    <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                      {lineCount ? `${lineCount} مكونات في الوصفة` : 'بدون وصفة — لا يُخصم مخزون مكونات'}
-                    </div>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!ingredients.length}
-                    onClick={() => openRecipe(product)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                    {lineCount ? 'تعديل الوصفة' : 'إضافة وصفة'}
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
+          <RecipesTab
+            products={products}
+            recipes={recipes}
+            hasIngredients={ingredients.length > 0}
+            onOpenRecipe={openRecipe}
+          />
         )}
 
         {tab === 'suppliers' && (
-          <div className="divide-y divide-[var(--color-border)]">
-            <div className="flex justify-end p-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setSupplierToEdit(null);
-                  setShowSupplierForm(true);
-                }}
-              >
-                <Plus className="h-4 w-4" />
-                مورّد جديد
-              </Button>
-            </div>
-            {!suppliers.length ? (
-              <EmptyState title="ما فيه موردون مسجلون" description="أضف الموردين لربطهم بالمكونات وأرقام الشراء." />
-            ) : suppliers.map((supplier) => (
-              <div key={supplier.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <div>
-                  <div className="font-bold">{supplier.name}</div>
-                  <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                    {[supplier.contact_name, supplier.phone, supplier.email].filter(Boolean).join(' · ') || 'لا توجد بيانات تواصل'}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSupplierToEdit(supplier);
-                    setShowSupplierForm(true);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                  تعديل
-                </Button>
-              </div>
-            ))}
-          </div>
+          <SuppliersTab
+            suppliers={suppliers}
+            onNewSupplier={() => {
+              setSupplierToEdit(null);
+              setShowSupplierForm(true);
+            }}
+            onEditSupplier={(supplier) => {
+              setSupplierToEdit(supplier);
+              setShowSupplierForm(true);
+            }}
+          />
         )}
 
-        {tab === 'history' && (
-          <div className="divide-y divide-[var(--color-border)]">
-            {!movements.length ? (
-              <EmptyState title="سجل الحركات فارغ" description="ستظهر هنا عمليات الاستلام والتسوية والاستهلاك والإرجاع." />
-            ) : movements.map((movement) => {
-              const ingredient = ingredients.find((item) => item.id === movement.ingredient_id);
-              const positive = Number(movement.quantity_delta) > 0;
-              return (
-                <div key={movement.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-                  <div className="flex items-center gap-3">
-                    {positive
-                      ? <ArrowDownToLine className="h-4 w-4 text-[var(--color-success)]" />
-                      : <ArrowUpFromLine className="h-4 w-4 text-[var(--color-danger)]" />}
-                    <div>
-                      <div className="font-semibold">{ingredient?.name ?? 'مكوّن'}</div>
-                      <div className="text-xs text-[var(--color-text-secondary)]">
-                        {MOVEMENT_LABELS[movement.movement_type]}{movement.notes ? ` · ${movement.notes}` : ''}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-end">
-                    <div className={`font-bold ${positive ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`} dir="ltr">
-                      {positive ? '+' : ''}{quantity(movement.quantity_delta)} {UNIT_LABELS[movement.unit]}
-                    </div>
-                    <div className="text-xs text-[var(--color-text-secondary)]">
-                      الرصيد بعد الحركة: {quantity(movement.stock_after)} {UNIT_LABELS[movement.unit]}
-                    </div>
-                  </div>
-                  <time className="text-xs text-[var(--color-text-muted)]" dateTime={movement.created_at}>
-                    {new Intl.DateTimeFormat('ar-BH', {
-                      dateStyle: 'short',
-                      timeStyle: 'short',
-                      timeZone: 'Asia/Bahrain',
-                    }).format(new Date(movement.created_at))}
-                  </time>
-                </div>
-              );
-            })}
-            <p className="p-3 text-center text-xs text-[var(--color-text-muted)]">
-              يعرض آخر 50 حركة. كل عملية بيع أو إلغاء تُسجل تلقائيًا.
-            </p>
-          </div>
-        )}
+        {tab === 'history' && <MovementsHistoryTab movements={movements} ingredients={ingredients} />}
       </section>
 
       {showIngredientForm && (
