@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { lockBodyScroll } from '@/lib/use-body-scroll-lock';
 import { Check, Search, ShoppingBag, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -14,6 +14,10 @@ import {
 } from '@/lib/product-options';
 import { Button } from '@/components/ui/button';
 import { CartPanel } from '@/components/pos/cart-panel';
+import { PosProductGrid } from '@/components/pos/pos-product-grid';
+import { PosMobileCart } from '@/components/pos/pos-mobile-cart';
+import { PosOrderConfirmed } from '@/components/pos/pos-order-confirmed';
+import { PosAddonPicker } from '@/components/pos/pos-addon-picker';
 import { ProductCard } from '@/components/pos/product-card';
 import type { PosLine } from '@/components/pos/types';
 import { toast } from 'sonner';
@@ -309,6 +313,29 @@ export function PosClient({
 
   const itemCount = lines.reduce((s, l) => s + l.quantity, 0);
 
+  // ONE props object for both carts: the desktop column and the mobile sheet
+  // render the same CartPanel, and a re-listed set of twenty props is exactly
+  // how the two drifted apart before.
+  const cartPanelProps: ComponentProps<typeof CartPanel> = {
+    lines,
+    products,
+    currency,
+    type,
+    onTypeChange: setType,
+    notes,
+    onNotesChange: setNotes,
+    onClear: () => setLines([]),
+    onRepeat: repeatLastOrder,
+    repeatLoading,
+    onIncrement: (key) => updateQty(key, 1),
+    onDecrement: (key) => updateQty(key, -1),
+    onSetQuantity: setQty,
+    onAddQuantity: (key, n) => updateQty(key, n),
+    onRemove: (key) => setLines((prev) => prev.filter((x) => x.key !== key)),
+    onSubmit: submit,
+    submitting,
+  };
+
   return (
     <div className="page md:max-w-[1440px]">
       <div className="page-header">
@@ -318,289 +345,63 @@ export function PosClient({
       </div>
 
       <div data-pos-shell className="md:grid md:grid-cols-[minmax(0,1fr)_380px] md:items-start md:gap-4">
-        {/* ── Left: product grid ─────────────────────────────────────── */}
-        <div className="min-w-0">
-          {/* Mobile order type — desktop keeps it in the cart header */}
-          {/* audit T1 #15: these are filter buttons over ONE visible region, not tabs with
-              panels - role="tab" without panels is a half-implemented pattern that axe flags
-              (aria-required-children). aria-pressed matches the other filters in the app. */}
-          <div className="mb-3 flex gap-1 rounded-[var(--radius-md)] bg-[var(--color-surface-sunken)] p-1 md:hidden" role="group" aria-label="نوع الطلب">
-            {ORDER_TYPES.map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={type === value}
-                onClick={() => setType(value)}
-                disabled={submitting}
-                className={`min-h-[44px] flex-1 rounded-[6px] text-sm font-semibold transition-colors ${type === value ? 'bg-[var(--color-surface)] text-[var(--color-text)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Cashier search — desktop "/" shortcut, Enter quick-adds top hit */}
-          <div className="relative mb-3">
-            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-            <input
-              ref={searchRef}
-              type="search"
-              inputMode="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={onSearchKeyDown}
-              placeholder="ابحث عن منتج… ( / )"
-              aria-label="ابحث عن منتج"
-              maxLength={60}
-              className="input min-h-[44px] w-full ps-10! pe-12!"
-              style={{ borderRadius: 'var(--radius-md)' }}
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery('')}
-                aria-label="مسح البحث"
-                className="absolute end-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-sunken)] hover:text-[var(--color-text)]"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          {!filtered.length ? (
-            <div className="card empty">
-              <h3>{q ? 'لا توجد نتائج مطابقة' : 'ما فيه منتجات متاحة حالياً'}</h3>
-              <p className="text-sm">
-                {q ? `لا يوجد منتج باسم «${query.trim()}».` : 'أضف منتجاتك من صفحة المنتجات.'}
-              </p>
-            </div>
-          ) : (
-            <div data-pos-grid className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
-              {filtered.map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  currency={currency}
-                  onSelect={(prod) => openProduct(prod as ProductWithOptions)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        {/* ── Left: product grid (extracted component, wave 4 phase b) ── */}
+        <PosProductGrid
+          type={type}
+          onTypeChange={setType}
+          submitting={submitting}
+          query={query}
+          onQueryChange={setQuery}
+          onSearchKeyDown={onSearchKeyDown}
+          searchRef={searchRef}
+          products={filtered}
+          queryIsActive={Boolean(q)}
+          currency={currency}
+          onSelect={(prod) => openProduct(prod as ProductWithOptions)}
+        />
 
         {/* ── Right: cart panel (desktop, sticky full-height) ─────────── */}
         <aside data-pos-cart className="hidden md:block">
           <div className="md:sticky md:top-[57px] md:h-[calc(100dvh-57px)] lg:top-0 lg:h-dvh">
-            <CartPanel
-              lines={lines}
-              products={products}
-              currency={currency}
-              type={type}
-              onTypeChange={setType}
-              notes={notes}
-              onNotesChange={setNotes}
-              onClear={() => setLines([])}
-              onRepeat={repeatLastOrder}
-              repeatLoading={repeatLoading}
-              onIncrement={(key) => updateQty(key, 1)}
-              onDecrement={(key) => updateQty(key, -1)}
-              onSetQuantity={setQty}
-              onAddQuantity={(key, n) => updateQty(key, n)}
-              onRemove={(key) => setLines((prev) => prev.filter((x) => x.key !== key))}
-              onSubmit={submit}
-              submitting={submitting}
-            />
+            <CartPanel {...cartPanelProps} />
           </div>
         </aside>
       </div>
 
-      {/* ── Mobile: floating total bar ───────────────────────────────── */}
-      <div data-pos-floating-bar className="fixed inset-x-0 bottom-0 z-[var(--z-drawer)] border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 p-3 pb-safe-bottom backdrop-blur-md md:hidden">
-        <button
-          type="button"
-          onClick={() => setCartOpen(true)}
-          disabled={submitting}
-          aria-haspopup="dialog"
-          aria-label="عرض السلة"
-          className="flex min-h-[48px] w-full items-center justify-between gap-3 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-white transition-colors active:scale-[0.98] hover:bg-[var(--color-primary-hover)]"
-        >
-          <span className="flex items-center gap-2 text-sm font-semibold">
-            <ShoppingBag className="h-4 w-4" />
-            {itemCount > 0 ? `${itemCount} قطعة` : 'السلة فارغة'}
-          </span>
-          <span className="flex items-center gap-1 text-base font-bold tabular-nums">
-            {formatMoney(total, currency)}
-          </span>
-        </button>
-      </div>
+      {/* ── Mobile: cart (extracted component, wave 4 phase b) ───────── */}
+      <PosMobileCart
+        panel={cartPanelProps}
+        itemCount={itemCount}
+        total={total}
+        currency={currency}
+        submitting={submitting}
+        open={cartOpen}
+        onOpen={() => setCartOpen(true)}
+        onClose={() => setCartOpen(false)}
+      />
 
-      {/* ── Mobile: cart bottom sheet ────────────────────────────────── */}
-      {cartOpen && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/40 md:hidden"
-          role="dialog"
-          aria-modal="true"
-          aria-label="سلة الطلب"
-          onClick={(e) => { if (e.target === e.currentTarget) setCartOpen(false); }}
-          onKeyDown={(e) => { if (e.key === 'Escape') setCartOpen(false); }}
-        >
-          <div className="flex h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--color-surface)] animate-slide-up">
-            <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2">
-              <span className="mx-auto h-1 w-10 rounded-full bg-[var(--color-border)]" aria-hidden="true" />
-              <button
-                type="button"
-                onClick={() => setCartOpen(false)}
-                className="btn btn-ghost btn-sm absolute end-3"
-                aria-label="إغلاق السلة"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <CartPanel
-              lines={lines}
-              products={products}
-              currency={currency}
-              type={type}
-              onTypeChange={setType}
-              notes={notes}
-              onNotesChange={setNotes}
-              onClear={() => setLines([])}
-              onRepeat={repeatLastOrder}
-              repeatLoading={repeatLoading}
-              onIncrement={(key) => updateQty(key, 1)}
-              onDecrement={(key) => updateQty(key, -1)}
-              onSetQuantity={setQty}
-              onAddQuantity={(key, n) => updateQty(key, n)}
-              onRemove={(key) => setLines((prev) => prev.filter((x) => x.key !== key))}
-              onSubmit={submit}
-              submitting={submitting}
-              className="min-h-0 flex-1"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ── Order-confirmed banner: the order reached the kitchen ─────── */}
+      {/* ── Order-confirmed banner (extracted component) ─────────────── */}
       {lastConfirmed && (
-        <div className="fixed inset-x-0 top-3 z-[var(--z-modal)] flex justify-center px-4">
-          <div className="flex min-h-[52px] w-full max-w-md items-center justify-between gap-3 rounded-[var(--radius-lg)] bg-[var(--color-success)] px-4 py-2.5 text-white shadow-float">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-bold">
-                ✓
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-bold leading-tight">وصل الطلب للمطبخ</p>
-                <p className="truncate text-[11.5px] leading-tight opacity-90" dir="ltr">
-                  order-{lastConfirmed.orderNumber} · {formatMoney(lastConfirmed.totalAmount, currency)}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setLastConfirmed(null)}
-              aria-label="إغلاق"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/20"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        <PosOrderConfirmed
+          order={lastConfirmed}
+          currency={currency}
+          onDismiss={() => setLastConfirmed(null)}
+        />
       )}
 
-      {/* ── Addon picker ─────────────────────────────────────────────── */}
+      {/* ── Addon picker (extracted component) ───────────────────────── */}
       {picker && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`خيارات — ${picker.name}`}
-          onClick={(e) => { if (e.target === e.currentTarget) setPicker(null); }}
-          onKeyDown={(e) => { if (e.key === 'Escape') setPicker(null); }}
-        >
-          <div
-            ref={pickerRef}
-            className="w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-t-[12px] bg-[var(--color-surface)] p-4 pb-safe-bottom sm:max-h-[85vh] sm:rounded-[10px] animate-slide-up"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-bold">{picker.name}</h3>
-              <button
-                type="button"
-                onClick={() => setPicker(null)}
-                className="btn btn-ghost btn-sm"
-                aria-label="إغلاق"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
-              اختر الخيارات
-            </p>
-            <div className="mb-4 space-y-3">
-              {pickerGroups.map((group) => {
-                const choices = availableChoices(group);
-                const bounds = effectiveBounds(group);
-                const single = bounds.max === 1;
-                return (
-                  <div key={group.id} role={single ? 'radiogroup' : 'group'} aria-label={group.name}>
-                    <p className="mb-1 text-[12px] font-bold text-[var(--color-text-secondary)]">
-                      {group.name}
-                      {bounds.min >= 1 && <span className="ms-1 text-[var(--color-primary)]">(إلزامي)</span>}
-                    </p>
-                    <ul className="space-y-1.5">
-                      {choices.map((choice) => {
-                        const on = selectedOptions.includes(choice.id);
-                        return (
-                          <li key={choice.id}>
-                            <button
-                              type="button"
-                              role={single ? 'radio' : 'checkbox'}
-                              aria-checked={on}
-                              onClick={() => toggleOption(group, choice.id)}
-                              className={`flex min-h-[44px] w-full items-center justify-between gap-2 rounded-[var(--radius-md)] border px-3 py-2 text-sm transition-colors ${
-                                on
-                                  ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)] font-semibold'
-                                  : 'border-[var(--color-border)]'
-                              }`}
-                            >
-                              <span className="flex items-center gap-2">
-                                <span
-                                  aria-hidden="true"
-                                  className={`flex items-center justify-center border ${single ? 'rounded-full' : 'rounded-[4px]'} ${
-                                    on ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border-strong)]'
-                                  }`}
-                                  style={{ height: '18px', width: '18px' }}
-                                >
-                                  {on && <Check className="h-3 w-3" />}
-                                </span>
-                                {choice.name}
-                              </span>
-                              <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
-                                {Number(choice.price) > 0 ? `+${formatMoney(Number(choice.price), currency)}` : 'بدون زيادة'}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex gap-2">
-              <Button block disabled={pickerViolation !== null} onClick={confirmOptions}>
-                إضافة للسلة
-              </Button>
-              <Button variant="secondary" onClick={() => setPicker(null)}>
-                إلغاء
-              </Button>
-            </div>
-            {pickerViolation && (
-              <p role="alert" className="mt-2 text-center text-[12.5px] font-semibold text-[var(--color-danger)]">
-                {pickerViolation.message}
-              </p>
-            )}
-          </div>
-        </div>
+        <PosAddonPicker
+          picker={picker}
+          groups={pickerGroups}
+          selectedOptionIds={selectedOptions}
+          currency={currency}
+          violation={pickerViolation}
+          panelRef={pickerRef}
+          onToggleOption={toggleOption}
+          onConfirm={confirmOptions}
+          onClose={() => setPicker(null)}
+        />
       )}
     </div>
   );
