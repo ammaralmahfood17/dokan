@@ -574,7 +574,7 @@ export function MenuClient({
 
   // ======== MAIN MENU ========
   return (
-    <div className="min-h-dvh bg-[var(--color-bg)] pb-24 page-enter">
+    <div className="min-h-dvh bg-[var(--color-bg)] pb-24">
       {/* D7: offline notice — replaces the full-screen blocker (design: the
           customer should still be able to browse the cached menu) */}
       <OfflineBanner />

@@ -4,7 +4,7 @@
  *   node scripts/build-brand-images.mjs
  *
  * These are RENDERED PAGES, not hand-drawn files: the HTML pulls the real
- * @font-face rules out of src/app/fonts/thmanyah.css (the same inlined data: URIs
+ * @font-face rules out of public/thmanyah.css (the same inlined data: URIs
  * the app ships) and the real artwork out of assets/brand/, so a regenerated card
  * can never drift from the product's typography or mark. Rendering offline needs
  * no dev server and no network — the fonts are already base64 in that CSS.
@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 
-const FONT_CSS = readFileSync('src/app/fonts/thmanyah.css', 'utf8');
+const FONT_CSS = readFileSync('public/thmanyah.css', 'utf8');
 const markBlack = readFileSync('assets/brand/dokan-logo-black.svg', 'utf8');
 const markWhite = readFileSync('assets/brand/dokan-logo-white.svg', 'utf8');
 

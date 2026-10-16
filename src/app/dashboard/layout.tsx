@@ -96,7 +96,7 @@ export default async function DashboardLayout({
 
         {/* Main */}
         <main className="flex-1">
-          <div className="page-enter">
+          <div>
             {children}
           </div>
         </main>

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-// خط ثمانية (Thmanyah Typeface) — the faces live INLINE in fonts/thmanyah.css as data: URIs.
+// خط ثمانية (Thmanyah Typeface) — the faces live INLINE in public/thmanyah.css as data: URIs.
 // Two reasons, both load-bearing:
 //   1. LICENCE. The Thmanyah licence permits embedding the font in a website/app only as part
 //      of a compiled product, and forbids hosting it or making it available as a font file at
@@ -12,7 +12,13 @@ import type { Metadata, Viewport } from 'next';
 // the two serif faces were dropped (2026-10-07). It is content-hashed and
 // immutable-cached, so it is paid once per user.
 // Rebuild: node scripts/build-thmanyah-fonts.mjs "<thmanyah typeface dir>"
-import './fonts/thmanyah.css';
+//
+// DELIVERY (2026-10-16, frontend audit F-1): this sheet is NOT imported any more. As an import
+// it became a render-blocking bundled stylesheet — 231KB brotli on every route, arriving at
+// 2.6s on Slow-4G and 10.5-12.2s on Slow-3G, which WAS the first paint (measured: FCP 3.3s/4G,
+// 11.1-12.8s/3G). It is now served from public/ and attached after first paint, which is the
+// only licence-safe lever: the base64 embedding is untouched, only its arrival moved.
+// scripts/check-critical-css.mjs fails the build if it ever returns to the critical path.
 import { Toaster } from 'sonner';
 import { ServiceWorkerRegister } from '@/components/service-worker-register';
 import { WebVitals } from '@/components/web-vitals';
@@ -105,10 +111,22 @@ export default function RootLayout({
       lang="ar"
       dir="rtl"
       suppressHydrationWarning
-      /* The family is applied through --font-sans (globals.css); the @font-face rules come
-         from the imported fonts/thmanyah.css, so no variable class is needed. */
+      /* The family is applied through --font-sans (globals.css); the @font-face rules arrive
+         with the deferred /thmanyah.css sheet, so no variable class is needed. */
     >
       <head>
+        {/* Thmanyah faces, OUT of the critical path (audit F-1). media="print" makes the browser
+            fetch it without blocking paint; src/instrumentation-client.ts flips it to "all" before
+            hydration (React cannot serialize an `onload` attribute, and an inline one fails tsc).
+            The noscript twin keeps a JS-less visitor on the shipped typeface.
+            Do not turn this back into an import: scripts/check-critical-css.mjs fails the build
+            when a bundled stylesheet carries data:font. */}
+        {/* eslint-disable-next-line @next/next/no-css-tags -- deliberate: the sheet must NOT be a bundled import (see the F-1 note above). */}
+        <link rel="stylesheet" href="/thmanyah.css" media="print" data-font-sheet="" />
+        <noscript>
+          {/* eslint-disable-next-line @next/next/no-css-tags -- deliberate: the no-JS twin of the deferred sheet. */}
+          <link rel="stylesheet" href="/thmanyah.css" />
+        </noscript>
         {/* Supabase: early connect */}
         {supabaseUrl && (
           <>

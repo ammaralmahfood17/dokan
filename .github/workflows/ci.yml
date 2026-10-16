@@ -142,6 +142,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      # 2026-10-16 (frontend audit F-1): the 315KB font sheet used to be a CSS import, i.e. a
+      # render-blocking stylesheet in front of the first paint of every route (measured FCP
+      # 3.27s on Slow-4G / 11.1-12.8s on Slow-3G). Re-importing it would be invisible to every
+      # other gate — the build stays green and only a throttled browser notices — so the BUILT
+      # css is inspected here, right after the build.
+      - name: Assert the critical CSS carries no inlined font data
+        run: node scripts/check-critical-css.mjs
+
       # The service-role key must never reach a client bundle. Cheap, and it
       # catches the single worst thing that could be committed.
       - name: Assert no service-role key in client assets

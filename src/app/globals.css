@@ -16,6 +16,10 @@
    Spacing scale — strict 8px grid (multiples of 4px, no exceptions)
    ========================================================================== */
 :root {
+  /* Audit F-20: there is no dark mode in this product. Declaring the scheme stops the
+     browser from rendering form controls and scrollbars dark for an OS in dark mode
+     (which is exactly the mismatch the dark splash screens already imply). */
+  color-scheme: light;
   --space-0-5: 2px;
   --space-1: 4px;
   --space-2: 8px;
@@ -83,8 +87,9 @@
      Weights: the family ships five discrete weights and the UI asks for
      semibold (600) constantly, so each face declares a RANGE (500-600 = Medium,
      700-800 = Bold) — see scripts/build-thmanyah-fonts.mjs.
-     The faces are INLINED in src/app/fonts/thmanyah.css as data: URIs. That is
-     deliberate and licence-mandated: no font file is served from a URL. */
+     The faces are INLINED in public/thmanyah.css as data: URIs (served as a static sheet and
+     attached AFTER first paint — audit F-1). That is deliberate and licence-mandated: no font
+     file is ever served from a URL. */
   --font-sans: "thmanyah sans", ui-sans-serif, system-ui, sans-serif;
   /* One family for the whole product (owner decision 2026-10-07). The serif faces
      are no longer embedded: --font-display and --font-serif both resolve to

@@ -22,7 +22,7 @@
  * a permitted embedding into a forbidden download of the font software.
  *
  * The source .woff2 files are NOT in this repo (they are the licensed software);
- * this script reads them from a local directory and writes the generated CSS,
+ * this script reads them from a local directory and writes the generated CSS to public/, so the
  * which IS committed so the build is deterministic and offline.
  */
 
@@ -115,4 +115,4 @@ function build(entries, outFile, title) {
   );
 }
 
-build(CORE, 'src/app/fonts/thmanyah.css', 'UI: sans 400/500-600/700-800 (one family)');
+build(CORE, 'public/thmanyah.css', 'UI: sans 400/500-600/700-800 (one family)');

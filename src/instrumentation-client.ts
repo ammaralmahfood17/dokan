@@ -25,6 +25,30 @@
 import * as Sentry from '@sentry/nextjs';
 import { scrubSentryBreadcrumb, scrubSentryEvent } from '@/lib/sentry-scrub';
 
+/**
+ * Promote the deferred Thmanyah sheet to an applying stylesheet.
+ *
+ * WHY (frontend audit F-1, 2026-10-16): the font sheet is 231KB brotli / 315KB decoded and used
+ * to be a CSS import, i.e. the ONE render-blocking resource on every route — measured FCP 3.27s
+ * on Slow-4G and 11.1-12.8s on Slow-3G, with its arrival time equal to the first paint. It now
+ * arrives as `<link media="print">` (fetched, not blocking) and this flips it to `media="all"`.
+ *
+ * Deliberately here rather than an inline `onload=` attribute: React does not serialize event
+ * handlers to SSR'd HTML, and a raw `onload` string prop fails `tsc` and trips
+ * `@next/next/no-css-tags`. This runs once, before hydration, and is a no-op if the link is
+ * absent (the layout is the only place that emits it).
+ */
+if (typeof document !== 'undefined') {
+  const promoteFontSheet = () => {
+    const link = document.querySelector<HTMLLinkElement>('link[data-font-sheet]');
+    if (link && link.media !== 'all') link.media = 'all';
+  };
+  // Already parsed (the common case: instrumentation loads after the HTML head).
+  promoteFontSheet();
+  // Belt and braces for a streamed/slow head.
+  document.addEventListener('DOMContentLoaded', promoteFontSheet, { once: true });
+}
+
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
 
 const clientDsn = process.env.NEXT_PUBLIC_SENTRY_DSN;

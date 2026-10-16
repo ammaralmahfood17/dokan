@@ -18,7 +18,7 @@ export default function GlobalError({
       <body
         style={{
           // Brand family first, system fallback after: global-error replaces the root layout,
-          // so it cannot rely on fonts/thmanyah.css being loaded. The page must render no
+          // so it cannot rely on the deferred /thmanyah.css being loaded. The page must render no
           // matter what — a webfont is never worth a blank error screen.
           fontFamily: "'thmanyah sans', system-ui, -apple-system, 'Segoe UI', sans-serif",
           display: 'flex',

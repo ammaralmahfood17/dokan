@@ -4,7 +4,8 @@
  *
  *   1. NO request ever goes to fonts.googleapis.com / fonts.gstatic.com. The
  *      licence forbids hosting the typeface or making it available at any URL,
- *      so it must arrive as data: URIs inside our own compiled CSS.
+ *      so it must arrive as data: URIs inside a stylesheet we serve ourselves (public/thmanyah.css,
+ *      attached after first paint since audit F-1) — never as a .woff2 at any URL.
  *   2. No .woff2 is served from any URL — including ours. If a future change
  *      re-adds `url('/fonts/x.woff2')`, this fails: that is a licence breach
  *      and an offline-build regression at the same time.
