@@ -59,7 +59,7 @@ export function OrdersToolbar({
             onChange={(e) => {
               if (e.target.value) onSelectDate(e.target.value);
             }}
-            className="bg-transparent text-xs font-semibold outline-none"
+            className="bg-transparent text-xs font-semibold"
             aria-label="اختيار تاريخ"
           />
         </label>
@@ -96,7 +96,7 @@ export function OrdersToolbar({
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as SortKey)}
             aria-label="ترتيب الطلبات"
-            className="bg-transparent text-xs font-semibold outline-none"
+            className="bg-transparent text-xs font-semibold"
           >
             <option value="newest">الأحدث</option>
             <option value="oldest">الأقدم</option>

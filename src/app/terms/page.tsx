@@ -1,8 +1,12 @@
 import type { Metadata } from 'next';
 import { LegalPage } from '@/components/legal-page';
 
+// F-6: the title template in the root layout already appends «— دكان», so the manual suffix
+// rendered as «شروط الاستخدام — دكان — دكان» (verified in the served HTML). The canonical was the
+// homepage's, which told Google this page was a duplicate of the store root.
 export const metadata: Metadata = {
-  title: 'شروط الاستخدام — دكان',
+  title: 'شروط الاستخدام',
+  alternates: { canonical: '/terms' },
   description: 'شروط استخدام منصة دكان لإدارة طلبات المطاعم والمقاهي.',
 };
 

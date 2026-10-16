@@ -126,9 +126,10 @@
   /* Shadow — border-first; shadow only for layering (dropdown/modal/popover) */
   --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
   --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.06), 0 4px 6px rgba(15, 23, 42, 0.04);
-  /* audit T1 #1: 0.15 alpha measured ~1.2:1 - a shadow is not the ring any more, but if it
-     is drawn it should support the outline rather than contradict it. */
-  --shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.28);
+  /* audit T1 #1 + F-12: the band supports the outline, and it is drawn from the SHIPPED brand
+     token now — it used to be the retired indigo (rgba(79,70,229,.28)). 4px everywhere, so a form
+     control and a button carry the same indicator geometry (they differed by 1px before). */
+  --shadow-focus: 0 0 0 4px color-mix(in srgb, var(--color-primary) 28%, transparent);
   /* v1.1 Calm Surface: THE only shadow — floating elements only
      (cart bar, modal, dropdown). Cards are border-first. */
   --shadow-float: 0 8px 28px rgba(20, 20, 15, 0.10), 0 1px 3px rgba(20, 20, 15, 0.06);
@@ -261,7 +262,7 @@
 
 .btn-danger {
   background: var(--color-danger-tint); color: var(--color-danger);
-  border-color: rgba(220, 38, 38, 0.25);
+  border-color: color-mix(in srgb, var(--color-danger) 25%, transparent); /* F-15: was the retired #DC2626 */
 }
 .btn-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-danger-tint) 85%, var(--color-danger));
@@ -277,6 +278,19 @@
    mouse keeps the 36px enterprise density. */
 @media (pointer: coarse) {
   .btn, .btn-sm, [class*="btn-sm"] { min-height: 44px; }
+}
+
+/* ==========================================================================
+   Storefront CTA — colours are resolved from the TENANT's brand fill at render time
+   (audit F-3: white-on-tenant-pink measured 1.92:1, axe SERIOUS). The component sets
+   --cta-hover to one step stronger than its resting background, so both states stay
+   whatever the merchant's colour is.
+   ========================================================================== */
+.storefront-cta {
+  transition: background-color 0.2s ease-out;
+}
+.storefront-cta:hover {
+  background: var(--cta-hover, var(--color-primary-hover));
 }
 
 /* ==========================================================================
@@ -300,7 +314,9 @@
 }
 .input:focus, .select:focus, .textarea:focus {
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-focus);
+  /* F-12: no box-shadow here on purpose. This rule (0,2,0) used to override *:focus-visible's
+     band (0,1,0) with a 3px version, so the documented geometry was false on exactly the controls
+     a form is made of. One rule now owns the indicator; this one only recolours the border. */
 }
 /* iOS PWA: <16px inputs trigger Safari auto-zoom on focus, and <44px
    targets violate the touch contract. Only on coarse pointers — the
@@ -323,7 +339,8 @@
 .hint { font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.25rem; }
 .error-text { font-size: 0.75rem; color: var(--color-danger); margin-top: 0.25rem; }
 .input-error { border-color: var(--color-danger) !important; }
-.input-error:focus { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important; }
+/* F-12: the retired rgba(220,38,38,.15) band was removed — the danger border marks the error
+   and the shared *:focus-visible indicator marks focus. */
 
 /* ==========================================================================
    Cards (spec §6.4) — border-first, NO default shadow; shadow only when
@@ -449,7 +466,7 @@
        not get painted at all. */
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.28); /* keeps the existing inset look */
+    box-shadow: var(--shadow-focus); /* F-12: one band, from the brand token */
   border-radius: 4px;
 }
 

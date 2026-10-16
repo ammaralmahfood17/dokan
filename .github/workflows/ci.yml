@@ -105,6 +105,12 @@ jobs:
       - name: Assert icon-only controls are at least 44px
         run: node scripts/check-touch-targets.mjs
 
+      # 2026-10-16 (F-12/F-13): `outline-none` on a focusable control removes the only indicator
+      # that survives forced-colors mode. It was on the orders date filter and the POS quantity
+      # field, invisible until someone tabbed through those exact controls.
+      - name: Assert no control drops its focus outline without a substitute
+        run: node scripts/check-focus-visible.mjs
+
       # 2026-10 follow-up: the build used to fetch the font from Google at BUILD time, which
       # failed CI twice for identical code. Cairo is self-hosted now; this keeps it that way.
       - name: Assert the build needs no network for assets

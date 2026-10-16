@@ -130,7 +130,7 @@ export function TablesClient({
       const dataUrl = await QRCode.toDataURL(url, {
         width: 280,
         margin: 2,
-        color: { dark: '#0F172A', light: '#FFFFFF' },
+        color: { dark: '#1F2320', light: '#FFFFFF' },
       });
       setQrPreview({
         url,
@@ -167,7 +167,7 @@ export function TablesClient({
         const dataUrl = await QRCode.toDataURL(url, {
           width: 180,
           margin: 1,
-          color: { dark: '#0F172A', light: '#FFFFFF' },
+          color: { dark: '#1F2320', light: '#FFFFFF' },
         });
         return { number: t.number, slug: t.slug, dataUrl, url };
       } catch {
@@ -186,13 +186,17 @@ export function TablesClient({
         <meta charset="utf-8">
         <title>QR الطاولات — ${projectSlug}</title>
         <style>
+          /* F-15: this window is a bare document with none of the app's CSS, so the palette is
+             written as literals — the SHIPPED ones (ink --color-text #1F2320, secondary
+             --color-text-secondary #6B6F68, border-strong composited on white #E1E1DF). It used to
+             carry the retired slate set (#0F172A/#E2E8F0/#475569) while the product is warm. */
           body { font-family: system-ui, sans-serif; padding: 20px; background: #fff; }
-          h1 { font-size: 18px; color: #0F172A; margin-bottom: 16px; text-align: center; }
+          h1 { font-size: 18px; color: #1F2320; margin-bottom: 16px; text-align: center; }
           .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
-          .card { border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; text-align: center; break-inside: avoid; }
+          .card { border: 1px solid #E1E1DF; border-radius: 8px; padding: 12px; text-align: center; break-inside: avoid; }
           .card img { width: 160px; height: 160px; margin: 0 auto 8px; display: block; }
-          .card .label { font-weight: 700; font-size: 14px; color: #0F172A; }
-          .card .slug { font-size: 11px; color: #475569; direction: ltr; }
+          .card .label { font-weight: 700; font-size: 14px; color: #1F2320; }
+          .card .slug { font-size: 11px; color: #6B6F68; direction: ltr; }
           @media print { body { padding: 10px; } }
         </style>
       </head>

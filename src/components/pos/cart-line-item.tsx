@@ -82,7 +82,7 @@ export function CartLineItem({
                   if (Number.isFinite(n) && n >= 1 && n <= 999) onSetQuantity(Math.floor(n));
                 }}
                 aria-label={`كمية ${line.productName}`}
-                className="w-12 border-0 bg-transparent text-center text-sm font-bold tabular-nums text-[var(--color-text)] outline-none"
+                className="w-12 border-0 bg-transparent text-center text-sm font-bold tabular-nums text-[var(--color-text)]"
               />
             ) : (
               <span

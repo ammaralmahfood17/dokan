@@ -70,12 +70,12 @@
   </style>
 </head>
 <body>
-  <div class="card">
+  <main class="card">
     <div class="icon" aria-hidden="true">!</div>
     <h1>لا يوجد اتصال بالإنترنت</h1>
     <p>تحقق من اتصال الشبكة ثم أعد المحاولة. الطلبات الجديدة لن تصل حتى يعود الاتصال.</p>
     <button class="retry-btn" onclick="window.location.reload()">أعد المحاولة</button>
-  </div>
+  </main>
   <script>
     // Auto-retry when the browser comes back online
     window.addEventListener('online', () => window.location.reload());

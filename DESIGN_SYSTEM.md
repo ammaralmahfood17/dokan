@@ -2,7 +2,7 @@
 ### Enterprise SaaS Design System · v1.0
 
 **الهوية:** أداة مؤسسية مدفوعة، لا منتج استهلاكي. القياس: Shopify Plus / Salla Enterprise / أنظمة الكاشير الحديثة (Toast, Square).
-**المبادئ الحاكمة:** رياضي · صارم · هادئ · بلا طاقة "ستارت أب" · RTL أولاً · Cairo فقط · لا Dark Mode.
+**المبادئ الحاكمة:** رياضي · صارم · هادئ · بلا طاقة "ستارت أب" · RTL أولاً · خط ثمانية (thmanyah sans) فقط · لا Dark Mode.
 
 ---
 
@@ -25,36 +25,36 @@
 
 | الدور | Hex | متغير CSS | الاستخدام |
 |---|---|---|---|
-| Primary | `#4F46E5` | `--color-primary` | أزرار أساسية، روابط فعّالة، حالة التحديد |
-| Primary Hover | `#4338CA` | `--color-primary-hover` | تحويم/ضغط الأزرار الأساسية |
-| Primary Active | `#3730A3` | `--color-primary-active` | حالة الضغط (mousedown) |
-| Primary Tint | `#EEF2FF` | `--color-primary-tint` | خلفية شارات/تحديد صف في جدول |
-| Primary Tint Strong | `#E0E7FF` | `--color-primary-tint-strong` | خلفية أيقونة نشطة في الشريط الجانبي |
+| Primary | `#7047EB` | `--color-primary` | أزرار أساسية، روابط فعّالة، حالة التحديد |
+| Primary Hover | `#6034DC` | `--color-primary-hover` | تحويم/ضغط الأزرار الأساسية |
+| Primary Active | `#4E27BC` | `--color-primary-active` | حالة الضغط (mousedown) |
+| Primary Tint | `#F1ECFE` | `--color-primary-tint` | خلفية شارات/تحديد صف في جدول |
+| Primary Tint Strong | `#E6DBFE` | `--color-primary-tint-strong` | خلفية أيقونة نشطة في الشريط الجانبي |
 
-**قاعدة صارمة:** Indigo لا يظهر إلا في: زر أساسي واحد لكل شاشة (CTA)، حالة تحديد/تركيز، روابط نصية قابلة للنقر. لا يُستخدم كخلفية زخرفية أو Gradient.
+**قاعدة صارمة:** البنفسجي (`#7047EB`) لا يظهر إلا في: زر أساسي واحد لكل شاشة (CTA)، حالة تحديد/تركيز، روابط نصية قابلة للنقر. لا يُستخدم كخلفية زخرفية أو Gradient.
 
-### 1.2 المحايد (Slate)
+### 1.2 المحايد (Warm Neutral)
 
 | الدور | Hex | متغير CSS |
 |---|---|---|
-| Background | `#F8FAFC` | `--color-bg` |
+| Background | `#FAF9F6` | `--color-bg` |
 | Surface (بطاقات/لوحات) | `#FFFFFF` | `--color-surface` |
 | Surface Sunken (مناطق ثانوية) | `#F1F5F9` | `--color-surface-sunken` |
-| Border | `#E2E8F0` | `--color-border` |
-| Border Strong | `#CBD5E1` | `--color-border-strong` |
-| Text Primary | `#0F172A` | `--color-text` |
-| Text Secondary | `#475569` | `--color-text-secondary` |
-| Text Muted | `#94A3B8` | `--color-text-muted` |
+| Border | `rgba(20, 20, 15, 0.08)` | `--color-border` |
+| Border Strong | `rgba(20, 20, 15, 0.14)` | `--color-border-strong` |
+| Text Primary | `#1F2320` | `--color-text` |
+| Text Secondary | `#6B6F68` | `--color-text-secondary` |
+| Text Muted | `#64748B` | `--color-text-muted` |
 | Text Disabled | `#CBD5E1` | `--color-text-disabled` |
 
 ### 1.3 الدلالية (منزوعة التشبع عمدًا — لا ألوان "ألعاب")
 
 | الدور | Hex | Tint | متغير |
 |---|---|---|---|
-| Success | `#059669` | `#ECFDF5` | `--color-success` / `--color-success-tint` |
+| Success | `#059669` | `#047857` | `--color-success` / `--color-success-tint` |
 | Warning | `#D97706` | `#FFFBEB` | `--color-warning` / `--color-warning-tint` |
-| Danger | `#DC2626` | `#FEF2F2` | `--color-danger` / `--color-danger-tint` |
-| Info | `#0284C7` | `#F0F9FF` | `--color-info` / `--color-info-tint` |
+| Danger | `#DC2626` | `#B91C1C` | `--color-danger` / `--color-danger-tint` |
+| Info | `#0284C7` | `#0369A1` | `--color-info` / `--color-info-tint` |
 
 كل لون دلالي له نسخة `-hover` أغمق بمقدار خطوة واحدة على مقياس Tailwind (600→700) لاستخدامها في الأزرار الثانوية الدلالية (مثال: زر "إلغاء الطلب" بلون Danger).
 
@@ -62,7 +62,7 @@
 
 ## 2. الطباعة (Typography)
 
-**الخط الوحيد: Cairo.** لا خطوط ثانوية، لا خط عرض منفصل. الانضباط يعني عائلة واحدة بأوزان متعددة.
+**الخط الوحيد: ثمانية (thmanyah sans).** لا خطوط ثانوية، لا خط عرض منفصل. الانضباط يعني عائلة واحدة بأوزان متعددة. (قرار المالك 2026-10-07: العائلة الموحّدة هي thmanyah sans، والخطوط المضمّنة في public/thmanyah.css.)
 
 الأوزان المستخدمة: `400` (نص)، `500` (تسميات/UI)، `600` (عناوين فرعية/تشديد)، `700` (عناوين)، `800` (أرقام KPI فقط).
 
@@ -82,7 +82,7 @@
 
 **حد القراءة الأدنى (إضافة 2026-10):** لا نص واجهة أقل من `11.5px`. عند 10px تفقد العربية نقاطها وفراغ التشكيل، وقد كان في الواجهة 65 موضعًا تحته (`text-[10px]` / `text-[11px]` / `text-[10.5px]`) ورفعت كلها. الحد 11.5px لكل شيء بلا استثناء (كان الخطة تسمح 11px للشارات الرقمية، لكن بوابة لا ترى المحتوى لا تستطيع فرض استثناءٍ، وقاعدة باستثناء غير قابل للفحص تُخرق). البوابة: `src/lib/design-tokens.test.ts`.
 
-**قاعدة الأرقام:** أي رقم (مبلغ، عدد طلبات، وقت) يُغلَّف بـ `direction: ltr; unicode-bidi: isolate` ويُعرض بالخط نفسه (Cairo يدعم الأرقام اللاتينية بشكل ممتاز) — لا يتحول اتجاهه أبدًا حتى داخل جملة عربية.
+**قاعدة الأرقام:** أي رقم (مبلغ، عدد طلبات، وقت) يُغلَّف بـ `direction: ltr; unicode-bidi: isolate` ويُعرض بالخط نفسه (خط ثمانية يدعم الأرقام اللاتينية تمامًا) — لا يتحول اتجاهه أبدًا حتى داخل جملة عربية.
 
 **Letter-spacing:** `0` على كل من العناوين والنص العادي. **ممنوع منعًا باتًا** أي قيمة سالبة على النص العربي (كانت الوصفة السابقة `-0.01em` للعناوين وقد نقضها عقد AGENTS.md: السالب يضغط الحروف المتصلة والتشكيل ويُفقد العربية وضوحها) — `0.01–0.03em` موجب فقط على الـ micro-labels الصغيرة (`text-xs`) كبديل عن uppercase الذي يكسر العربية.
 
@@ -167,9 +167,9 @@
 | النمط | الخلفية | النص | الحدود |
 |---|---|---|---|
 | Primary | `--color-primary` | أبيض | بلا |
-| Secondary | `--color-surface` | `--color-text` | `1px solid --color-border-strong` |
+| Secondary | `#1F2320` | `--color-text` | `1px solid --color-border-strong` |
 | Ghost | شفاف | `--color-text-secondary` | بلا (خلفية `--color-surface-sunken` عند hover) |
-| Destructive | `--color-danger-tint` | `--color-danger` | `1px solid` بلون danger بشفافية 20% |
+| Destructive | `#B91C1C` | `--color-danger` | `1px solid` بلون danger بشفافية 20% |
 
 الحشو: `sm`: 6px 12px / `md`: 8px 16px / `lg`: 10px 20px. نصف القطر: `--radius-sm` (sm/md)، `--radius-md` (lg).
 حالة التركيز: `--shadow-focus` + بلا outline افتراضي المتصفح. حالة التعطيل: شفافية 45% + `cursor: not-allowed`، بلا تغيير لون.
@@ -190,8 +190,8 @@ Pill بارتفاع 20-24px، `--text-xs` وزن 600، حشو 2px 8px، خلفي
 |---|---|---|
 | `pending` | Warning | قيد الانتظار |
 | `preparing` | Info | قيد التحضير |
-| `ready` | Success (tint فاتح) | جاهز |
-| `completed` | `--color-text-muted` bg `--color-surface-sunken` | مكتمل |
+| `ready` | Success (tint فاتح) | جاهز | 
+ | `#64748B` | `--color-text-muted` bg `--color-surface-sunken` | مكتمل |
 | `cancelled` | Danger | ملغى |
 
 ### 6.4 البطاقات
@@ -254,7 +254,7 @@ Alert مضمّن (Banner) بعرض كامل: خلفية Tint + حد `inline-star
 ## 9. ما تم استبعاده عمدًا
 
 - **لا Dark Mode.** قرار منتج نهائي — يبسّط الاختبار، يوحّد الهوية، ويناسب بيئة استخدام نهارية (كاشير/مطبخ مضاء).
-- **لا خطوط عربية إضافية** (Tajawal, El Messiri, Noto سبق تجربتها — تم التوحيد على Cairo فقط لضبط الاتساق).
+- **لا خطوط عربية إضافية** (Tajawal, El Messiri, Noto سبق تجربتها — تم التوحيد على خط ثمانية (thmanyah sans) لضبط الاتساق).
 - **لا ألوان زخرفية إضافية** (ذهبي/عنبر كلون علامة تجارية) — اللون الوحيد غير المحايد هو Indigo، والباقي دلالي بحت.
 - **لا Gradient، لا Glassmorphism، لا حركات دخول متتالية (stagger animations).**
 
@@ -268,7 +268,7 @@ Alert مضمّن (Banner) بعرض كامل: خلفية Tint + حد `inline-star
 أزرق تيليجرام `sky-100/200/50/600/700/800` + `bg-white` على بطاقات إعداد ربط الحساب — هوية بصرية لتطبيق تيليجرام تحديدًا، تمكّن المستخدم من التعرف الفوري على القسم المرتبط بالبوت. **لا يُستبدل** بتوكينات النظام.
 
 ### 10.2 طباعة QR للطاولات (`src/app/dashboard/tables/tables-client.tsx`)
-ألوان hex مضمّنة داخل سلسلة HTML مستقلة للطباعة (`#0F172A`, `#E2E8F0`, `#475569`) — لا تمر على Tailwind إطلاقًا ولا على نظام التوكينات؛ استبدالها بتوكينات CSS غير ممكن/عديم القيمة عمليًا.
+ألوان hex مضمّنة داخل سلسلة HTML مستقلة للطباعة (`#1F2320`, `#E1E1DF`, `#6B6F68`) — لا تمر على Tailwind إطلاقًا ولا على نظام التوكينات؛ استبدالها بتوكينات CSS غير ممكن/عديم القيمة عمليًا.
 
 ### 10.3 شاشة خطأ الطوارئ (`src/app/global-error.tsx`)
-ألوان مضمّنة inline (`#F8FAFC`, `#0F172A`, `#4F46E5`, `#475569`) — صفحة fallback تعمل بالضبط عندما يفشل تحميل التطبيق/CSS نفسه؛ فرض توكينات يفترض تحميلًا ناجحًا، عكس الغرض منها تمامًا.
+ألوان مضمّنة inline (`#FAF9F6`, `#1F2320`, `#7047EB`) — صفحة fallback تعمل بالضبط عندما يفشل تحميل التطبيق/CSS نفسه؛ فرض توكينات يفترض تحميلًا ناجحًا، عكس الغرض منها تمامًا.

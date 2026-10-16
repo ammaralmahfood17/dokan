@@ -58,7 +58,7 @@ export default function ResetPasswordPage() {
             </p>
             <Link
               href="/login"
-              className="btn btn-primary mt-4 inline-flex"
+              className="btn btn-primary mt-4 inline-flex min-h-[44px]"
             >
               العودة لتسجيل الدخول
             </Link>

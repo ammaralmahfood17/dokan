@@ -22,6 +22,28 @@ export const dynamicParams = true;
 // the live QR menu immediately instead of waiting up to 60s (or longer with
 // SWR). Wrapped in a function so the tag can be project-scoped (unstable_cache
 // options are evaluated per call).
+/**
+ * F-5: does this table exist? generateMetadata needs the answer to decide between "a real menu"
+ * and "a slug nobody printed", and the page body already resolves it — but the body cannot tell
+ * metadata anything. Cached under the menu tag so an added/deactivated table shows up at once.
+ */
+async function getMenuTable(projectId: string, tableSlug: string) {
+  return unstable_cache(
+    async () => {
+      const { data } = await createAnonClient()
+        .from('tables')
+        .select('id, number, slug, is_active, project_id')
+        .eq('project_id', projectId)
+        .eq('slug', tableSlug)
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    ['menu-table', projectId, tableSlug],
+    { revalidate: 60, tags: [`menu-${projectId}`] }
+  )();
+}
+
 async function getMenuData(projectId: string, tableId: string) {
   return unstable_cache(
     async () => {
@@ -81,10 +103,35 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { projectSlug, tableSlug } = await params;
   const project = await getPublicProject(projectSlug);
+  if (!project) {
+    return { title: 'القائمة', robots: { index: false, follow: false } };
+  }
+
+  const table = await getMenuTable(project.id, tableSlug);
+  const title = `${project.name} — القائمة`;
+  // F-5: an unknown table slug answered 200 with a SELF-referential canonical and no noindex —
+  // a textbook soft-404 that Google may index as a menu that does not exist. The response stays
+  // 200 (Next swallows notFound() under force-static, and a page with a real message beats a
+  // blank shell), so the SEO half is closed here: noindex + canonical pointing at the STORE.
+  if (!table) {
+    return {
+      title,
+      robots: { index: false, follow: true },
+      alternates: { canonical: `${getSiteUrl()}/${projectSlug}` },
+    };
+  }
+
+  const url = `${getSiteUrl()}/${projectSlug}/menu/${tableSlug}`;
   return {
-    title: project?.name ? `${project.name} — القائمة` : 'القائمة',
-    alternates: {
-      canonical: `${getSiteUrl()}/${projectSlug}/menu/${tableSlug}`,
+    title,
+    alternates: { canonical: url },
+    // F-14: this page inherited the homepage's og:url/og:title, so sharing a menu link showed
+    // the platform's card instead of the store's.
+    openGraph: {
+      title,
+      description: `قائمة ${project.name} — امسح رمز الطاولة للطلب`,
+      url,
+      ...(project.logo_url ? { images: [{ url: project.logo_url, alt: project.name }] } : {}),
     },
   };
 }

@@ -20,17 +20,28 @@ export function LegalPage({
     <div className="landing-shell min-h-dvh">
       <header className="landing-nav sticky top-0 z-[var(--z-sticky)] border-b border-white/70">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white text-sm font-bold">
+          <Link href="/" className="flex min-h-[44px] items-center gap-2">
+            {/* F-16: the mark's letter is decoration; without aria-hidden the link's accessible
+                name read "ددكان" (letter + name) to a screen reader. */}
+            <span
+              aria-hidden="true"
+              className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white text-sm font-bold"
+            >
               د
             </span>
             <span className="text-base font-bold">دكان</span>
           </Link>
           <nav className="flex items-center gap-3 text-sm">
-            <Link href="/terms" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">
+            <Link
+              href="/terms"
+              className="inline-flex min-h-[44px] items-center text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+            >
               الشروط
             </Link>
-            <Link href="/privacy" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)]">
+            <Link
+              href="/privacy"
+              className="inline-flex min-h-[44px] items-center text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+            >
               الخصوصية
             </Link>
             <Link href="/login" className="btn btn-ghost btn-sm">

@@ -158,7 +158,9 @@ function LoginForm() {
         {loading ? 'جاري الدخول…' : 'دخول'}
       </Button>
       <div className="mt-3 text-center">
-        <Link href="/reset-password" className="text-xs font-semibold text-[var(--color-primary)] hover:underline">
+        <Link
+            href="/reset-password"
+            className="inline-flex min-h-[44px] items-center text-xs font-semibold text-[var(--color-primary)]">
           نسيت كلمة المرور؟
         </Link>
       </div>
@@ -181,7 +183,9 @@ export default function LoginPage() {
         </Suspense>
         <p className="mt-4 text-center text-sm text-[var(--color-text-secondary)]">
           ليس لديك حساب؟{' '}
-          <Link href="/register" className="font-semibold text-[var(--color-primary)]">إنشاء حساب</Link>
+          <Link href="/register" className="inline-flex min-h-[44px] items-center font-semibold text-[var(--color-primary)]">
+            إنشاء حساب
+          </Link>
         </p>
       </div>
     </div>

@@ -55,7 +55,7 @@ export default function LandingPage() {
   return (
     <div className="storefront landing-shell min-h-dvh">
       <header className="landing-nav sticky top-0 z-[var(--z-sticky)] border-b border-white/70">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <DokanMark className="h-9 w-9" />
             <span className="text-base font-bold">دكان</span>
@@ -77,7 +77,7 @@ export default function LandingPage() {
             <div className="flex-1">
               <p className="section-title mb-3">للمقاهي والمطاعم وعربات الطعام</p>
               <h1 className="landing-title mx-auto max-w-3xl font-extrabold text-[var(--color-text)] lg:mx-0">
-                من التسجيل إلى أول طلب
+                {'من التسجيل إلى أول طلب '}
                 <br />
                 <span className="landing-title-accent">في أقل من 7 دقائق</span>
               </h1>
@@ -91,7 +91,7 @@ export default function LandingPage() {
                 </Link>
               </div>
             </div>
-            <div className="hidden shrink-0 lg:block">
+            <div className="hidden shrink-0 lg:block" aria-hidden="true">
               <div className="relative mx-auto" style={{ width: '240px' }}>
                 <div className="overflow-hidden rounded-[2.5rem] border-[6px] border-[var(--color-text)] bg-[var(--color-primary)] shadow-xl">
                   <div className="mx-auto mt-2 h-5 w-28 rounded-full bg-[var(--color-text)]" />
@@ -100,11 +100,11 @@ export default function LandingPage() {
                       <DokanMark className="h-9 w-9" />
                     </div>
                     <p className="text-sm font-bold">دكان</p>
-                    <p className="mt-1 text-[11.5px] text-white/60">قائمة طعامك في جوال الزبون</p>
+                    <p className="mt-1 text-[11.5px] text-white/90">قائمة طعامك في جوال الزبون</p>
                     <div className="mt-4 flex h-16 w-16 items-center justify-center rounded-lg bg-white/10">
-                      <QrCode className="h-8 w-8 text-white/50" />
+                      <QrCode className="h-8 w-8 text-white/90" />
                     </div>
-                    <p className="mt-2 text-[11.5px] text-white/40">امسح واطلب</p>
+                    <p className="mt-2 text-[11.5px] text-white/90">امسح واطلب</p>
                   </div>
                 </div>
               </div>
@@ -146,9 +146,9 @@ export default function LandingPage() {
           <div className="mx-auto max-w-sm">
             <div className="overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--color-primary)] bg-[var(--color-surface)] shadow-lg">
               <div className="bg-[var(--color-primary)] px-6 py-5 text-center text-white">
-                <CreditCard className="mx-auto mb-2 h-6 w-6 text-white/70" />
+                <CreditCard className="mx-auto mb-2 h-6 w-6 text-white/90" />
                 <h3 className="text-lg font-bold">باقة دكان</h3>
-                <p className="mt-1 text-sm text-white/70">كل شي تحتاجه لإدارة مطعمك</p>
+                <p className="mt-1 text-sm text-white/90">كل شي تحتاجه لإدارة مطعمك</p>
               </div>
 
               <div className="px-6 py-6 text-center">
@@ -191,10 +191,16 @@ export default function LandingPage() {
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-xs text-[var(--color-text-muted)]">
         © {COPYRIGHT_YEAR} دكان — منصة طلبات للمؤسسات الصغيرة
         <div className="mt-2 flex items-center justify-center gap-4">
-          <Link href="/terms" className="underline-offset-4 hover:underline">
+          <Link
+            href="/terms"
+            className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline"
+          >
             الشروط والأحكام
           </Link>
-          <Link href="/privacy" className="underline-offset-4 hover:underline">
+          <Link
+            href="/privacy"
+            className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline"
+          >
             سياسة الخصوصية
           </Link>
         </div>

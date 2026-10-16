@@ -171,7 +171,7 @@ export default function RegisterPage() {
 
         <p className="mt-4 text-center text-sm text-[var(--color-text-secondary)]">
           لديك حساب؟{' '}
-          <Link href="/login" className="font-semibold text-[var(--color-primary)]">
+          <Link href="/login" className="inline-flex min-h-[44px] items-center font-semibold text-[var(--color-primary)]">
             دخول
           </Link>
         </p>

@@ -12,7 +12,9 @@ export default function robots() {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/dashboard', '/api', '/super-admin'],
+        // F-19: /offline.html is the service worker's fallback shell, not a page anyone
+        // should land on from a search result.
+        disallow: ['/dashboard', '/api', '/super-admin', '/offline.html'],
       },
     ],
     sitemap: `${siteUrl}/sitemap.xml`,

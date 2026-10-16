@@ -6,6 +6,7 @@ import { getPublicProject } from '@/lib/public-project';
 import { getSiteUrl } from '@/lib/site-url';
 import { createAnonClient } from '@/lib/supabase/anon';
 import { Unavailable } from '@/components/menu/unavailable';
+import { compositeOver, resolveLegibleFill } from '@/lib/contrast';
 
 export const dynamicParams = true;
 
@@ -67,16 +68,24 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { projectSlug } = await params;
   const project = await getPublicProject(projectSlug);
-  if (!project) return { title: 'المتجر غير متاح' };
+  // F-5: an unknown slug renders the graceful <Unavailable> UI with HTTP 200 (notFound() is
+  // swallowed inside a force-static route), so without this the page was indexable AS a store
+  // page. noindex is the SEO half of the fix; the 200 stays deliberate.
+  if (!project) {
+    return { title: 'المتجر غير متاح', robots: { index: false, follow: false } };
+  }
 
+  const url = `${getSiteUrl()}/${projectSlug}`;
   return {
     title: project.name,
-    alternates: {
-      canonical: `${getSiteUrl()}/${projectSlug}`,
-    },
+    alternates: { canonical: url },
+    // F-14: the storefront is the page a merchant SHARES, and it had no og:image at all —
+    // the share card fell back to the platform's. Absolute URL via metadataBase.
     openGraph: {
       title: project.name,
       description: `تصفح قائمة ${project.name}`,
+      url,
+      ...(project.logo_url ? { images: [{ url: project.logo_url, alt: project.name }] } : {}),
     },
   };
 }
@@ -99,8 +108,12 @@ export default async function StorefrontPage({
   // your table") and offers the single browse link, so the customer learns how ordering works
   // before they reach a menu they cannot order from.
 
-  const heroColor = project.primary_color || '#7047EB';
-
+  /* Audit F-3: the hero used to paint the merchant's own brand colour and write white on it.
+     Measured on the live tenants: #FFFFFF on #F4A4C0 = 1.92:1 and #FCE4EC on #F5ADC6 = 1.52:1 —
+     axe flagged two SERIOUS contrast violations and the customer could not read the store name.
+     The owner's colour is their identity, so the resolver picks the INK for it, and only deepens
+     the fill (at constant hue) when neither white nor the dark token clears 4.5:1. */
+  const hero = resolveLegibleFill(project.primary_color);
   return (
     <main
       dir="rtl"
@@ -109,7 +122,7 @@ export default async function StorefrontPage({
       {/* Hero */}
       <div
         className="flex flex-col items-center justify-center px-6 pb-16 pt-20 text-center"
-        style={{ background: heroColor, color: '#fff' }}
+        style={{ background: hero.fill, color: hero.ink }}
       >
         {project.logo_url ? (
           <Image
@@ -120,12 +133,17 @@ export default async function StorefrontPage({
             className="mb-4 h-16 w-16 rounded-full border-2 border-white/20 object-cover"
           />
         ) : (
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-2xl font-bold">
+          <div
+            className="mb-4 flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold"
+            style={{ background: hero.inkSoft }}
+          >
             {project.name.charAt(0)}
           </div>
         )}
         <h1 className="text-2xl font-bold">{project.name}</h1>
-        <p className="mt-2 text-sm text-white/70">قائمة طعام ومشروبات</p>
+        <p className="mt-2 text-sm" style={{ color: hero.inkMuted }}>
+          قائمة طعام ومشروبات
+        </p>
 
         <div className="mt-8">
           {activeTables.length > 0 ? (
@@ -135,23 +153,28 @@ export default async function StorefrontPage({
                the physical table — this page says so, and offers ONE read-only browse link
                (which resolves to a token-less URL that the menu renders read-only). */
             <div className="flex flex-col items-center gap-4">
-              <p className="max-w-xs text-sm font-semibold leading-6 text-white/85">
+              <p className="max-w-xs text-sm font-semibold leading-6">
                 امسح رمز QR الموجود على طاولتك للطلب
               </p>
               <Link
                 href={`/${projectSlug}/menu/${activeTables[0].slug}`}
-                className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-white/15 px-5 text-sm font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/25 active:scale-95"
+                className="storefront-cta inline-flex min-h-[44px] items-center justify-center rounded-xl px-5 text-sm font-bold backdrop-blur-sm active:scale-95"
+                style={{
+                  background: hero.inkSoft,
+                  color: hero.ink,
+                  ['--cta-hover' as string]: compositeOver(hero.ink, 0.25, hero.fill),
+                }}
               >
                 تصفّح القائمة
               </Link>
             </div>
           ) : (
             /* ── Zero tables: info + note ── */
-            <div className="rounded-xl bg-white/10 px-6 py-4 backdrop-blur-sm">
-              <p className="text-sm font-semibold text-white">
+            <div className="rounded-xl px-6 py-4 backdrop-blur-sm" style={{ background: hero.inkSoft }}>
+              <p className="text-sm font-semibold">
                 مرحباً بك في {project.name}
               </p>
-              <p className="mt-1 text-xs text-white/70">
+              <p className="mt-1 text-xs" style={{ color: hero.inkMuted }}>
                 القائمة غير متاحة حالياً — اسأل الكاشير للمساعدة
               </p>
             </div>
