@@ -182,6 +182,13 @@ jobs:
       - name: Assert the critical CSS carries no inlined font data
         run: node scripts/check-critical-css.mjs
 
+      # The JS half of the same budget (frontend audit action item 18). Both real bundle
+      # regressions in this repo's history — the font sheet in the critical path, and a QR encoder
+      # imported statically into a route that only needs it on one tap — would have been caught by
+      # a ceiling like this one.
+      - name: Assert the JS/CSS bundle stays inside its budget
+        run: node scripts/check-js-budget.mjs
+
       # The service-role key must never reach a client bundle. Cheap, and it
       # catches the single worst thing that could be committed.
       - name: Assert no service-role key in client assets
