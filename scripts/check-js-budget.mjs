@@ -5,10 +5,14 @@
  * repo's history both landed: a 315 KB font sheet bundled into the critical path, and libraries
  * (the QR encoder) imported statically into a route that only needed them on one tap.
  *
- * WHY THESE CEILINGS: measured on the build of 2026-10-17 — 56 chunks, 2,033 KB total, largest
- * single chunk 353.9 KB, CSS 64 KB. The numbers below sit ~15-20% above that: loose enough that
- * ordinary work never trips them, tight enough that "a dependency leaked into the client" or "a
- * route stopped code-splitting" does. Raise them deliberately, in a commit that says why.
+ * WHY THESE CEILINGS, AND WHY THEY ARE NOT THE LOCAL NUMBERS: the first version of this guard was
+ * calibrated on a local build — 56 chunks, 2,033 KB, largest chunk 353.9 KB — and it failed the
+ * moment CI ran it, because CI's build is NOT the local build: the same tree produced a 486.5 KB
+ * chunk there. The ceilings below come from the CI artefact, which is the one that ships (Vercel
+ * runs the same command), with ~20% of headroom: a single chunk may reach 600 KB, all JS 2,600 KB,
+ * all CSS 200 KB. Loose enough to survive an ordinary dependency bump, tight enough that a library
+ * pulled statically into a route — or anything like the 315 KB font sheet — trips it. Raise them
+ * deliberately, from a fresh CI measurement, in a commit that says why.
  *
  * Run AFTER `next build` (it reads .next/static).
  */
@@ -16,8 +20,8 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const CHUNKS = '.next/static';
-const MAX_CHUNK_KB = 450; // single JS chunk — the biggest is a framework chunk
-const MAX_JS_KB = 2400; // every JS file the app can serve, summed
+const MAX_CHUNK_KB = 600; // single JS chunk — CI's largest measures 486.5 KB
+const MAX_JS_KB = 2600; // every JS file the app can serve, summed
 const MAX_CSS_KB = 200; // every stylesheet, summed (one 120 KB sheet is the per-sheet cap)
 
 if (!existsSync(CHUNKS)) {
