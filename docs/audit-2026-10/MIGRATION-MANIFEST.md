@@ -113,10 +113,11 @@ each one needs the owner's own approval, per the standing gate.**
 `subscription_payments` had ZERO policies in production while `0010_subscription_payments.sql` +
 `20260928111000_performance_advisor_hardening.sql` create two and the ledger lists both as applied.
 Verified: after running #17 inside a rolled-back transaction, `policies_now=2` and `phase4_5` test 8
-goes green — so the restore is what closes it. Also observed, NOT fixed: `service_role` holds only
-`TRIGGER` on that table (no SELECT/INSERT), which is harmless today because the super-admin flows go
-through SECURITY DEFINER RPCs (their owner is `postgres`) — but a future direct admin-client read of
-that table would fail with 42501.
+goes green — so the restore is what closes it. **CORRECTION (measured again, 2026-10-17):** an earlier note in this file said `service_role` holds
+only `TRIGGER` on `subscription_payments`. That was WRONG — it came from reading a truncated grant
+listing. Grouped properly, `service_role` holds SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES
+and TRIGGER on that table, exactly like `postgres`. There is no grant gap and nothing to fix; the
+note is corrected here so it is not carried forward as a finding.
 
 ### STATUS UPDATE, same day — these five were applied to production by the Supabase GitHub integration
 

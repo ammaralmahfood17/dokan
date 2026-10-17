@@ -343,3 +343,66 @@ the build classifies the route `ƒ` for that reason, not because it reads the re
 ### D4 — `REQUIRE_TABLE_TOKEN` stays false at deploy
 Flip gate and the daily query: `POST-DEPLOY-MONITORING.md`. Baseline at the time of writing:
 `token_present=true` = 1, `token_present=false` = 0 (`public.order_audit_logs`).
+
+---
+
+## 2026-10-16 round — F-1…F-21 (frontend) and B-1…B-13 (backend): item-by-item status
+
+The two reports of that round live in chat; this is the record of what each item became, with the
+measurement that closes it. **Every closed item below was re-measured on the deployed build**, not
+marked done from the diff. Corrections to the reports' own claims are marked as such, because two of
+them were my errors and one was an artefact of a truncated query.
+
+| Item | What it was | Status | Evidence (all live unless stated) |
+|---|---|---|---|
+| F-1 | 231 KB font sheet inside the render-blocking path | **closed** | render-blocking sheet is 65,375 B with `data:font` = 0; FCP on Slow-3G **3,776 ms** (was 11.1–12.8 s); `fontSheetPromoted: true` and the four thmanyah faces load; `scripts/check-critical-css.mjs` fails CI if it regresses |
+| F-2 | `page-enter` left the customer menu with no FCP at all | **closed** | wrapper removed from `menu-client.tsx` + `dashboard/layout.tsx` |
+| F-3 | tenant brand colour made text unreadable (`/fofo`) | **closed** | `resolveLegibleFill`; live `/fofo` contrast failures **1 → 0**. The second pass found a *contract* bug, not a colour bug: `inkMuted` is guaranteed against `fill` and was painted on `inkSoft` (3.70:1). The resolver now returns each ink with its surface (`inkMutedSoft`) and a test pins all four pairs |
+| F-4 | homepage hero: 3 failing pairs | **closed** | live `/` contrast failures 0 |
+| F-5 | soft-404 — unknown table/menu slug served 200 | **closed (SEO half, as prescribed)** | unknown slug → `noindex, follow` + canonical to the store; unknown store → `noindex, follow`. The 200 stays deliberate: `notFound()` is swallowed inside a `force-static` route, and the prescribed fix was the SEO half |
+| F-6 | canonical/sitemap broken on 5 routes | **closed** | `/login`, `/terms`, `/reset-password` each declare their own canonical + title (measured in the served HTML) |
+| F-7 | 12 touch targets under 44 px | **closed** | live mobile probe: **0** targets under 44 px (the only hit is the 1×1 skip link, visible on focus by design) |
+| F-8 | no `<main>` on 3 routes | **closed** | `main` = 1 on `/`, `/login`, `/estikana`, `/estikana/menu/table-1` |
+| F-9 | DESIGN_SYSTEM.md described the retired palette | **closed** | doc rewritten from the shipped tokens + `design-system-doc.test.ts` compares it to `globals.css` |
+| F-10 | homepage `<h1>` read «طلبفي» | **closed** | served h1 = «من التسجيل إلى أول طلب في أقل من 7 دقائق», one h1 per page |
+| F-11 | header container 48 px off the content; uneven section padding | **closed** | measured at 1440 px: header, hero and grid all start at **x=144, width 1152**; section rhythm unified to `py-16`/`sm:py-20` (hero one step more) and documented in DESIGN_SYSTEM.md §3 |
+| F-12 | focus ring: unequal geometry + a retired-palette shadow | **closed** | `--shadow-focus` derived from `color-mix(var(--color-primary) 28%)`; 4 px band on buttons and fields alike |
+| F-13 | `outline-none` without a substitute ([Inferred] in the report) | **closed** | removed from `orders-toolbar.tsx` ×2 and `cart-line-item.tsx`; `scripts/check-focus-visible.mjs` fails CI if a control drops its outline without a ring |
+| F-14 | storefront/menu carried the platform's OG card | **closed** | storefront emits its own `og:title`/`og:url` + the tenant's logo as `og:image` when set (platform image otherwise); the menu page emits its own title and URL |
+| F-15 | retired palette in shipped code (4 CSS + 6 TSX sites) | **closed** | only *comments* naming the retired values remain; the QR generator's `#0F172A` and the danger reds are tokens now |
+| F-16 | logo mark made the link's accessible name «ددكان» | **closed** | `aria-hidden="true"` on the decorative mark in `legal-page.tsx` |
+| F-17 | closed store was a dead end with no action | **closed** | the exit link is a 44 px `<Link href="/">`; live `/fofo` has 0 sub-44 px interactive elements |
+| F-18 | `script-src` carries `'unsafe-inline'` | **OPEN — hardening, deliberately** | A per-request nonce is the standard fix, but every public page here is prerendered and CDN-cached, so a nonce would be shared across users and the alternative (build-time script hashes) must be regenerated on every build or the app breaks at runtime. Not a defect — the rest of the policy is strict (`frame-ancestors 'none'`, `object-src 'none'`, `upgrade-insecure-requests`, no mixed content). Left open on purpose, with the tradeoff named |
+| F-19 | `/offline.html` was indexable | **closed** | `robots.txt` disallows it |
+| F-20 | no `color-scheme`, dark OS → dark splash then a light app | **closed (first half)** | `color-scheme: light` in `globals.css` — the app states it is light-only, so UA form controls and scrollbars stop following the OS. The dark *startup image* is retained deliberately: iOS picks a launch image per system appearance, and one link per resolution with its dark sibling is the only shape that ever applies (a single unqualified link is ignored by every device it does not match exactly) |
+| F-21 | the retired `--shadow-focus` sitting among the tokens | **closed with F-12** | the token now derives from the shipped primary |
+| B-1 | GoTrue's own signup endpoint open with the public anon key | **closed at the data layer; platform half pending** | `auth_users_require_api_provisioning` is live; `POST /auth/v1/signup` with the anon key → **500 «Database error saving new user», users 4 → 4** (it used to answer 422 `weak_password`, GoTrue validating a request it would have created). The graceful half is `disable_signup = true` in the project's Auth settings — owner click or a Management-API token |
+| B-2 | `/api/pos/cancel` had no rate limit | **closed** | 30/min per caller + Sentry |
+| B-3 | table token compared in process memory | **closed** | resolution moved inside the database (`resolve_table_by_token`), same rule as the public order route |
+| B-4 | `service_role` unbounded, no idle-in-transaction timeout anywhere | **closed** | applied: `service_role` = `statement_timeout 15s`, `lock_timeout 8s`; idle 30 s on `anon`/`authenticated`/`service_role` |
+| B-5 | 500s on the order path never reached Sentry | **closed** | four paths report (order create, pos/cancel transition, service-request insert, reset-password send) |
+| B-6 | `/api/auth/reset-password` had no per-IP cap | **closed** | per-IP + per-email |
+| B-7 | inert policies + the misleading amount trigger | **closed** | trigger + function dropped; the two order policies dropped. **Scope correction (CI found it):** the file first dropped the two `subscription_payments` policies too, and `phase4_5` failed — that test pins their cached-`auth.uid()` shape, so they stay. Unreachable in production, still the right shape to keep |
+| B-8 | duplicate `DOKAN_*` Vercel credentials | **closed by owner decision — left in place** | nothing in the code reads them; the values cannot be read back after deletion, so they stay |
+| B-9 | RPC called on every `/login` visit | **CORRECTED — the report overstated it** | measured in the code: `supabase.rpc('is_super_admin')` runs only when `user && isAuthPage`, i.e. an authenticated visitor on `/login`/`/register`, and the redirect lands immediately. Not a per-visit cost for anyone else, and no cache is warranted at this scale. The related `withSuperAdmin` double round trip is the report's own "acceptable now" rating |
+| B-10 | the two retention tables looked unindexed | **CORRECTED — my error** | `impersonation_sessions_expires_idx (expires_at)` and `super_admin_audit_log_created_at_idx (created_at DESC)` both exist; the sizes (216 KB / 160 KB) are data volume, not a scan cost. No migration needed. The report's "no visible retention index" came from a truncated listing — the same trap this repo's catalog reference warns about |
+| B-11 | duplicated body guard in `signup/route.ts` | **closed** | one guard, explanation attached |
+| B-12 | `revalidate-menu` accepted a non-uuid projectId | **closed** | validated with the shared `isUuid`; a bad id is now a 400, not a 500 + a Sentry event |
+| B-13 | membership helpers answer "does this project exist?" to `authenticated` | **documented, not a defect** | RLS policies call them as the *invoking* role, so revoking EXECUTE would break every policy that uses them; the ids are unguessable uuids. Recorded, per the report's own framing |
+
+**New guard added by this pass:** `supabase/tests/phase12_function_grants.sql` (8 assertions) closes
+the gap both reports named — nothing asserted `has_function_privilege`. It pins the money RPCs as
+service_role-only *in both directions*, `advance_order_status` as anon-no/authenticated-yes,
+the anon-executable set as exactly `{is_project_publicly_available, resolve_table_by_token}`,
+the PUBLIC (`=X`) default grant as exactly one documented function, and every SECURITY DEFINER
+function as search_path-pinned. **It was run RED first** (assertion 7 failed until the deliberate
+exception was named) and passes 8/8 against production. A fresh `db reset` in CI runs all of
+`supabase/tests/*.sql`, so a future `CREATE FUNCTION` that inherits the default now fails the build.
+
+**Open, with the reason (not defects):** F-18 (above); the concurrency test the backend report asked
+for (two orders racing on the last unit in stock, and two with the same idempotency key) — it needs
+two live sessions and cannot be written honestly without one; the pgTAP coverage for the
+reservations RPCs, which is blocked on a **repo↔production drift**: production has the `reservations`
+table and its three RPCs, while no file in `supabase/migrations/` creates them, so a fresh database
+does not have them and a test naming them would fail CI. Versioning that schema is the prerequisite,
+and it is a migration, so it goes through `supabase/pending/` and the owner's approval.

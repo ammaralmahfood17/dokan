@@ -112,8 +112,12 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* F-11: one vertical rhythm for the landing — content sections carry py-16/sm:py-20 on
+            the CONTAINER (the bordered strip below puts it on its inner grid so the border stays
+            tight to the content), and the hero is allowed exactly one step more. Measured before
+            the change: hero 112 · strip 56 · pricing 80 at >=640px. */}
         <section className="border-y border-white/80 bg-white/65">
-          <div className="mx-auto grid max-w-6xl gap-4 px-4 py-14 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mx-auto grid max-w-6xl gap-4 px-4 py-16 sm:grid-cols-2 sm:py-20 lg:grid-cols-3">
             {FEATURES.map((f) => {
               const Icon = f.icon;
               return (
