@@ -183,10 +183,16 @@ export default async function StorefrontPage({
       </div>
 
       {/* Footer */}
+      {/* F-17: the closed-store state left half a phone screen empty with nothing to act on — the
+          customer had scanned a QR and had no way out. This is that way out, at a 44px target. */}
       <div className="mt-auto pb-8 pt-6 text-center">
-        <p className="text-[11.5px] text-[var(--color-text-tertiary)]" dir="ltr">
+        <Link
+          href="/"
+          className="inline-flex min-h-[44px] items-center text-[11.5px] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
+          dir="ltr"
+        >
           Powered by Dokan
-        </p>
+        </Link>
       </div>
     </main>
   );

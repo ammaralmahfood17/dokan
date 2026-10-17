@@ -27,13 +27,9 @@ import { turnstileErrorMessage, verifyTurnstile } from '@/lib/turnstile';
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
-    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
-    }
-    // A literal `null` body is valid JSON, so request.json() returns null and
-    // the destructure below would throw a TypeError -> a 500 on an
-    // unauthenticated caller. Non-object input is a 400 like any other bad
-    // signup payload.
+    // B-11: this guard used to appear twice, verbatim. A literal `null` body is valid JSON, so
+    // request.json() returns null and the destructure below would throw a TypeError -> a 500 on
+    // an unauthenticated caller. Non-object input is a 400 like any other bad signup payload.
     if (body === null || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
     }
@@ -110,7 +106,13 @@ export async function POST(request: Request) {
       // merchant proves the inbox before it can be used.
       user_metadata: {
         full_name: fullName.trim(),
-        from_api: 'true',       // safety trigger skips users from the main API
+      },
+      // B-1: app_metadata is set by the SERVER (GoTrue's own signup endpoint maps client input to
+      // user_metadata only), so it is the one field a direct /auth/v1/signup call cannot forge.
+      // The migration that guards auth.users keys on this marker, which is what makes the owner's
+      // "signups are closed" decision true at the data layer instead of only in this route.
+      app_metadata: {
+        provisioned_by: 'dokan-admin-api',
       },
     });
 

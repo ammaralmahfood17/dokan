@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@/lib/database.types';
 import type { OrderItemOption, OrderType, ProductOptionGroup, PublicOrderItemInput } from '@/lib/types';
@@ -277,7 +278,12 @@ export async function createSecureOrder(
     ) {
       return { ok: false, error: 'بيانات صنف غير صالحة', status: 400 };
     }
+    // B-5: this path RETURNS a 500 to the route, so the route's own catch never sees it and an
+    // unexpected order-creation failure produced a console line and nothing else — the worst
+    // possible silent failure in this product. The known rejections above are handled marketing
+    // wording; anything that reaches here is a real error and is reported.
     console.error('Order create error:', createErr);
+    Sentry.captureException(createErr, { tags: { area: 'order-create', projectId } });
     return { ok: false, error: 'فشل إنشاء الطلب', status: 500 };
   }
 

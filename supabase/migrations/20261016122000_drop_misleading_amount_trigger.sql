@@ -1,0 +1,32 @@
+-- Migration: the amount trigger that guards nothing and misleads anyone who reads it
+-- (backend audit B-7, 2026-10-16)
+--
+-- MEASURED STATE THIS REMOVES: `orders_validate_amount_on_insert` is a BEFORE INSERT trigger on
+-- public.orders that compares `new.total_amount` with `SUM(order_items)` for the same order id.
+-- It returns immediately when `auth.role() = 'service_role'`.
+--
+-- That is the ONLY role that can insert an order: `anon` and `authenticated` hold no INSERT on
+-- orders at table OR column level (verified in information_schema), and create_order_transactional
+-- — the one writer — is executable only by service_role. So the trigger can never fire where it
+-- was written to matter.
+--
+-- It DOES fire somewhere it was not written for: calling create_order_transactional as any other
+-- role fails with «total_amount must match order_items sum (got 6.400, expected 0)», because a
+-- BEFORE INSERT trigger reads order_items before the function inserts them. Measured on
+-- production during the Task-2 audit. That message is a lie about the caller's problem, and it
+-- makes the EXECUTE grant the RPC carries for any future client path unusable.
+--
+-- WHY DELETE RATHER THAN KEEP: it reads as the protection for the money path while the protection
+-- is the absent GRANT. The RPC computes `v_total` from the catalog under `FOR SHARE` locks and
+-- never trusts `p_total_amount`, so no behaviour depends on the trigger. Two mechanisms describing
+-- one boundary is the exact ambiguity this audit found in four other places (see
+-- ARCHITECTURE.md's boundary table).
+--
+-- Rollback (recreates the mechanism verbatim; also restore the two assertions in
+-- supabase/tests/phase4_5_advisor_hardening.sql and its plan count if you roll back):
+--   CREATE OR REPLACE FUNCTION public.orders_validate_amount_on_insert() ... (see 0013);
+--   CREATE TRIGGER orders_validate_amount_on_insert BEFORE INSERT ON public.orders
+--     FOR EACH ROW EXECUTE FUNCTION public.orders_validate_amount_on_insert();
+
+drop trigger if exists orders_validate_amount_on_insert on public.orders;
+drop function if exists public.orders_validate_amount_on_insert();

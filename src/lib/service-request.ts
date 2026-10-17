@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { createAdminClient } from './supabase/admin';
 import { rateLimit, createRateLimitResponse } from './rate-limit';
 import { getClientIp } from './ip';
@@ -38,6 +39,45 @@ const LABELS: Record<ServiceRequestKind, { title: string; push: string }> = {
 
 /** How long an open request of the same kind blocks another one, per table. */
 const DEDUPE_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * Prove the scanned table WITHOUT ever holding its token in this process (backend audit B-3).
+ *
+ * The previous version selected `qrcode` and compared it with `!==`, so the 128-bit scan token —
+ * a credential that authorises ordering at a physical table — passed through Node's memory and
+ * could land in a log line, a Sentry event or a heap dump. Worse, it was the OPPOSITE of what the
+ * sibling public-order route does: that one calls a SECURITY DEFINER RPC precisely so the value
+ * never leaves the database (`public/order/route.ts`: "never enters this process's memory").
+ * Two routes in the same family resolving the same credential two different ways is the defect.
+ *
+ * `resolve_table_by_token` also fails closed on an expired subscription (no expiry = no service
+ * request), which is the behaviour the ordering path already has.
+ */
+async function resolveTable(
+  supabase: ReturnType<typeof createAdminClient>,
+  projectSlug: string,
+  projectId: string,
+  tableSlug: string,
+  tableToken: string
+): Promise<{ id: string; number: number } | null> {
+  if (tableToken !== '') {
+    const { data } = await supabase.rpc('resolve_table_by_token', {
+      p_project_slug: projectSlug,
+      p_table_token: tableToken,
+    });
+    return (data as { id: string; number: number } | null) ?? null;
+  }
+  // REQUIRE_TABLE_TOKEN rollout window: a tokenless request falls back to the slug. No secret is
+  // involved in this lookup, and a wrong-but-well-formed token never reaches it (the guard 404s).
+  const { data } = await supabase
+    .from('tables')
+    .select('id, number')
+    .eq('slug', tableSlug)
+    .eq('project_id', projectId)
+    .eq('is_active', true)
+    .maybeSingle();
+  return data ?? null;
+}
 
 export async function handleServiceRequest(
   request: NextRequest,
@@ -122,26 +162,25 @@ export async function handleServiceRequest(
     }
     const tableToken = tokenDecision.token;
 
-    // Per-PROJECT hourly budget — table rotation cannot dodge it.
-    const projectBudget = await rateLimit(`project:${project.id}`, {
-      limit: 30,
-      windowMs: 60 * 60 * 1000,
-      keyPrefix: 'public-service-project',
-    });
+    // Per-PROJECT hourly budget — table rotation cannot dodge it. Runs in parallel with the table
+    // resolution below: they are independent, and each is a DB round trip (~150ms by this repo's
+    // own measurement), so serialising them added that much to every «طلب موظف» tap.
+    const [projectBudget, tableResolution] = await Promise.all([
+      rateLimit(`project:${project.id}`, {
+        limit: 30,
+        windowMs: 60 * 60 * 1000,
+        keyPrefix: 'public-service-project',
+      }),
+      resolveTable(supabase, projectSlug, project.id, tableSlug, tableToken),
+    ]);
+
     if (!projectBudget.allowed) {
       const res = createRateLimitResponse(projectBudget.resetIn);
       return NextResponse.json({ error: res.error }, { status: res.status });
     }
 
-    const { data: table } = await supabase
-      .from('tables')
-      .select('id, number, qrcode')
-      .eq('slug', tableSlug)
-      .eq('project_id', project.id)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (!table || (tableToken !== '' && table.qrcode !== tableToken)) {
+    const table = tableResolution;
+    if (!table) {
       return NextResponse.json(
         { error: 'الطاولة غير موجودة أو رمز الطاولة غير صالح' },
         { status: 404 }
@@ -176,6 +215,11 @@ export async function handleServiceRequest(
 
     if (error || !created) {
       console.error('Service request insert failed:', error);
+      // B-5: a stored-nothing failure on the customer-facing request path used to be invisible to
+      // alerting — it reached console and stopped there.
+      Sentry.captureException(error ?? new Error('service_requests insert returned no row'), {
+        tags: { area: 'service-request', kind },
+      });
       return NextResponse.json({ error: 'فشل إرسال الطلب' }, { status: 500 });
     }
 
@@ -200,6 +244,7 @@ export async function handleServiceRequest(
     return NextResponse.json({ ok: true, id: created.id });
   } catch (err) {
     console.error(`Service request (${kind}) error:`, err);
+    Sentry.captureException(err, { tags: { area: 'service-request', kind } });
     return NextResponse.json({ error: 'خطأ داخلي' }, { status: 500 });
   }
 }

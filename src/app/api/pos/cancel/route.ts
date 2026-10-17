@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { rateLimit, createRateLimitResponse } from '@/lib/rate-limit';
+import * as Sentry from '@sentry/nextjs';
 
 /**
  * POST /api/pos/cancel
@@ -43,6 +45,18 @@ export async function POST(request: NextRequest) {
 
     if (!orderId) {
       return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
+    }
+
+    // B-2: order and payment both had a limiter; this money route — the one that cancels orders
+    // and restores stock — did not. Keyed on the caller, not the IP: it is an authenticated action.
+    const limit = await rateLimit(`pos-cancel:${user.id}`, {
+      limit: 30,
+      windowMs: 60 * 1000,
+      keyPrefix: 'pos-cancel',
+    });
+    if (!limit.allowed) {
+      const res = createRateLimitResponse(limit.resetIn);
+      return NextResponse.json({ error: res.error }, { status: res.status });
     }
 
     // Verify staff membership. UX-report C2: multi-project staff must be
@@ -102,12 +116,17 @@ export async function POST(request: NextRequest) {
     }
     if (updateErr || !updated) {
       console.error('[Cancel] transition error:', updateErr);
+      // B-5: a failed money mutation that reached console and stopped there.
+      Sentry.captureException(updateErr ?? new Error('advance_order_status returned no row'), {
+        tags: { area: 'pos-cancel', projectIds: projectIds.length },
+      });
       return NextResponse.json({ error: 'فشل إلغاء الطلب' }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[Cancel] API error:', err);
+    Sentry.captureException(err, { tags: { area: 'pos-cancel' } });
     return NextResponse.json({ error: 'خطأ داخلي' }, { status: 500 });
   }
 }

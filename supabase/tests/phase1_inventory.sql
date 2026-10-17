@@ -198,15 +198,13 @@ SELECT throws_ok(
 );
 
 RESET ROLE;
--- Seed the legacy order with total_amount 0, not 2.500. orders_validate_amount_on_insert()
--- (0013) recomputes the total from order_items for every role EXCEPT service_role, and it is
--- a BEFORE INSERT trigger - so it fires before the order_items row below can exist for this
--- order, the recomputed sum is necessarily 0, and any non-zero total raises
--- 'total_amount must match order_items sum'. This seeded order never has its total read back
--- (the two assertions on it only check product stock), so 0 loses nothing.
--- phase2_rbac_order_state.sql seeds its order the same way (0.000). The 2.500 this test used
--- to declare was arithmetically right for the 2 x 1.250 item below but structurally
--- unreachable for a BEFORE INSERT seed.
+-- Seed the legacy order with total_amount 0, not 2.500. That was a hard constraint while
+-- orders_validate_amount_on_insert() existed (a BEFORE INSERT trigger that recomputed the total
+-- from order_items, so it fired before the item row below could exist and any non-zero total
+-- raised 'total_amount must match order_items sum'). The trigger was dropped in migration
+-- 20261016122000, so 2.500 would be accepted now; the seed stays at 0.000 because the two
+-- assertions on this order only read product stock, and rewriting a seed to prove a point nothing
+-- checks is churn. phase2_rbac_order_state.sql seeds its order the same way.
 INSERT INTO public.orders (id, project_id, type, status, total_amount, order_number)
 VALUES (
   'e2000000-0000-0000-0000-000000000002',

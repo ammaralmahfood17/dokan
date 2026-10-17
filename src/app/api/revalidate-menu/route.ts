@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
+import { isUuid } from '@/lib/api/handler';
 
 /**
  * POST /api/revalidate-menu
@@ -30,7 +31,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 });
     }
     const body = rawBody as { projectId?: string };
-    if (!body.projectId || typeof body.projectId !== 'string') {
+    // B-12: validated as a uuid, not merely as a string — a non-uuid reached the query, came back
+    // as a PostgREST 400, and this route turned that into a 500 + a Sentry event.
+    if (!isUuid(body.projectId)) {
       return NextResponse.json({ error: 'projectId مطلوب' }, { status: 400 });
     }
 

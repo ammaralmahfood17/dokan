@@ -1,7 +1,12 @@
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(10);
+-- 10 -> 8 (migration 20261016122000): the two assertions for
+-- public.orders_validate_amount_on_insert() are removed because the function is gone. The trigger
+-- only ever fired for service_role (the sole role that can insert an order) and made the order RPC
+-- fail with a misleading message for anyone else — the boundary that remains is the absent INSERT
+-- grant on orders/order_items, asserted in phase1_inventory.sql.
+SELECT plan(8);
 
 SELECT ok(
   NOT has_function_privilege('anon', 'public.order_items_validate_project()', 'EXECUTE'),
@@ -18,14 +23,6 @@ SELECT ok(
 SELECT ok(
   NOT has_function_privilege('authenticated', 'public.orders_auto_number()', 'EXECUTE'),
   'authenticated cannot invoke the order-number trigger function'
-);
-SELECT ok(
-  NOT has_function_privilege('anon', 'public.orders_validate_amount_on_insert()', 'EXECUTE'),
-  'anon cannot invoke the amount-validation trigger function'
-);
-SELECT ok(
-  NOT has_function_privilege('authenticated', 'public.orders_validate_amount_on_insert()', 'EXECUTE'),
-  'authenticated cannot invoke the amount-validation trigger function'
 );
 SELECT ok(
   EXISTS (
