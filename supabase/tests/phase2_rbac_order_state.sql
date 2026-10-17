@@ -16,9 +16,9 @@ INSERT INTO auth.users (
   created_at,
   updated_at
 ) VALUES
-  ('00000000-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'phase2-owner@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000', 'b0000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'phase2-manager@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000', 'c0000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'phase2-staff@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now());
+  ('00000000-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'phase2-owner@example.test', '', now(), '{"provider":"email","providers":["email"],"provisioned_by":"dokan-admin-api"}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'b0000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'phase2-manager@example.test', '', now(), '{"provider":"email","providers":["email"],"provisioned_by":"dokan-admin-api"}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'c0000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'phase2-staff@example.test', '', now(), '{"provider":"email","providers":["email"],"provisioned_by":"dokan-admin-api"}', '{}', now(), now());
 
 INSERT INTO public.projects (
   id, name, slug, currency, primary_color, is_active, created_by

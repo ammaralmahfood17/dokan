@@ -23,9 +23,9 @@ INSERT INTO auth.users (
   instance_id, id, aud, role, email, encrypted_password,
   email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
 ) VALUES
-  ('00000000-0000-0000-0000-000000000000', 'a8000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'p8-owner@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000', 'b8000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'p8-manager@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000', 'c8000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'p8-staff@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now());
+  ('00000000-0000-0000-0000-000000000000', 'a8000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'p8-owner@example.test', '', now(), '{"provider":"email","providers":["email"],"provisioned_by":"dokan-admin-api"}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'b8000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'p8-manager@example.test', '', now(), '{"provider":"email","providers":["email"],"provisioned_by":"dokan-admin-api"}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'c8000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'p8-staff@example.test', '', now(), '{"provider":"email","providers":["email"],"provisioned_by":"dokan-admin-api"}', '{}', now(), now());
 
 INSERT INTO public.projects (id, name, slug, currency, primary_color, is_active, created_by) VALUES
   ('d8000000-0000-0000-0000-000000000004', 'Phase 8 Project', 'phase-8-product-upsert', 'BHD', '#4338CA', true, 'a8000000-0000-0000-0000-000000000001'),

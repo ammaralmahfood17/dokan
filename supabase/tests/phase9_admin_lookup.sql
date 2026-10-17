@@ -22,8 +22,8 @@ INSERT INTO auth.users (
   instance_id, id, aud, role, email, encrypted_password,
   email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
 ) VALUES
-  ('00000000-0000-0000-0000-000000000000', 'a9000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'owner9@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000', 'b9000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'gone9@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now());
+  ('00000000-0000-0000-0000-000000000000', 'a9000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'owner9@example.test', '', now(), '{"provider":"email","providers":["email"],"provisioned_by":"dokan-admin-api"}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'b9000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'gone9@example.test', '', now(), '{"provider":"email","providers":["email"],"provisioned_by":"dokan-admin-api"}', '{}', now(), now());
 
 UPDATE auth.users SET deleted_at = now() WHERE id = 'b9000000-0000-0000-0000-000000000002';
 
