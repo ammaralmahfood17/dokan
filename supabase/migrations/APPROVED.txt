@@ -1,0 +1,53 @@
+# Approved migrations — one filename per line, then the date the owner approved it.
+#
+# Read by scripts/check-migration-approval.mjs. A .sql file in supabase/migrations/ is APPLIED TO
+# PRODUCTION by the Supabase GitHub App on the next push to master, so this list is the record of
+# which ones were approved to be there. New migrations live in supabase/pending/ until their row
+# appears here; see supabase/pending/README.md for the flow and the owner's gate.
+#
+# The 44 below are the tree as it stood on 2026-10-17: every one is in the production ledger.
+
+0000_init.sql 2026-10-17
+0001_renew_subscription_super_admin_only.sql 2026-10-17
+0002_drop_handle_new_user_safety.sql 2026-10-17
+0003_security_hardening_batch1.sql 2026-10-17
+0004_close_anon_privilege_escalation.sql 2026-10-17
+0005_harden_caller_id_pattern.sql 2026-10-17
+0006_phase1_backend_hardening.sql 2026-10-17
+0007_onboarding_transactional.sql 2026-10-17
+0008_renew_unarchive.sql 2026-10-17
+0009_purge_rate_limits.sql 2026-10-17
+0010_subscription_payments.sql 2026-10-17
+0011_soldout_public_read.sql 2026-10-17
+0012_product_images_bucket.sql 2026-10-17
+0013_close_privilege_escalation_paths.sql 2026-10-17
+0014_order_idempotency.sql 2026-10-17
+0015_web_vitals.sql 2026-10-17
+0016_retention_sweeps.sql 2026-10-17
+0017_order_integrity.sql 2026-10-17
+0018_product_stock.sql 2026-10-17
+0019_onboarding_events.sql 2026-10-17
+20260924053759_0008_close_onboard_rpc_anon_leak.sql 2026-10-17
+20260924053849_0009_revoke_public_execute_onboard_rpc.sql 2026-10-17
+20260928090000_phase1_critical_security.sql 2026-10-17
+20260928100000_phase2_rbac_order_state.sql 2026-10-17
+20260928110000_security_advisor_hardening.sql 2026-10-17
+20260928111000_performance_advisor_hardening.sql 2026-10-17
+20261006090000_table_scan_token.sql 2026-10-17
+20261006094000_qr_reprint_flag.sql 2026-10-17
+20261006110000_payment_idempotency.sql 2026-10-17
+20261006120000_replay_race.sql 2026-10-17
+20261006130000_subscription_payments_client_request_key.sql 2026-10-17
+20261006150000_default_acl_hardening.sql 2026-10-17
+20261006160000_impersonation_at_rest.sql 2026-10-17
+20261006170000_service_requests_live.sql 2026-10-17
+20261006190000_product_options.sql 2026-10-17
+20261006200000_drop_legacy_addons.sql 2026-10-17
+20261008100000_phase1_ingredient_inventory.sql 2026-10-17
+20261013120000_upsert_product_with_options.sql 2026-10-17
+20261014100000_find_user_id_by_email.sql 2026-10-17
+20261016120000_role_service_timeouts.sql 2026-10-17
+20261016121000_drop_inert_write_policies.sql 2026-10-17
+20261016122000_drop_misleading_amount_trigger.sql 2026-10-17
+20261016123000_auth_signup_requires_api_marker.sql 2026-10-17
+20261016124000_restore_subscription_payment_policies.sql 2026-10-17

@@ -1,5 +1,24 @@
 # Migration manifest (owner item E4)
 
+> **How a migration is gated now (owner decisions, 2026-10-17).** `supabase/migrations/` is not a
+> staging area: the Supabase GitHub App is installed on this repository and applies what it finds
+> there to the production project on every push to `master`, so a file's presence there IS the
+> decision to apply it — and the per-migration approval the owner asked for cannot be satisfied by
+> pushing the files and waiting for CI, because the push already applies them. The gate is therefore
+> a directory: a migration that is written, dry-run and waiting for approval lives in
+> **`supabase/pending/`**, which the app never reads. CI applies the files there to a throwaway
+> database before running the assertion suite, so a pending file is proven from zero BEFORE the
+> owner is asked to approve it; on approval it is `git mv`-ed into `supabase/migrations/` and its
+> name added to `supabase/migrations/APPROVED.txt` in the same commit, which
+> `scripts/check-migration-approval.mjs` enforces. Flow and rationale:
+> `supabase/pending/README.md`. The owner also decided, same day, **not** to delete the three unused
+> duplicate `DOKAN_*` Vercel environment variables (their values cannot be read back, and nothing in
+> the code reads them) and **yes** to closing GoTrue's own signup endpoint at the platform level
+> (`disable_signup = true` in the project's Auth settings) so the refusal is graceful rather than the
+> 500 the database guard currently produces — the guard is what makes the boundary true, the setting
+> is what makes the answer polite. Applying that setting needs a `sbp_` Management-API token or the
+> owner's click; neither is in this repository.
+
 Every migration added on `fix/audit-remediation-20261005`, in order, with its apply timing. The
 production ledger head at the time of writing is `20261006130000`, so the five files below are already
 applied and the three marked PENDING are not.

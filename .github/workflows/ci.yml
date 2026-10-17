@@ -40,6 +40,25 @@ jobs:
       - name: Apply every migration from zero
         run: supabase db reset
 
+      # A migration waiting for approval lives in supabase/pending/ (invisible to the app that
+      # deploys to production). Apply those here, on the throwaway database, so the owner can be
+      # told the file passed CI from zero before being asked to approve it. psql talks to the
+      # stack `supabase start` just brought up; the local connection string is the CLI's default.
+      - name: Apply the pending (not yet approved) migrations
+        run: |
+          shopt -s nullglob
+          files=(supabase/pending/*.sql)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no pending migrations"
+            exit 0
+          fi
+          command -v psql >/dev/null || sudo apt-get install -y --no-install-recommends postgresql-client
+          for f in "${files[@]}"; do
+            echo "::group::applying $f"
+            PGPASSWORD=postgres psql "postgresql://postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f "$f"
+            echo "::endgroup::"
+          done
+
       - name: Run database security tests
         run: supabase test db
 
@@ -136,6 +155,13 @@ jobs:
       # the unification is forward-only and this is what keeps it that way.
       - name: Assert new migrations use the timestamp convention
         run: node scripts/check-migration-naming.mjs
+
+      # supabase/migrations/ is not a staging area: the Supabase GitHub App applies what it
+      # finds there to PRODUCTION on every push to master. This asserts every file in it was
+      # approved by name (supabase/migrations/APPROVED.txt), so a draft reaches production only
+      # after the owner said so — see supabase/pending/README.md for the flow.
+      - name: Assert every migration in the applying directory was approved
+        run: node scripts/check-migration-approval.mjs
 
       # Unit tests, BEFORE the build: a logic regression should fail in seconds
       # here rather than after a full Next build. `vitest run` exits non-zero on
