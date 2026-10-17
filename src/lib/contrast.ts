@@ -109,14 +109,23 @@ export type LegibleFill = {
   fill: string;
   /** Ink that clears 4.5:1 on `fill` — white or the dark text token. */
   ink: string;
-  /** The quiet step of `ink` (for secondary lines): the lowest alpha that still clears 4.5:1. */
+  /** The quiet step of `ink` (for secondary lines): the lowest alpha that still clears 4.5:1
+   *  **against `fill`**. Only valid for text painted on `fill`. */
   inkMuted: string;
-  /** `ink` at 15% composited over `fill` — for translucent chips/borders that must stay visible. */
+  /** `ink` tinted over `fill` at the strongest alpha (up to 15%) that still lets `ink` clear the
+   *  bar on it — for translucent chips/borders/panels. A surface, so it carries its own guarantee:
+   *  `contrastRatio(ink, inkSoft)` and `contrastRatio(inkMutedSoft, inkSoft)` are both >= the bar. */
   inkSoft: string;
+  /** The quiet step of `ink` for text painted on **`inkSoft`**, which is a darker surface than
+   *  `fill`: `inkMuted`'s ratio does not transfer to it (measured: on a #F4A4C0 hero, inkMuted is
+   *  4.79:1 on the fill but 3.70:1 on the inkSoft panel). Use this one there. */
+  inkMutedSoft: string;
   /** How far the fill had to be darkened (0 = untouched), for tests and telemetry. */
   deepened: number;
   ratio: number;
   mutedRatio: number;
+  /** `contrastRatio(inkMutedSoft, inkSoft)` — never below the bar, by construction. */
+  mutedSoftRatio: number;
 };
 
 /**
@@ -127,6 +136,10 @@ export type LegibleFill = {
  *   #F4A4C0 (white 1.92:1, dark 8.0:1)  -> fill untouched, ink = the dark token
  *   #7047EB (white 5.54:1)              -> fill untouched, ink = white
  *   #3B82F6 (white 3.68:1, dark 4.33:1) -> deepened to ~4.51:1 with white
+ *
+ * Every colour this returns comes with the surface it was measured against: `inkMuted` only holds
+ * on `fill`, `inkMutedSoft` only on `inkSoft`. Painting one on the other's surface is how a
+ * 4.79:1 secondary line became a 3.70:1 one on the /fofo storefront — see the field docs.
  */
 export function resolveLegibleFill(
   brandColor: string | null | undefined,
@@ -155,14 +168,41 @@ export function resolveLegibleFill(
           break;
         }
       }
+      // `inkSoft` is a SURFACE, so the ink painted on it must clear the bar too — and the fixed
+      // 15% tint does not always allow that (on a deepened mid-blue fill, white@15% over it drops
+      // white below 4.5:1). Keep the strongest tint that still lets `ink` pass; at alpha 0 the
+      // surface is `fill` itself, where `ink` passes by definition, so this always terminates.
+      let soft = fill;
+      for (let a = 0.15; a >= 0.02; a -= 0.01) {
+        const candidate = compositeOver(ink, a, fill);
+        if (contrastRatio(ink, candidate) >= min) {
+          soft = candidate;
+          break;
+        }
+      }
+      // The same walk, but measured against `soft` — the surface the panels actually paint.
+      let mutedSoft: string = ink;
+      let mutedSoftRatio = contrastRatio(ink, soft);
+      for (let a = 0.95; a >= 0.5; a -= 0.05) {
+        const candidate = compositeOver(ink, a, soft);
+        const r = contrastRatio(candidate, soft);
+        if (r >= min) {
+          mutedSoft = candidate;
+          mutedSoftRatio = r;
+        } else {
+          break;
+        }
+      }
       return {
         fill,
         ink,
         inkMuted: muted,
-        inkSoft: compositeOver(ink, 0.15, fill),
+        inkSoft: soft,
+        inkMutedSoft: mutedSoft,
         deepened,
         ratio,
         mutedRatio,
+        mutedSoftRatio,
       };
     }
     return null;
@@ -187,8 +227,10 @@ export function resolveLegibleFill(
     ink: WHITE,
     inkMuted: WHITE,
     inkSoft: WHITE,
+    inkMutedSoft: WHITE,
     deepened: 0,
     ratio: contrastRatio(WHITE, fallback),
     mutedRatio: contrastRatio(WHITE, fallback),
+    mutedSoftRatio: contrastRatio(WHITE, fallback),
   };
 }

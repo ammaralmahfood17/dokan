@@ -85,6 +85,24 @@ describe('resolveLegibleFill', () => {
     }
   });
 
+  it('guarantees the quiet ink on the surface it is painted on, not just on the fill', () => {
+    // The /fofo storefront regression, pinned: a secondary line in `inkMuted` on an `inkSoft`
+    // panel measured 3.70:1 on production while `mutedRatio` said 4.79:1 — because the ratio was
+    // measured against `fill` and the text sat on the darker `inkSoft`. Every colour the resolver
+    // hands out must clear the bar against the surface whose name it carries.
+    const samples = ['#F4A4C0', '#F5ADC6', '#FF9B53', '#FF698F', '#E23B7B', '#A244FF', '#3B82F6', '#FFFFFF', '#000000'];
+    for (const brand of samples) {
+      const r = resolveLegibleFill(brand);
+      expect(contrastRatio(r.inkMutedSoft, r.inkSoft), `${brand} inkMutedSoft/inkSoft`).toBeGreaterThanOrEqual(4.5);
+      expect(r.mutedSoftRatio).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(r.ink, r.inkSoft), `${brand} ink/inkSoft`).toBeGreaterThanOrEqual(4.5);
+    }
+    // and the specific pair that was broken, kept as the regression's own evidence
+    const fofo = resolveLegibleFill('#F4A4C0');
+    expect(contrastRatio(fofo.inkMuted, fofo.inkSoft)).toBeLessThan(4.5);
+    expect(contrastRatio(fofo.inkMutedSoft, fofo.inkSoft)).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('falls back to the platform brand for junk or missing input', () => {
     for (const bad of [null, undefined, '', 'hotpink', '#12']) {
       const r = resolveLegibleFill(bad as string | null | undefined);

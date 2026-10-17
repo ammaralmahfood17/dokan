@@ -174,7 +174,9 @@ export default async function StorefrontPage({
               <p className="text-sm font-semibold">
                 مرحباً بك في {project.name}
               </p>
-              <p className="mt-1 text-xs" style={{ color: hero.inkMuted }}>
+              {/* inkMutedSoft, not inkMuted: this line sits on the `inkSoft` panel, and the
+                  muted step is only guaranteed against `fill` (measured 3.70:1 there on /fofo). */}
+              <p className="mt-1 text-xs" style={{ color: hero.inkMutedSoft }}>
                 القائمة غير متاحة حالياً — اسأل الكاشير للمساعدة
               </p>
             </div>
