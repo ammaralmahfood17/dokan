@@ -99,6 +99,53 @@ goes green — so the restore is what closes it. Also observed, NOT fixed: `serv
 through SECURITY DEFINER RPCs (their owner is `postgres`) — but a future direct admin-client read of
 that table would fail with 42501.
 
+### STATUS UPDATE, same day — these five were applied to production by the Supabase GitHub integration
+
+I did not apply them. The `Supabase Preview` check on every push comes from the **Supabase GitHub
+App** (`details_url: supabase.com/dashboard/project/ehbsdfnyetvszjcftaxh`), and it deploys the
+migrations it finds on the production branch. Pushing the files to `master` therefore applied all
+five — the apply columns above are stale, and the "PENDING approval" they carry was overtaken by the
+platform within minutes of the push. This matters beyond bookkeeping: **the per-migration approval
+gate the owner asked for cannot be enforced by pushing files and waiting.** To gate migrations, the
+files must stay out of `master` until approved, or the integration's deploy-on-push must be turned
+off in the Supabase project settings.
+
+State verified on production AFTER the integration applied them (read-only, same day):
+
+```
+roles            service_role = statement_timeout=15s, lock_timeout=8s, idle_in_transaction=30s
+inert_policies   orders_staff_insert=0, order_audit_logs_insert=0
+amount trigger   pg_trigger=0, pg_proc=0
+auth guard       auth_users_require_api_provisioning = 1
+sub_pay policies 2, both caching ( SELECT auth.uid()   <- the drift #17 closed
+ledger           44 rows = 44 files in the repo, no divergence
+```
+
+All ten `supabase/tests/phase*.sql` files were then run against PRODUCTION (each wrapped in its own
+transaction and rolled back): **109 assertions, 0 failed, 0 errors** — including `phase11`, the new
+signup-boundary file, and `phase4_5` test 8 that exposed the drift.
+
+The B-1 boundary was also proved end-to-end against the live endpoint, not just in the catalogue:
+
+```
+users_before = 4
+POST {SUPABASE_URL}/auth/v1/signup  (public anon key, valid payload)
+  -> 500 {"error_code":"unexpected_failure","msg":"Database error saving new user"}
+users_after  = 4   probe account created: none
+```
+
+Before this batch the same endpoint answered 422 `weak_password` — GoTrue's own validation of a
+request it would have created an account for. Now the insert is refused by the database. The app's
+own path still works: `POST /api/auth/signup` sets `app_metadata.provisioned_by`, which is the
+marker the guard requires, and it is the only place in the codebase that creates a user
+(`grep -rn "admin.auth.admin.createUser" src/` -> one hit, and it sets the marker).
+
+Side effect to keep in mind: any account created BY HAND in the Supabase dashboard is now refused
+until the marker is set. That is the intended enforcement, and the workaround is in migration #16's
+header. The cleaner presentation is still the platform setting (`disable_signup = true` in Auth
+settings) — the trigger is what makes the boundary true at the data layer, the setting is what makes
+the response graceful.
+
 **Ordering constraint for #16:** the code that sets the marker (`src/app/api/auth/signup/route.ts`)
 must be DEPLOYED BEFORE the migration is applied, or the app's own signup breaks until the deploy
 lands. Apply it after the Vercel build for this batch is Ready.
