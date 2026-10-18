@@ -410,9 +410,17 @@ function grants for the two RPCs phase12 did not pin (`adjust_ingredient_stock`,
 `42501`, and tenant A's project with tenant B's product id → `PRODUCT_NOT_FOUND`. Validated against
 production inside the file's rolled-back transaction (6/6) and by CI's fresh database
 (`Files=12, Tests=123, Result: PASS`). The "cancel restores portion stock" item was already covered
-by `phase1_inventory.sql`; the note claiming otherwise was stale. **Only the two-session race
-remains open** (two orders on the last unit, and two concurrent same-key submits): it needs dblink
-or a second live session, and is not worth faking in a single-session pgTAP file.
+by `phase1_inventory.sql`; the note claiming otherwise was stale. **Closed 2026-10-18 — the two-session race** (`supabase/tests/phase14_race_conditions.sql`). It runs
+both invariants over dblink — two orders on the last ingredient unit, and two concurrent submits
+with the same idempotency key — with 7 assertions, and CI executes them for real (`Files=13,
+Tests=130`, harness notice `second backend at 172.18.0.2:5432`). Two environment facts were learned
+the hard way: dblink executes inside the database container, so it must reach the server's own
+address and port (172.x:5432), never the host-published 54322; and race B also writes to the
+project, so race A's row counts must be scoped to race A's idempotency keys. The production role
+cannot install dblink (it is not superuser), so the invariants were first proven against production
+with two real psql sessions: race A gave one success + one OUT_OF_INGREDIENT_STOCK, 1 order, stock
+0.000, 1 consume movement; race B gave the same order id with `replayed` false/true, 1 row, stock
+99.000. The seed is deleted at the end of the file.
 
 **Closed 2026-10-18 — the reservations drift.** Production had a `reservations` table and three
 RPCs that no migration created, which blocked pgTAP coverage for them and made a fresh `db reset`
