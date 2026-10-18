@@ -401,8 +401,12 @@ exception was named) and passes 8/8 against production. A fresh `db reset` in CI
 
 **Open, with the reason (not defects):** the concurrency test the backend report asked
 for (two orders racing on the last unit in stock, and two with the same idempotency key) — it needs
-two live sessions and cannot be written honestly without one; the pgTAP coverage for the
-reservations RPCs, which is blocked on a **repo↔production drift**: production has the `reservations`
-table and its three RPCs, while no file in `supabase/migrations/` creates them, so a fresh database
-does not have them and a test naming them would fail CI. Versioning that schema is the prerequisite,
-and it is a migration, so it goes through `supabase/pending/` and the owner's approval.
+two live sessions and cannot be written honestly without one.
+
+**Closed 2026-10-18 — the reservations drift.** Production had a `reservations` table and three
+RPCs that no migration created, which blocked pgTAP coverage for them and made a fresh `db reset`
+diverge from production. The feature was already reverted (owner decision 2026-10-09) and `src/`
+had zero references, so the fix was to remove the dead schema rather than version it:
+`20261018202853_drop_unused_reservations.sql` (approved 2026-10-18, applied by the Supabase GitHub
+App — ledger row present, table/enum/3 functions gone, 0 rows lost). The pgTAP item disappears with
+the objects; there is nothing left to test.
