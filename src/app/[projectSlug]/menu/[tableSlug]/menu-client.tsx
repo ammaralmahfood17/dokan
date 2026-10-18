@@ -82,7 +82,7 @@ export function MenuClient({
 }: {
   project: Project;
   table: Table;
-  /** Table scan token from the QR URL (?k=…) — empty on a link that carries none. */
+  /** Table scan token, read on the client from `#k=` (the proxy moves a QR's `?k=` there). */
   /** D3: the page no longer receives the token - it is read from the URL on the client instead. */
   requireToken: boolean;
   /**
@@ -157,7 +157,11 @@ export function MenuClient({
     subscribeNever,
     () => {
       try {
-        return new URLSearchParams(window.location.search).get('k') ?? '';
+        // The proxy moves a QR link's `?k=` into the fragment (307) so the token never
+        // reaches the server render; older links may still arrive in the query.
+        const fromQuery = new URLSearchParams(window.location.search).get('k');
+        if (fromQuery) return fromQuery;
+        return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('k') ?? '';
       } catch {
         return '';
       }

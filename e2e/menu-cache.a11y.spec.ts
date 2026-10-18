@@ -1,32 +1,41 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
 /**
- * Owner decision D3 (2026-10-06) — the public menu is cached again, and the table token is not part
- * of the render.
+ * D3 (owner decision 2026-10-06) — the table token is not part of the render.
  *
- * Three properties, each asserted rather than reasoned about:
+ * Two properties, each asserted rather than reasoned about:
  *
- *  1. **The HTML is identical with and without `?k=`.** That is what makes the page cacheable at
- *     all; if the token reached the server render, the cache would be keyed by a secret and a
- *     cached response could leak or serve the wrong ordering state.
+ *  1. **The HTML does not depend on the token.** It used to be byte-identical because the
+ *     page was cached; since F-18 every page renders per request and carries a fresh CSP
+ *     nonce, so the comparison normalises the nonce and asserts everything else is equal.
  *  2. **The token never appears in the HTML.** `tables.qrcode` must not reach logs, Sentry,
- *     analytics, Referer headers - or the page source.
- *  3. **The ordering gate is decided client-side from the URL, and the server still enforces it.**
- *     With `REQUIRE_TABLE_TOKEN=true` the CTA reads "مسح الرمز" without a token and "إتمام الطلب"
- *     with one; enforcement on POST is covered by the route's own tests and the smoke script.
+ *     analytics, Referer headers - or the page source. The proxy answers `?k=` with a 307 to
+ *     `#k=` (fragments are never sent upstream), so the render never receives it.
  *
- * Runs under `playwright.a11y.config.ts` because that is the config with the bundled browser (the
- * main config pins `channel: 'chrome'`); the name ends in `.a11y.spec.ts` for the same reason.
+ * The ordering gate is still decided client-side from the URL, and the server still enforces
+ * it on POST.
  */
 const BASE = process.env.E2E_BASE_URL || 'https://dokanstore.xyz';
 const STRICT_BASE = process.env.E2E_BASE_URL_STRICT; // a server started with REQUIRE_TABLE_TOKEN=true
 const MENU = process.env.E2E_MENU_PATH || '/estikana/menu/table-1';
 
 // Fetch the RAW response, not `page.content()`: the live DOM is post-hydration and would compare
-// client state, not what the CDN would serve. This is what a cache-identity assertion has to look at.
-async function raw(request: APIRequestContext, url: string): Promise<string> {
+// client state, not what the server sent.
+const TOKEN = '0123456789abcdef0123456789abcdef';
+
+/**
+ * Fetch a raw response and blank out the only things that legitimately differ between two
+ * renders: the CSP nonce (it appears in attributes AND inside the escaped Flight payload, so
+ * it is replaced by value) and Sentry's per-request trace ids.
+ */
+async function normalisedRaw(request: APIRequestContext, url: string): Promise<string> {
   const res = await request.get(url);
-  return await res.text();
+  const body = await res.text();
+  const csp = res.headers()['content-security-policy'] ?? '';
+  const nonce = csp.match(/'nonce-([^']+)'/)?.[1];
+  return (nonce ? body.split(nonce).join('<nonce>') : body)
+    .replace(/(<meta name="sentry-trace" content=")[^"]*(")/g, '$1<normalised>$2')
+    .replace(/(<meta name="baggage" content=")[^"]*(")/g, '$1<normalised>$2');
 }
 
 async function html(page: Page, url: string): Promise<string> {
@@ -35,18 +44,20 @@ async function html(page: Page, url: string): Promise<string> {
   return page.content();
 }
 
-test('the menu HTML is byte-identical with and without ?k=', async ({ request }) => {
-  const without = await raw(request, `${BASE}${MENU}`);
-  const withToken = await raw(request, `${BASE}${MENU}?k=0123456789abcdef0123456789abcdef`);
+test('the menu HTML does not depend on the token', async ({ request }) => {
+  const without = await normalisedRaw(request, `${BASE}${MENU}`);
+  const withToken = await normalisedRaw(request, `${BASE}${MENU}?k=${TOKEN}`);
   expect(
     withToken === without,
-    'the cached HTML must not depend on the token: identical bytes are the point of D3'
+    'the token must not change the render: only the nonce and Sentry ids may differ'
   ).toBe(true);
 });
 
 test('the table token never appears in the served HTML', async ({ request }) => {
-  const body = await raw(request, `${BASE}${MENU}?k=0123456789abcdef0123456789abcdef`);
-  expect(body).not.toContain('0123456789abcdef0123456789abcdef');
+  const res = await request.get(`${BASE}${MENU}?k=${TOKEN}`);
+  const body = await res.text();
+  expect(new URL(res.url()).search, 'the token must be moved out of the query').not.toContain('k=');
+  expect(body).not.toContain(TOKEN);
   expect(body, 'no ?k= in the markup').not.toContain('?k=');
 });
 

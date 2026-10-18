@@ -9,12 +9,10 @@ import type { Category, Product, ProductOptionGroup, Project, Table } from '@/li
 import { buildRestaurantJsonLd, serializeJsonLd } from '@/lib/jsonld';
 import { isTableTokenRequired } from '@/lib/public-write-guard';
 
-// The page itself is DYNAMIC (no `export const revalidate`): the subscription
-// cutoff flips projects.is_active=false and that must cut the public menu
-// IMMEDIATELY, not up to 60s later (a cached page would keep serving a
-// deactivated store). Performance is preserved by unstable_cache on the menu
-// queries below (60s, project-tagged, purged on edit via /api/revalidate-menu).
-export const dynamicParams = true;
+// The page renders per request (the root layout is `force-dynamic`): the subscription cutoff
+// flips projects.is_active=false and that must cut the public menu IMMEDIATELY, not up to 60s
+// later. Performance is preserved by unstable_cache on the menu queries below (60s,
+// project-tagged, purged on edit via /api/revalidate-menu).
 
 // M5: on-demand invalidation. Product/category edits call
 // /api/revalidate-menu, which revalidateTag()s `menu-${projectId}`. The menu
@@ -75,24 +73,17 @@ async function getMenuData(projectId: string, tableId: string) {
   )();
 }
 
-// Owner decision D3 (2026-10-06): the public menu is CACHED again. The route no longer reads
-// `searchParams`, so the rendered HTML is identical for every visitor and carries no table token:
-//   * the token lives in the URL fragment the QR encodes and is read by the CLIENT,
-//   * /api/public/order still resolves and enforces it server-side (that is the security boundary),
-//   * the only server knob the HTML depends on is REQUIRE_TABLE_TOKEN, an env constant identical
-//     for every request, which is what makes this cacheable at all.
-// On-demand revalidation is unchanged: getMenuData tags its fetches `menu-${projectId}` and the menu
-// write path calls /api/revalidate-menu (revalidateTag). See src/lib/products-utils.ts.
-export const revalidate = 60;
-// The FIRST measurement of D3 failed and this line is why it is here. With the route merely
-// "dynamic", Next still builds its router state tree from the REQUEST url, so a request carrying the
-// token produced `"c":["","estikana","menu","table-1?k=<token>"]` inside the React Flight payload -
-// the served HTML was not identical with and without `?k=` AND the token was in the page source.
-// `force-static` tells Next the render must not depend on the request at all: the response is then
-// produced once per path and reused, the router state carries no query, and the client still reads
-// the token from its own browser URL (which the server never sees). Verified by
-// e2e/menu-cache.a11y.spec.ts; measured before this line with the token visible in the payload.
-export const dynamic = 'force-static';
+// D3 (owner decision 2026-10-06): the rendered HTML must not depend on the table token. The route
+// never reads `searchParams`; the token is read by the CLIENT from its own URL and enforced
+// server-side by /api/public/order, which is the security boundary. Data reads stay cached
+// (`unstable_cache` + the `menu-${projectId}` tag), so edits still show up immediately.
+//
+// F-18 (2026-10-18): this route is no longer `force-static` — every page renders per request so the
+// CSP can carry a nonce. `force-static` was what kept the token out of the Flight payload; that
+// guarantee now lives in src/proxy.ts, which answers a `?k=` document navigation with a 307 to the
+// same URL carrying `#k=` (fragments are never sent upstream), so the render never sees a token
+// while the printed QR keeps working. e2e/menu-cache.a11y.spec.ts asserts the served HTML has no
+// token and does not depend on it.
 
 // A2/UX-report: every public menu served under 3 hostnames had no canonical —
 // search engines saw duplicates. Store name also becomes the tab/OG title.
@@ -111,8 +102,8 @@ export async function generateMetadata({
   const title = `${project.name} — القائمة`;
   // F-5: an unknown table slug answered 200 with a SELF-referential canonical and no noindex —
   // a textbook soft-404 that Google may index as a menu that does not exist. The response stays
-  // 200 (Next swallows notFound() under force-static, and a page with a real message beats a
-  // blank shell), so the SEO half is closed here: noindex + canonical pointing at the STORE.
+  // 200 (a page with a real message beats a blank shell), so the SEO half is closed here:
+  // noindex + canonical pointing at the STORE.
   if (!table) {
     return {
       title,
@@ -147,8 +138,8 @@ export default async function PublicMenuPage({
   const supabase = createAnonClient();
 
   const project = await getPublicProject(projectSlug);
-  // Rendered, not `notFound()`: inside a force-static route Next swallows notFound() and serves a
-  // blank 200 shell (measured live). See src/components/menu/unavailable.tsx.
+  // Rendered, not `notFound()`: the designed "unavailable" state is more useful than the generic
+  // 404. See src/components/menu/unavailable.tsx.
   if (!project) return <Unavailable kind="store" />;
 
   // Resolve active table inside project

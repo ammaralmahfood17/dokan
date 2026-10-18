@@ -8,8 +8,6 @@ import { createAnonClient } from '@/lib/supabase/anon';
 import { Unavailable } from '@/components/menu/unavailable';
 import { compositeOver, resolveLegibleFill } from '@/lib/contrast';
 
-export const dynamicParams = true;
-
 /**
  * P1 (audit 2026-10-10) — the storefront root was the ONE public route with no cache wrapper.
  * Measured live: `x-vercel-cache: MISS` on every hit with TTFB 1.55-1.99s, while the sibling menu
@@ -44,22 +42,15 @@ function getStorefrontTables(projectId: string) {
   )();
 }
 
-export const revalidate = 60;
-
 /**
- * `force-static` is what actually makes the route cacheable — measured: with `unstable_cache` alone
- * `next build` still reported `ƒ /[projectSlug]` (Dynamic) and production answered
- * `x-vercel-cache: MISS`; the sibling menu route is `○` (Static) because it is force-static, and it
- * serves in 0.37s. Same page for every visitor (no cookies, no searchParams, token-free), so being
- * static is correct here.
+ * F-18: this route is rendered per request (the root layout is `force-dynamic`) so the
+ * proxy can stamp a CSP nonce on its scripts. It used to be `force-static` so the CDN could
+ * cache the HTML; that is the trade taken to drop `'unsafe-inline'`. The data reads below are
+ * still `unstable_cache` (60s, menu-tagged), so the per-request cost is the render, not the DB.
  *
- * CONSEQUENCE, stated because it is a real trade-off: inside a forced-static route Next SWALLOWS
- * `notFound()`, so an unknown slug can no longer answer a hard 404 — it renders the graceful
- * `<Unavailable kind="store" />` page with a 200 instead (the mechanism measured on the menu route).
- * Unknown slugs are not linked from anywhere, so the SEO cost is nil, and a page with a real message
- * beats a blank 200. To get the hard 404 back, drop this line and accept `MISS` + ~1.9s TTFB.
+ * The page is token-free (no cookies, no searchParams), which is why a per-request render is
+ * safe here: nothing user-specific enters the HTML beyond the store's own public data.
  */
-export const dynamic = 'force-static';
 
 export async function generateMetadata({
   params,
@@ -68,9 +59,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { projectSlug } = await params;
   const project = await getPublicProject(projectSlug);
-  // F-5: an unknown slug renders the graceful <Unavailable> UI with HTTP 200 (notFound() is
-  // swallowed inside a force-static route), so without this the page was indexable AS a store
-  // page. noindex is the SEO half of the fix; the 200 stays deliberate.
+  // F-5: an unknown slug renders the graceful <Unavailable> UI (HTTP 200) rather than a bare
+  // 404 — a page with a real message beats a blank shell — so without this the page was
+  // indexable AS a store page. noindex is the SEO half of the fix.
   if (!project) {
     return { title: 'المتجر غير متاح', robots: { index: false, follow: false } };
   }
@@ -98,7 +89,8 @@ export default async function StorefrontPage({
   const { projectSlug } = await params;
 
   const project = await getCachedPublicProject(projectSlug);
-  // Rendered, not `notFound()` — swallowed inside a force-static route (see the note above).
+  // Rendered, not `notFound()`: the designed "store unavailable" state is more useful than the
+  // generic 404, and the noindex in generateMetadata closes the SEO side (F-5).
   if (!project) return <Unavailable kind="store" />;
 
   const activeTables = await getStorefrontTables(project.id);
