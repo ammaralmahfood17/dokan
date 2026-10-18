@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCsp, isNoncePath } from './csp';
+import { buildCsp, buildStaticCsp, isNoncePath } from './csp';
 
 /** Parse a policy into directive → sources, so assertions read like the header. */
 function directives(policy: string): Map<string, string[]> {
@@ -13,7 +13,7 @@ function directives(policy: string): Map<string, string[]> {
 
 const NONCE = 'rAnd0m+/base64==';
 
-describe('buildCsp — every page gets the strict policy', () => {
+describe('buildCsp — the page policy', () => {
   const d = directives(buildCsp({ nonce: NONCE }));
 
   it('carries the nonce verbatim and never allows inline scripts', () => {
@@ -67,27 +67,70 @@ describe('buildCsp — every page gets the strict policy', () => {
   });
 });
 
-describe('isNoncePath', () => {
-  it('covers every HTML route', () => {
+describe('buildStaticCsp — the cached menu and the 404 shell', () => {
+  const d = directives(buildStaticCsp());
+
+  it('allows inline scripts, because that HTML is built once', () => {
+    expect(d.get('script-src')).toContain("'unsafe-inline'");
+    expect(d.get('script-src')?.some((s) => s.startsWith("'nonce-"))).toBe(false);
+    expect(d.get('script-src')).not.toContain("'strict-dynamic'");
+  });
+
+  it('keeps every other guarantee identical to the nonce policy', () => {
+    const strict = directives(buildCsp({ nonce: NONCE }));
+    for (const name of [
+      'default-src',
+      'frame-ancestors',
+      'object-src',
+      'base-uri',
+      'form-action',
+      'connect-src',
+      'img-src',
+      'font-src',
+      'worker-src',
+      'style-src',
+    ]) {
+      expect(d.get(name), name).toEqual(strict.get(name));
+    }
+  });
+
+  it('ships unsafe-eval to dev only', () => {
+    expect(d.get('script-src')).not.toContain("'unsafe-eval'");
+    expect(directives(buildStaticCsp({ dev: true })).get('script-src')).toContain("'unsafe-eval'");
+  });
+});
+
+describe('isNoncePath — which routes can carry a nonce', () => {
+  it('covers the pages that render per request', () => {
     for (const path of [
       '/',
       '/login',
       '/register',
-      '/terms',
+      '/reset-password',
+      '/update-password',
       '/onboarding',
+      '/terms',
+      '/privacy',
+      '/store-unavailable',
+      '/subscription-expired',
       '/dashboard',
       '/dashboard/orders',
       '/super-admin/users',
-      '/estikana',
-      '/estikana/menu/table-1',
-      '/does-not-exist',
+      '/estikana', // the tenant storefront (single segment)
     ]) {
       expect(isNoncePath(path), path).toBe(true);
     }
   });
 
-  it('leaves JSON API responses out', () => {
-    for (const path of ['/api/pos/orders', '/api/public/order', '/api/revalidate-menu']) {
+  it('excludes the cached menu, the 404 shell and JSON', () => {
+    for (const path of [
+      '/estikana/menu/table-1',
+      '/fofo/menu/t12',
+      '/no/such/deep/path',
+      '/a/b',
+      '/api/pos/orders',
+      '/api/public/order',
+    ]) {
       expect(isNoncePath(path), path).toBe(false);
     }
   });

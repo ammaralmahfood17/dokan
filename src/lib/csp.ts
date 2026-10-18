@@ -8,9 +8,35 @@
  * Header values are built here so the proxy and the tests read the same string.
  */
 
-/** Non-HTML responses (JSON) have no CSP scope. */
+const MENU_PATH = /^\/[^/]+\/menu\/[^/]+\/?$/;
+const STORE_PATH = /^\/[^/]+\/?$/;
+
+/** Pages that must render per request for the nonce (they carry `dynamic = 'force-dynamic'`). */
+const DYNAMIC_EXACT = new Set([
+  '/',
+  '/login',
+  '/register',
+  '/reset-password',
+  '/update-password',
+  '/onboarding',
+  '/terms',
+  '/privacy',
+  '/store-unavailable',
+  '/subscription-expired',
+]);
+const DYNAMIC_PREFIXES = ['/dashboard', '/super-admin'];
+
+/**
+ * Which paths get the NONCE policy. Everything else on the HTML matcher gets the static policy:
+ * the cached customer menu (`force-static`) and the 404 shell for an unmatched path (Next serves
+ * the static `_not-found` page, which has no nonce to stamp).
+ */
 export function isNoncePath(pathname: string): boolean {
-  return !pathname.startsWith('/api');
+  if (pathname.startsWith('/api')) return false;
+  if (MENU_PATH.test(pathname)) return false;
+  if (DYNAMIC_EXACT.has(pathname)) return true;
+  if (DYNAMIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return true;
+  return STORE_PATH.test(pathname);
 }
 
 export interface CspOptions {
@@ -58,6 +84,15 @@ export function buildCsp({ nonce, dev = false, https = true }: CspOptions): stri
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${evalSource} ${THIRD_PARTY}`,
     https
   );
+}
+
+/**
+ * The static policy — the cached menu and the 404 shell. Named separately so the only places that
+ * allow inline scripts are explicit, never a fallback branch of buildCsp().
+ */
+export function buildStaticCsp({ dev = false, https = true }: Omit<CspOptions, 'nonce'> = {}): string {
+  const evalSource = dev ? " 'unsafe-eval'" : '';
+  return assemble(`script-src 'self' 'unsafe-inline'${evalSource} ${THIRD_PARTY}`, https);
 }
 
 /** Same rule next.config.ts used: https only when the site URL really is https. */

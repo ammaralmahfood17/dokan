@@ -8,6 +8,9 @@ import { createAnonClient } from '@/lib/supabase/anon';
 import { Unavailable } from '@/components/menu/unavailable';
 import { compositeOver, resolveLegibleFill } from '@/lib/contrast';
 
+/** F-18: rendered per request so the proxy's CSP nonce reaches this page. */
+export const dynamic = 'force-dynamic';
+
 /**
  * P1 (audit 2026-10-10) — the storefront root was the ONE public route with no cache wrapper.
  * Measured live: `x-vercel-cache: MISS` on every hit with TTFB 1.55-1.99s, while the sibling menu

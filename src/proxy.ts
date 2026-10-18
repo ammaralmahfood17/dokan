@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
-import { buildCsp, siteIsHttps } from '@/lib/csp';
+import { buildCsp, buildStaticCsp, isNoncePath, siteIsHttps } from '@/lib/csp';
 
 /**
  * Next.js 16 proxy (replaces middleware.ts).
@@ -8,8 +8,9 @@ import { buildCsp, siteIsHttps } from '@/lib/csp';
  * Two jobs:
  *  1. Refresh the Supabase session and apply the UX-level route gates
  *     (`updateSession`) — only on the routes that need it.
- *  2. Emit the Content-Security-Policy. Every page renders per request and gets a
- *     fresh nonce.
+ *  2. Emit the Content-Security-Policy. Pages that render per request get a fresh
+ *     nonce; the cached menu and the 404 shell get the static policy (a nonce cannot
+ *     be attached to HTML built once).
  *
  * The nonce must be on the REQUEST header: that is how Next learns to stamp
  * `nonce="…"` onto its own script tags during server rendering.
@@ -18,9 +19,6 @@ import { buildCsp, siteIsHttps } from '@/lib/csp';
  * fragment (`#k=`) and old sheets' `?k=` never reaches the render because the
  * menu route is `force-static` (it ignores the query). The client reads both.
  */
-
-/** `/<store>/menu/<table>` — the customer menu (a QR link carries the token as `?k=`). */
-const MENU_PATH = /^\/[^/]+\/menu\/[^/]+\/?$/;
 
 /** Routes whose cookies/session the SSR client refreshes. */
 const SESSION_ROUTE_PREFIXES = [
@@ -46,30 +44,13 @@ function mintNonce(): string {
 }
 
 export async function proxy(request: NextRequest) {
-  const { pathname, searchParams } = request.nextUrl;
+  const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith('/api');
-
-  // D3: the token must not reach the render. A QR link carries it as `?k=`; because the page
-  // renders per request, Next would echo that into the Flight payload's router state. Move a
-  // document navigation to the fragment, which browsers never send upstream. New QR links are
-  // already printed with `#k=` (menuPath), so only older sheets pay this redirect.
-  if (
-    MENU_PATH.test(pathname) &&
-    searchParams.has('k') &&
-    !request.headers.has('rsc') &&
-    !searchParams.has('_rsc')
-  ) {
-    const token = searchParams.get('k') ?? '';
-    const clean = request.nextUrl.clone();
-    clean.searchParams.delete('k');
-    clean.hash = `k=${encodeURIComponent(token)}`;
-    return NextResponse.redirect(clean, 307);
-  }
   const env = { dev: process.env.NODE_ENV !== 'production', https: siteIsHttps() };
 
   // API responses are JSON — a CSP scope there is noise.
-  const nonce = !isApi ? mintNonce() : null;
-  const csp = nonce ? buildCsp({ nonce, ...env }) : null;
+  const nonce = !isApi && isNoncePath(pathname) ? mintNonce() : null;
+  const csp = isApi ? null : nonce ? buildCsp({ nonce, ...env }) : buildStaticCsp(env);
 
   if (nonce && csp) {
     request.headers.set('x-nonce', nonce);

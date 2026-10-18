@@ -10,13 +10,14 @@ import {
   CreditCard,
 } from 'lucide-react';
 
+/** F-18: rendered per request so the proxy's CSP nonce reaches this page. */
+export const dynamic = 'force-dynamic';
 // سنة الحقوق بتوقيت البحرين (خادم UTC قد يعرض 2026 بينما البحرين في 2027
 // عند منتصف ليلة 31 ديسمبر — Intl مرة واحدة لا إعادة حساب في كل render)
 const COPYRIGHT_YEAR = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
   timeZone: 'Asia/Bahrain',
 }).format(new Date());
-
 
 const FEATURES = [
   {
@@ -50,7 +51,6 @@ const FEATURES = [
     desc: 'من التسجيل إلى أول طلب حقيقي في أقل من سبع دقائق.',
   },
 ] as const;
-
 export default function LandingPage() {
   return (
     <div className="storefront landing-shell min-h-dvh">
@@ -70,7 +70,6 @@ export default function LandingPage() {
           </div>
         </div>
       </header>
-
       <main>
         <section className="landing-hero mx-auto max-w-6xl px-4 py-20 text-center sm:py-28">
           <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-start lg:text-start">
@@ -111,7 +110,6 @@ export default function LandingPage() {
             </div>
           </div>
         </section>
-
         {/* F-11: one vertical rhythm for the landing — content sections carry py-16/sm:py-20 on
             the CONTAINER (the bordered strip below puts it on its inner grid so the border stays
             tight to the content), and the hero is allowed exactly one step more. Measured before
@@ -134,7 +132,6 @@ export default function LandingPage() {
             })}
           </div>
         </section>
-
         {/* ── E2: Pricing ── */}
         <section className="mx-auto max-w-6xl px-4 py-16 sm:py-20">
           <div className="text-center">
@@ -146,7 +143,6 @@ export default function LandingPage() {
               لا رسوم خفية. لا عقود. ابدأ مجاناً وادفع لما تكون جاهز.
             </p>
           </div>
-
           <div className="mx-auto max-w-sm">
             <div className="overflow-hidden rounded-[var(--radius-xl)] border-2 border-[var(--color-primary)] bg-[var(--color-surface)] shadow-lg">
               <div className="bg-[var(--color-primary)] px-6 py-5 text-center text-white">
@@ -154,7 +150,6 @@ export default function LandingPage() {
                 <h3 className="text-lg font-bold">باقة دكان</h3>
                 <p className="mt-1 text-sm text-white/90">كل شي تحتاجه لإدارة مطعمك</p>
               </div>
-
               <div className="px-6 py-6 text-center">
                 <div className="mb-1 flex items-baseline justify-center gap-1">
                   <span className="text-4xl font-extrabold text-[var(--color-text)]" dir="ltr">7</span>
@@ -162,7 +157,6 @@ export default function LandingPage() {
                   <span className="text-sm text-[var(--color-text-muted)]">/ شهرياً</span>
                 </div>
                 <p className="text-xs text-[var(--color-text-muted)]">بعد 14 يوم تجربة مجانية كاملة</p>
-
                 <ul className="mt-6 space-y-3 text-start text-sm">
                   {[
                     'قائمة QR غير محدودة',
@@ -179,7 +173,6 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-
                 <Link href="/register" className="btn btn-primary btn-lg mt-7 w-full">
                   ابدأ تجربتك المجانية
                 </Link>
@@ -191,7 +184,6 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
-
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-xs text-[var(--color-text-muted)]">
         © {COPYRIGHT_YEAR} دكان — منصة طلبات للمؤسسات الصغيرة
         <div className="mt-2 flex items-center justify-center gap-4">

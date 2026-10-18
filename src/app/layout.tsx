@@ -27,14 +27,13 @@ import { getSiteUrl } from '@/lib/site-url';
 import { InstallPrompt } from '@/components/ui/install-prompt';
 import './globals.css';
 
-/**
- * F-18: every page renders per request so the proxy can stamp a nonce on the CSP
- * (`src/lib/csp.ts`). This is the deliberate trade for `script-src` without
- * `'unsafe-inline'`: HTML is no longer CDN-cached. The data reads are still cached
- * (`unstable_cache`, project-tagged), so the added cost is the render, not the DB.
- * A route that must be static again cannot have a nonce — see the note in csp.ts.
+/*
+ * F-18: rendering is decided per ROUTE, not here. A page that carries the CSP nonce must be
+ * dynamic; the cached customer menu must stay static. A root-level `force-dynamic` would make
+ * that impossible (Next throws "Dynamic server usage" for a nested force-static page), so each
+ * page (or its segment layout) declares `dynamic = 'force-dynamic'` itself, and
+ * scripts/check-route-rendering.mjs fails the build if a page that needs a nonce is prerendered.
  */
-export const dynamic = 'force-dynamic';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseOrigin = supabaseUrl ? new URL(supabaseUrl).origin : '';

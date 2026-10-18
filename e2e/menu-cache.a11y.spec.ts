@@ -60,6 +60,17 @@ test('the table token never appears in the served HTML', async ({ request }) => 
   expect(body, 'no ?k= in the markup').not.toContain('?k=');
 });
 
+test('the cached menu keeps the static policy (the documented F-18 exception)', async ({ request }) => {
+  const res = await request.get(`${BASE}${MENU}`);
+  const headers = await res.headersArray();
+  const cspHeaders = headers.filter((h) => h.name.toLowerCase() === 'content-security-policy');
+  expect(cspHeaders.length, 'exactly one CSP header — two would be enforced together').toBe(1);
+  const csp = cspHeaders[0]!.value;
+  expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+  expect(csp).not.toContain("'nonce-");
+  expect(csp).toContain("frame-ancestors 'none'");
+});
+
 test('with REQUIRE_TABLE_TOKEN=true the gate follows the URL, client-side', async ({ page }) => {
   // NOTE: E2E_BASE_URL_STRICT must be a target rendered with the flag TRUE and must NOT share an ISR
   // cache directory with a flag-false server: the cached HTML carries whichever value was rendered,

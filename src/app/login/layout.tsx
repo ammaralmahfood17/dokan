@@ -12,6 +12,9 @@ import type { Metadata } from 'next';
  * The same file fixes the missing landmark: /login, /register and /reset-password had NO <main>
  * (axe: `landmark-one-main` + `region` x3-7), so the skip link in the root layout jumped to a div.
  */
+/** F-18: rendered per request so the proxy's CSP nonce reaches this client page. */
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'تسجيل الدخول',
   description: 'سجّل الدخول إلى لوحة تحكم دكان لإدارة طلبات مطعمك ومقهاك.',

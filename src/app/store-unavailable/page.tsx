@@ -1,5 +1,8 @@
 import Link from 'next/link';
 
+/** F-18: rendered per request so the proxy's CSP nonce reaches this page. */
+export const dynamic = 'force-dynamic';
+
 /** Shown when a staff member's project has been archived (soft-deleted). */
 export default function StoreUnavailablePage() {
   return (

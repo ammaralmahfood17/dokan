@@ -199,6 +199,11 @@ jobs:
           fi
           echo "ok — no service-role key in .next/static"
 
+      - name: Assert page rendering matches the CSP model
+        # F-18: a prerendered page served with a nonce header has no nonce in its HTML, so all of
+        # its scripts are blocked. Only the cached customer menu (and the 404 shell) may be static.
+        run: node scripts/check-route-rendering.mjs
+
       - name: Assert security headers are configured
         run: |
           # The CSP moved from next.config.ts to src/proxy.ts (F-18): dynamic routes get a

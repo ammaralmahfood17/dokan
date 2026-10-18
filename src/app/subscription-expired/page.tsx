@@ -1,5 +1,8 @@
 import Link from 'next/link';
 
+/** F-18: rendered per request so the proxy's CSP nonce reaches this page. */
+export const dynamic = 'force-dynamic';
+
 export default function SubscriptionExpiredPage() {
   return (
     <div className="storefront flex min-h-dvh items-center justify-center bg-[var(--color-bg)] p-4">

@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation';
 import { requireSuperAdmin } from '@/lib/super-admin';
 import { SuperAdminHeader } from './super-admin-header';
 
+/** F-18: rendered per request so the proxy's CSP nonce reaches this page. */
+export const dynamic = 'force-dynamic';
+
 /**
  * Super-admin route group guard. Runs on EVERY request (server component
  * layout) — a session that was valid at page load does not carry over; each

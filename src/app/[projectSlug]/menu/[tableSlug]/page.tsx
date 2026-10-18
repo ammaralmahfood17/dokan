@@ -88,12 +88,19 @@ async function getMenuData(projectId: string, tableId: string) {
 // server-side by /api/public/order, which is the security boundary. Data reads stay cached
 // (`unstable_cache` + the `menu-${projectId}` tag), so edits still show up immediately.
 //
-// F-18 (2026-10-18): this route renders per request, like every other page, so the CSP can carry
-// a nonce. `force-static` is NOT possible while the root layout is `force-dynamic` — Next throws
-// "Dynamic server usage" on every request (measured: the menu 500'd on production). The cost is
-// measured and accepted: see docs/audit-2026-10/REMEDIATION.md F-18. The token stays out of the
-// render because the client reads it from its own URL and the server never sees it as state;
+// F-18 (2026-10-18): this is the ONE page that stays `force-static` — every QR scan is served from
+// the CDN. The strict nonce policy needs a per-request render (measured: +0.6-0.9 s on the QR
+// flow), so src/lib/csp.ts gives exactly this path the static policy and src/proxy.ts skips the
+// nonce. This works because the statically/dynamically decision lives per ROUTE: a nested
+// `force-static` under a `force-dynamic` ROOT throws "Dynamic server usage" (that is how the
+// menu 500'd on 2026-10-18 — see the commit trail), so the root layout sets neither.
+//
+// `force-static` is also what keeps the table token out of the render: the route ignores the
+// query entirely, so `?k=` never reaches the Flight payload. The client reads the token from its
+// own URL (query on sheets printed before 2026-10-18, fragment on newer ones) and
 // /api/public/order enforces it.
+export const dynamic = 'force-static';
+export const revalidate = 60;
 
 // A2/UX-report: every public menu served under 3 hostnames had no canonical —
 // search engines saw duplicates. Store name also becomes the tab/OG title.

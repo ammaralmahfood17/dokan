@@ -5,6 +5,9 @@ import { AppSidebar } from '@/components/dashboard/app-sidebar';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { getImpersonationById } from '@/lib/super-admin';
 
+/** F-18: rendered per request so the proxy's CSP nonce reaches this page. */
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {
