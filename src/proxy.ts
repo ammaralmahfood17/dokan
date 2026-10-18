@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
-import { buildCsp, isNoncePath, siteIsHttps } from '@/lib/csp';
+import { buildCsp, buildStaticCsp, isStaticCspPath, siteIsHttps } from '@/lib/csp';
 
 /**
  * Next.js 16 proxy (replaces middleware.ts).
@@ -8,16 +8,16 @@ import { buildCsp, isNoncePath, siteIsHttps } from '@/lib/csp';
  * Two jobs:
  *  1. Refresh the Supabase session and apply the UX-level route gates
  *     (`updateSession`) — only on the routes that need it.
- *  2. Emit the Content-Security-Policy for every page, with a per-request nonce.
+ *  2. Emit the Content-Security-Policy. Every page renders per request and gets a
+ *     fresh nonce, EXCEPT the cached customer menu (`/…/menu/…`), which stays
+ *     `force-static` for QR-scan speed and therefore gets the static policy.
  *
  * The nonce must be on the REQUEST header: that is how Next learns to stamp
  * `nonce="…"` onto its own script tags during server rendering.
  *
- * It also keeps the table's scan token out of the render: a menu request carrying
- * `?k=` is rewritten for the SERVER with that parameter removed, so the RSC
- * payload can never contain it (the browser URL keeps it; the client reads it
- * from its own location). This replaces what `force-static` used to guarantee —
- * see the D3 note in src/app/[projectSlug]/menu/[tableSlug]/page.tsx.
+ * The table's scan token is not handled here: new QR links carry it in the
+ * fragment (`#k=`) and old sheets' `?k=` never reaches the render because the
+ * menu route is `force-static` (it ignores the query). The client reads both.
  */
 
 /** Routes whose cookies/session the SSR client refreshes. */
@@ -29,9 +29,6 @@ const SESSION_ROUTE_PREFIXES = [
   '/reset-password',
   '/api/pos',
 ] as const;
-
-/** `/<store>/menu/<table>` — the customer menu (token lives in `?k=`). */
-const MENU_PATH = /^\/[^/]+\/menu\/[^/]+\/?$/;
 
 function needsSession(pathname: string): boolean {
   return SESSION_ROUTE_PREFIXES.some(
@@ -47,47 +44,22 @@ function mintNonce(): string {
 }
 
 export async function proxy(request: NextRequest) {
-  const { pathname, searchParams } = request.nextUrl;
+  const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith('/api');
-
-  // D3: the table token must never reach the render. A QR link carries it as `?k=…`; the
-  // server would echo it into the Flight payload's router state (Next builds that from the
-  // request URL), so a document navigation is moved to the fragment, which browsers never
-  // send upstream. Printed QRs keep working unchanged; the client reads `#k=`.
-  if (
-    MENU_PATH.test(pathname) &&
-    searchParams.has('k') &&
-    !request.headers.has('rsc') &&
-    !searchParams.has('_rsc')
-  ) {
-    const token = searchParams.get('k') ?? '';
-    const clean = request.nextUrl.clone();
-    clean.searchParams.delete('k');
-    clean.hash = `k=${encodeURIComponent(token)}`;
-    return NextResponse.redirect(clean, 307);
-  }
+  const env = { dev: process.env.NODE_ENV !== 'production', https: siteIsHttps() };
 
   // API responses are JSON — a CSP scope there is noise.
-  const nonce = !isApi && isNoncePath(pathname) ? mintNonce() : null;
-  const csp = nonce
-    ? buildCsp({
-        nonce,
-        dev: process.env.NODE_ENV !== 'production',
-        https: siteIsHttps(),
-      })
-    : null;
+  const nonce = !isApi && !isStaticCspPath(pathname) ? mintNonce() : null;
+  const csp = isApi ? null : nonce ? buildCsp({ nonce, ...env }) : buildStaticCsp(env);
 
   if (nonce && csp) {
     request.headers.set('x-nonce', nonce);
     request.headers.set('Content-Security-Policy', csp);
   }
 
-  let response;
-  if (needsSession(pathname)) {
-    response = await updateSession(request);
-  } else {
-    response = NextResponse.next({ request });
-  }
+  const response = needsSession(pathname)
+    ? await updateSession(request)
+    : NextResponse.next({ request });
 
   if (csp) response.headers.set('Content-Security-Policy', csp);
 

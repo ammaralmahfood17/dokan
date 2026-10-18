@@ -56,9 +56,19 @@ test('the menu HTML does not depend on the token', async ({ request }) => {
 test('the table token never appears in the served HTML', async ({ request }) => {
   const res = await request.get(`${BASE}${MENU}?k=${TOKEN}`);
   const body = await res.text();
-  expect(new URL(res.url()).search, 'the token must be moved out of the query').not.toContain('k=');
   expect(body).not.toContain(TOKEN);
   expect(body, 'no ?k= in the markup').not.toContain('?k=');
+});
+
+test('the cached menu keeps the static policy (the one F-18 exception)', async ({ request }) => {
+  const res = await request.get(`${BASE}${MENU}`);
+  const headers = await res.headersArray();
+  const cspHeaders = headers.filter((h) => h.name.toLowerCase() === 'content-security-policy');
+  expect(cspHeaders.length, 'exactly one CSP header — two would be enforced together').toBe(1);
+  const csp = cspHeaders[0]!.value;
+  expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+  expect(csp).not.toContain("'nonce-");
+  expect(csp).toContain("frame-ancestors 'none'");
 });
 
 test('with REQUIRE_TABLE_TOKEN=true the gate follows the URL, client-side', async ({ page }) => {

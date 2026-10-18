@@ -1,14 +1,16 @@
 /**
  * The Content-Security-Policy, in one place.
  *
- * Every page is rendered per request (root layout sets `dynamic = 'force-dynamic'`), so
- * `src/proxy.ts` can mint a nonce, put the policy on the REQUEST header (that is how
- * Next learns to stamp `nonce="…"` onto its own script tags) and on the RESPONSE header.
- * `script-src` therefore never needs `'unsafe-inline'` on an HTML response.
+ * Almost every page renders per request (root layout sets `dynamic = 'force-dynamic'`), so
+ * `src/proxy.ts` can mint a nonce, put the policy on the REQUEST header (that is how Next
+ * learns to stamp `nonce="…"` onto its own script tags) and on the RESPONSE header.
  *
- * The trade, accepted deliberately: a per-request render means no CDN-cached HTML. The
- * data reads stay cached (`unstable_cache`, project-tagged), so the cost is the render,
- * not the database. `/api/*` returns JSON and gets no CSP.
+ * The ONE exception is the customer menu (`/…/menu/…`): it stays `force-static` so every QR
+ * scan is served from the CDN — measured, the per-request render cost 0.6-0.9 s on the
+ * ordering flow, and that is the page customers hit at the table. A build-time page cannot
+ * carry a nonce, so it gets the static policy with `'unsafe-inline'`. Its content is
+ * React-escaped tenant data and the token never reaches the render (see the D3 note in the
+ * menu page), so the exposure is the framework's own inline bootstrap.
  *
  * Header values are built here so the proxy and the tests read the same string.
  */
@@ -16,6 +18,11 @@
 /** Non-HTML responses (JSON) have no CSP scope. */
 export function isNoncePath(pathname: string): boolean {
   return !pathname.startsWith('/api');
+}
+
+/** The cached customer menu — the only route on the static policy. */
+export function isStaticCspPath(pathname: string): boolean {
+  return /^\/[^/]+\/menu\/[^/]+\/?$/.test(pathname);
 }
 
 export interface CspOptions {
@@ -27,16 +34,8 @@ export interface CspOptions {
   https?: boolean;
 }
 
-export function buildCsp({ nonce, dev = false, https = true }: CspOptions): string {
-  if (!nonce) {
-    throw new Error('CSP requires a nonce — without one script-src would need unsafe-inline');
-  }
-  const evalSource = dev ? " 'unsafe-eval'" : '';
-
-  // Sentry + Turnstile origins stay listed even though `'strict-dynamic'` makes
-  // CSP3 browsers ignore host allowlists: they are the CSP2 fallback.
-  const scriptSrc = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${evalSource} https://*.sentry.io https://challenges.cloudflare.com`;
-
+/** Shared directives; only `script-src` differs between the two policies. */
+function assemble(scriptSrc: string, https: boolean): string {
   return [
     "default-src 'self'",
     scriptSrc,
@@ -57,6 +56,29 @@ export function buildCsp({ nonce, dev = false, https = true }: CspOptions): stri
     "form-action 'self'",
     ...(https ? ['upgrade-insecure-requests'] : []),
   ].join('; ');
+}
+
+/** Sentry + Turnstile origins stay listed for CSP2 browsers (`strict-dynamic` hides them in CSP3). */
+const THIRD_PARTY = 'https://*.sentry.io https://challenges.cloudflare.com';
+
+export function buildCsp({ nonce, dev = false, https = true }: CspOptions): string {
+  if (!nonce) {
+    throw new Error('CSP requires a nonce — without one script-src would need unsafe-inline');
+  }
+  const evalSource = dev ? " 'unsafe-eval'" : '';
+  return assemble(
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${evalSource} ${THIRD_PARTY}`,
+    https
+  );
+}
+
+/**
+ * The static policy — cached menu only. Kept a separate, named function so the one place that
+ * allows inline scripts is explicit and greppable, never a fallback branch of buildCsp().
+ */
+export function buildStaticCsp({ dev = false, https = true }: Omit<CspOptions, 'nonce'> = {}): string {
+  const evalSource = dev ? " 'unsafe-eval'" : '';
+  return assemble(`script-src 'self' 'unsafe-inline'${evalSource} ${THIRD_PARTY}`, https);
 }
 
 /** Same rule next.config.ts used: https only when the site URL really is https. */

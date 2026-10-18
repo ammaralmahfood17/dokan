@@ -9,10 +9,10 @@ import type { Category, Product, ProductOptionGroup, Project, Table } from '@/li
 import { buildRestaurantJsonLd, serializeJsonLd } from '@/lib/jsonld';
 import { isTableTokenRequired } from '@/lib/public-write-guard';
 
-// The page renders per request (the root layout is `force-dynamic`): the subscription cutoff
-// flips projects.is_active=false and that must cut the public menu IMMEDIATELY, not up to 60s
-// later. Performance is preserved by unstable_cache on the menu queries below (60s,
-// project-tagged, purged on edit via /api/revalidate-menu).
+// The page is `force-static` (bottom of this header): every QR scan is served from the CDN, which
+// is the point of D3. The cost of that choice is stated with the config at the bottom: a
+// deactivated store can stay visible for up to the 60 s revalidate window (or until the menu tag
+// is purged). Data reads below are `unstable_cache`, project-tagged, purged on edit.
 
 // M5: on-demand invalidation. Product/category edits call
 // /api/revalidate-menu, which revalidateTag()s `menu-${projectId}`. The menu
@@ -78,12 +78,16 @@ async function getMenuData(projectId: string, tableId: string) {
 // server-side by /api/public/order, which is the security boundary. Data reads stay cached
 // (`unstable_cache` + the `menu-${projectId}` tag), so edits still show up immediately.
 //
-// F-18 (2026-10-18): this route is no longer `force-static` — every page renders per request so the
-// CSP can carry a nonce. `force-static` was what kept the token out of the Flight payload; that
-// guarantee now lives in src/proxy.ts, which answers a `?k=` document navigation with a 307 to the
-// same URL carrying `#k=` (fragments are never sent upstream), so the render never sees a token
-// while the printed QR keeps working. e2e/menu-cache.a11y.spec.ts asserts the served HTML has no
-// token and does not depend on it.
+// F-18 (2026-10-18): this is the ONE route that keeps `force-static`. The strict nonce policy
+// needs a per-request render, and measured on production that cost the QR flow 0.6-0.9 s (the
+// page renders ~100 KB of menu HTML per request) — at a table, on a phone, that is the wrong
+// trade. A build-time page cannot carry a nonce, so src/lib/csp.ts gives this path the static
+// policy (`buildStaticCsp`, the only place `'unsafe-inline'` remains) and src/proxy.ts skips the
+// nonce here. `force-static` is also what keeps `?k=` out of the Flight payload: the route
+// ignores the query entirely, the client reads the token from its own URL (query on sheets
+// printed before 2026-10-18, fragment on newer ones), and /api/public/order enforces it.
+export const dynamic = 'force-static';
+export const revalidate = 60;
 
 // A2/UX-report: every public menu served under 3 hostnames had no canonical —
 // search engines saw duplicates. Store name also becomes the tab/OG title.
