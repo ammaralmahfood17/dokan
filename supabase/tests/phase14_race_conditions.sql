@@ -77,12 +77,20 @@ DECLARE
   v_ok    boolean := false;
   v_res   jsonb;
   v_err   text := 'no candidate worked';
+  v_log   text := '';
   v_detail text;
   i       int;
 BEGIN
-  v_hosts := ARRAY['/var/run/postgresql', '/tmp', '127.0.0.1'];
-  IF inet_server_addr() IS NOT NULL AND inet_server_addr()::text <> '127.0.0.1' THEN
-    v_hosts := v_hosts || inet_server_addr()::text;
+  v_hosts := ARRAY[]::text[];
+  BEGIN
+    SELECT array_agg(trim(x)) INTO v_hosts
+      FROM unnest(string_to_array(
+        coalesce(current_setting('unix_socket_directories', true), '/var/run/postgresql,/tmp'), ',')) AS x;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  v_hosts := coalesce(v_hosts, ARRAY[]::text[]) || ARRAY['127.0.0.1', '/var/run/postgresql', '/tmp'];
+  IF inet_server_addr() IS NOT NULL THEN
+    v_hosts := v_hosts || host(inet_server_addr());
   END IF;
 
   v_ports := ARRAY[coalesce(current_setting('race.port', true), inet_server_port()::text)];
@@ -92,12 +100,12 @@ BEGIN
     FOREACH v_port IN ARRAY v_ports LOOP
       BEGIN
         PERFORM dblink_connect('race1', format(
-          'host=%s port=%s dbname=%s user=%s password=%s',
+          'host=%s port=%s dbname=%s user=%s password=%s connect_timeout=5',
           v_host, v_port, current_database(),
           coalesce(current_setting('race.user', true), current_user),
           coalesce(current_setting('race.password', true), 'postgres')));
         PERFORM dblink_connect('race2', format(
-          'host=%s port=%s dbname=%s user=%s password=%s',
+          'host=%s port=%s dbname=%s user=%s password=%s connect_timeout=5',
           v_host, v_port, current_database(),
           coalesce(current_setting('race.user', true), current_user),
           coalesce(current_setting('race.password', true), 'postgres')));
@@ -105,7 +113,9 @@ BEGIN
         EXIT;
       EXCEPTION WHEN OTHERS THEN
         GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
-        v_err := SQLERRM || coalesce(' / ' || v_detail, '') || ' [' || v_host || ':' || v_port || ']';
+        v_err := SQLERRM;
+        v_log := left(v_log || format(' [%s:%s %s %s%s]', v_host, v_port, SQLSTATE, SQLERRM,
+          coalesce(' / ' || v_detail, '')), 1200);
         BEGIN PERFORM dblink_disconnect('race1'); EXCEPTION WHEN OTHERS THEN NULL; END;
         BEGIN PERFORM dblink_disconnect('race2'); EXCEPTION WHEN OTHERS THEN NULL; END;
       END;
@@ -114,8 +124,8 @@ BEGIN
   END LOOP;
 
   IF NOT v_ok THEN
-    UPDATE race_env SET connected = false, reason = v_err;
-    RAISE NOTICE 'race harness: skipped, no second backend after probing (%: %)', v_err, array_to_string(v_ports, ',');
+    UPDATE race_env SET connected = false, reason = left(v_log, 900);
+    RAISE NOTICE 'race harness: skipped, no second backend (%)', v_log;
     RETURN;
   END IF;
   RAISE NOTICE 'race harness: second backend at %:%', v_h, v_p;
