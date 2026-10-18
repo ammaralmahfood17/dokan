@@ -403,6 +403,17 @@ exception was named) and passes 8/8 against production. A fresh `db reset` in CI
 for (two orders racing on the last unit in stock, and two with the same idempotency key) — it needs
 two live sessions and cannot be written honestly without one.
 
+**Closed 2026-10-18 — three of the four pgTAP gaps** (`supabase/tests/phase13_inventory_boundaries.sql`):
+function grants for the two RPCs phase12 did not pin (`adjust_ingredient_stock`,
+`replace_product_recipe`: anon denied, authenticated allowed), and cross-tenant rejection on
+`create_order_transactional` executed in BOTH shapes — a member of tenant A naming tenant B →
+`42501`, and tenant A's project with tenant B's product id → `PRODUCT_NOT_FOUND`. Validated against
+production inside the file's rolled-back transaction (6/6) and by CI's fresh database
+(`Files=12, Tests=123, Result: PASS`). The "cancel restores portion stock" item was already covered
+by `phase1_inventory.sql`; the note claiming otherwise was stale. **Only the two-session race
+remains open** (two orders on the last unit, and two concurrent same-key submits): it needs dblink
+or a second live session, and is not worth faking in a single-session pgTAP file.
+
 **Closed 2026-10-18 — the reservations drift.** Production had a `reservations` table and three
 RPCs that no migration created, which blocked pgTAP coverage for them and made a fresh `db reset`
 diverge from production. The feature was already reverted (owner decision 2026-10-09) and `src/`
