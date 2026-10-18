@@ -34,6 +34,13 @@ describe('scrubTokenFromUrl()', () => {
     expect(scrubTokenFromUrl(`https://x/y?k=${TOKEN}#top`)).toBe('https://x/y?k=REDACTED#top');
   });
 
+  it('strips the token from the FRAGMENT (new QR links carry #k=)', () => {
+    expect(scrubTokenFromUrl(`https://dokanstore.xyz/estikana/menu/table-1#k=${TOKEN}`)).toBe(
+      'https://dokanstore.xyz/estikana/menu/table-1#k=REDACTED'
+    );
+    expect(scrubTokenFromUrl(`/x#k=${TOKEN}&top`)).toBe('/x#k=REDACTED&top');
+  });
+
   it('strips a relative URL (what a client breadcrumb usually holds)', () => {
     expect(scrubTokenFromUrl(`/estikana/menu/table-1?k=${TOKEN}`)).toBe(
       '/estikana/menu/table-1?k=REDACTED'

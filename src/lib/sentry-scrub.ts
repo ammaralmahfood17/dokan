@@ -1,8 +1,9 @@
 /**
  * Scan-token scrubber — 2026-10 audit remediation, amendment A2.
  *
- * The public menu URL carries the table's 128-bit scan token in the `k` query parameter
- * (`/…/menu/table-1?k=<32 hex>`). That token is a credential: it authorises ordering at a
+ * The public menu URL carries the table's 128-bit scan token in the `k` parameter
+ * (`/…/menu/table-1#k=<32 hex>`, and `?k=` on sheets printed before 2026-10-18 — the proxy
+ * redirects those to the fragment). That token is a credential: it authorises ordering at a
  * physical table. Sentry is a THIRD-PARTY system, so a token that reaches an event is a
  * credential leaked off-site — and it can arrive three different ways:
  *
@@ -17,8 +18,8 @@
  * Pure and dependency-free so it can be unit-tested without initialising the SDK.
  */
 
-/** `?k=…` or `&k=…` anywhere in a URL (stops at the next delimiter or whitespace). */
-const TOKEN_PARAM = /([?&])k=[^&#\s]*/gi;
+/** `?k=…`, `&k=…` or `#k=…` anywhere in a URL (stops at the next delimiter or whitespace). */
+const TOKEN_PARAM = /([?&#])k=[^&#\s]*/gi;
 
 const REDACTED = '$1k=REDACTED';
 

@@ -127,10 +127,14 @@ export function formatMoney(value: number, currency = 'BHD'): string {
  * Public menu URL. `tableToken` is the table's 128-bit scan token (tables.qrcode) and is
  * what the printed QR encodes — it is REQUIRED for ordering (audit 2026-10-05, T2 #1).
  * Omitting it yields a browse-only link, which the storefront's table picker still uses.
+ *
+ * The token goes in the FRAGMENT, not the query (F-18): fragments are never sent to the
+ * server, so no render, log or Sentry event can contain it. Sheets printed before
+ * 2026-10-18 carry `?k=`; src/proxy.ts answers those with a 307 to `#k=`, so both work.
  */
 export function menuPath(projectSlug: string, tableSlug: string, tableToken?: string): string {
   const path = `/${projectSlug}/menu/${tableSlug}`;
-  return tableToken ? `${path}?k=${encodeURIComponent(tableToken)}` : path;
+  return tableToken ? `${path}#k=${encodeURIComponent(tableToken)}` : path;
 }
 
 /** Default table slug from table number */
