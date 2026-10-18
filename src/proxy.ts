@@ -19,6 +19,9 @@ import { buildCsp, siteIsHttps } from '@/lib/csp';
  * menu route is `force-static` (it ignores the query). The client reads both.
  */
 
+/** `/<store>/menu/<table>` — the customer menu (a QR link carries the token as `?k=`). */
+const MENU_PATH = /^\/[^/]+\/menu\/[^/]+\/?$/;
+
 /** Routes whose cookies/session the SSR client refreshes. */
 const SESSION_ROUTE_PREFIXES = [
   '/dashboard',
@@ -43,8 +46,25 @@ function mintNonce(): string {
 }
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
   const isApi = pathname.startsWith('/api');
+
+  // D3: the token must not reach the render. A QR link carries it as `?k=`; because the page
+  // renders per request, Next would echo that into the Flight payload's router state. Move a
+  // document navigation to the fragment, which browsers never send upstream. New QR links are
+  // already printed with `#k=` (menuPath), so only older sheets pay this redirect.
+  if (
+    MENU_PATH.test(pathname) &&
+    searchParams.has('k') &&
+    !request.headers.has('rsc') &&
+    !searchParams.has('_rsc')
+  ) {
+    const token = searchParams.get('k') ?? '';
+    const clean = request.nextUrl.clone();
+    clean.searchParams.delete('k');
+    clean.hash = `k=${encodeURIComponent(token)}`;
+    return NextResponse.redirect(clean, 307);
+  }
   const env = { dev: process.env.NODE_ENV !== 'production', https: siteIsHttps() };
 
   // API responses are JSON — a CSP scope there is noise.

@@ -24,6 +24,17 @@ import { isTableTokenRequired } from '@/lib/public-write-guard';
  * and "a slug nobody printed", and the page body already resolves it — but the body cannot tell
  * metadata anything. Cached under the menu tag so an added/deactivated table shows up at once.
  */
+/**
+ * The project read used to be the only uncached query on this page — one PostgREST round trip
+ * (~150 ms floor, see references/perf-round-trip-floor.md) on every QR scan. Cached by slug,
+ * same 60 s window as the menu data it gates.
+ */
+function getCachedProject(slug: string) {
+  return unstable_cache(() => getPublicProject(slug), ['menu-project', slug], {
+    revalidate: 60,
+  })();
+}
+
 async function getMenuTable(projectId: string, tableSlug: string) {
   return unstable_cache(
     async () => {
@@ -136,7 +147,7 @@ export default async function PublicMenuPage({
   // so signed-in users see other restaurants' menus too
   const supabase = createAnonClient();
 
-  const project = await getPublicProject(projectSlug);
+  const project = await getCachedProject(projectSlug);
   // Rendered, not `notFound()`: the designed "unavailable" state is more useful than the generic
   // 404. See src/components/menu/unavailable.tsx.
   if (!project) return <Unavailable kind="store" />;
