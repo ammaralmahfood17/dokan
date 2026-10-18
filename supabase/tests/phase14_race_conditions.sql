@@ -6,12 +6,16 @@
 --   B. two concurrent submits with the SAME idempotency key -> one insert, one replay, one row.
 --
 -- dblink is used because a second backend has its own transaction and therefore cannot see
--- uncommitted rows — so the seed below is committed on purpose and removed at the end. The
--- connection string defaults to `supabase start` (127.0.0.1:54322, postgres/postgres) and can be
--- overridden through the GUCs `race.host`, `race.port`, `race.user`, `race.password`.
+-- uncommitted rows — so the seed below is committed on purpose and removed at the end.
 --
--- If a second connection cannot be opened the assertions are SKIPPED with the reason (visible in
--- the TAP output) instead of failing: a missing dblink must never break CI.
+-- Connection probing: dblink runs INSIDE the database server, so the host-published port is
+-- useless there (`supabase start` publishes 54322 on the host while the server listens on 5432).
+-- The candidates are therefore the server's own port first, then 5432/54322, on 127.0.0.1 and on
+-- the server's own address. `race.host` / `race.port` / `race.user` / `race.password` GUCs can
+-- pin it explicitly.
+--
+-- If no second backend can be opened the assertions are SKIPPED with the reason (visible in the
+-- TAP output) instead of failing: a missing dblink must never break CI.
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 DO $init$ BEGIN
@@ -64,26 +68,58 @@ INSERT INTO race_env VALUES (false, 'not attempted');
 -- ── drive both races ───────────────────────────────────────────────────────────────────────────
 DO $race$
 DECLARE
-  v_conn  text;
-  v_q     text;
+  v_hosts text[];
+  v_ports text[];
+  v_host  text;
+  v_port  text;
+  v_h     text;
+  v_p     text;
+  v_ok    boolean := false;
   v_res   jsonb;
-  v_err   text;
+  v_err   text := 'no candidate worked';
   i       int;
 BEGIN
-  v_q := format(
-    'host=%s port=%s dbname=%s user=%s password=%s',
-    coalesce(current_setting('race.host', true), '127.0.0.1'),
-    coalesce(current_setting('race.port', true), '54322'),
-    current_database(),
-    coalesce(current_setting('race.user', true), 'postgres'),
-    coalesce(current_setting('race.password', true), 'postgres')
-  );
+  v_hosts := ARRAY[coalesce(current_setting('race.host', true), '127.0.0.1')];
+  IF inet_server_addr() IS NOT NULL AND inet_server_addr()::text <> '127.0.0.1' THEN
+    v_hosts := v_hosts || inet_server_addr()::text;
+  END IF;
+
+  v_ports := ARRAY[coalesce(current_setting('race.port', true), inet_server_port()::text)];
+  v_ports := v_ports || ARRAY['5432', '54322'];
+
+  FOREACH v_host IN ARRAY v_hosts LOOP
+    FOREACH v_port IN ARRAY v_ports LOOP
+      BEGIN
+        PERFORM dblink_connect('race1', format(
+          'host=%s port=%s dbname=%s user=%s password=%s',
+          v_host, v_port, current_database(),
+          coalesce(current_setting('race.user', true), current_user),
+          coalesce(current_setting('race.password', true), 'postgres')));
+        PERFORM dblink_connect('race2', format(
+          'host=%s port=%s dbname=%s user=%s password=%s',
+          v_host, v_port, current_database(),
+          coalesce(current_setting('race.user', true), current_user),
+          coalesce(current_setting('race.password', true), 'postgres')));
+        v_ok := true; v_h := v_host; v_p := v_port;
+        EXIT;
+      EXCEPTION WHEN OTHERS THEN
+        v_err := SQLERRM;
+        BEGIN PERFORM dblink_disconnect('race1'); EXCEPTION WHEN OTHERS THEN NULL; END;
+        BEGIN PERFORM dblink_disconnect('race2'); EXCEPTION WHEN OTHERS THEN NULL; END;
+      END;
+    END LOOP;
+    EXIT WHEN v_ok;
+  END LOOP;
+
+  IF NOT v_ok THEN
+    UPDATE race_env SET connected = false, reason = v_err;
+    RAISE NOTICE 'race harness: skipped, no second backend after probing (%: %)', v_err, array_to_string(v_ports, ',');
+    RETURN;
+  END IF;
+  RAISE NOTICE 'race harness: second backend at %:%', v_h, v_p;
 
   BEGIN
     -- ── race A: last unit of stock, different idempotency keys ────────────────────────────────
-    PERFORM dblink_connect('race1', v_q);
-    PERFORM dblink_connect('race2', v_q);
-
     FOR i IN 1..2 LOOP
       PERFORM dblink_send_query('race' || i, format($q$
         WITH cfg AS (
@@ -115,8 +151,14 @@ BEGIN
     END LOOP;
 
     -- ── race B: same idempotency key, plenty of stock ─────────────────────────────────────────
-    PERFORM dblink_connect('race1', v_q);
-    PERFORM dblink_connect('race2', v_q);
+    PERFORM dblink_connect('race1', format(
+      'host=%s port=%s dbname=%s user=%s password=%s', v_h, v_p, current_database(),
+      coalesce(current_setting('race.user', true), current_user),
+      coalesce(current_setting('race.password', true), 'postgres')));
+    PERFORM dblink_connect('race2', format(
+      'host=%s port=%s dbname=%s user=%s password=%s', v_h, v_p, current_database(),
+      coalesce(current_setting('race.user', true), current_user),
+      coalesce(current_setting('race.password', true), 'postgres')));
 
     FOR i IN 1..2 LOOP
       PERFORM dblink_send_query('race' || i, $q$
@@ -146,7 +188,7 @@ BEGIN
     END LOOP;
 
     UPDATE race_env SET connected = true, reason = NULL;
-    RAISE NOTICE 'race harness: second backend connected, both races executed';
+    RAISE NOTICE 'race harness: both races executed';
   EXCEPTION WHEN OTHERS THEN
     v_err := SQLERRM;
     BEGIN PERFORM dblink_disconnect('race1'); EXCEPTION WHEN OTHERS THEN NULL; END;
