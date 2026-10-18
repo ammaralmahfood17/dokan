@@ -1,15 +1,6 @@
 import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 
-/** Dev needs the bundler's eval sourcemaps; production does not. */
-const isDev = process.env.NODE_ENV !== 'production';
-
-/** Emit `upgrade-insecure-requests` only when the app is actually served over
- *  https. Keying it on NODE_ENV would break LOCAL verification: `next start`
- *  runs with NODE_ENV=production on http://localhost, and the browser would then
- *  upgrade every same-origin subresource to https and fail to load them. */
-const siteIsHttps = (process.env.NEXT_PUBLIC_SITE_URL || '').startsWith('https://');
-
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -24,63 +15,18 @@ const securityHeaders = [
   },
   // audit T1 #22: X-XSS-Protection removed. The header is obsolete - browsers dropped the XSS
   // auditor, and block mode has been a liability rather than a control for years - and keeping it
-  // reads as "XSS is handled" when the actual controls are the CSP below and React's escaping.
+  // reads as "XSS is handled" when the actual controls are the CSP (src/lib/csp.ts, emitted by
+  // src/proxy.ts) and React's escaping.
   // Dead security theatre is what makes the real posture hard to review. ci.yml now asserts its
   // ABSENCE, so it cannot creep back.
-  // F1: Content-Security-Policy. Next.js needs 'unsafe-inline'/'unsafe-eval'
-  // for its runtime scripts; Supabase
-  // is the API/WS origin; Sentry for error reporting. frame-ancestors 'none'
-  // hardens against clickjacking on top of X-Frame-Options.
-  {
-    key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      // 'unsafe-inline' is unavoidable until Next can be given a per-request nonce
-      // (deferred: a nonce makes previously-static pages uncacheable, which costs the
-      // landing page's LCP). 'unsafe-eval' is only needed by the DEV bundler's eval
-      // sourcemaps, so production does not ship it any more.
-      // challenges.cloudflare.com serves the Turnstile widget script (owner decision 7).
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://*.sentry.io https://challenges.cloudflare.com`,
-      // next/font is gone; the خط ثمانية faces are INLINED in the CSS as data: URIs
-      // (the Thmanyah licence permits web embedding only as part of a compiled
-      // product — see scripts/build-thmanyah-fonts.mjs), so the stylesheet itself
-      // needs no other origin.
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' blob: data: https://*.supabase.co",
-      // SENTRY FIX (verified by the CSP census, 2026-10-05): the DSN host is
-      // region-scoped — o4511834824638464.ingest.us.sentry.io — and a CSP host
-      // wildcard must match the WHOLE suffix, so "*.ingest.sentry.io" does NOT match
-      // "…ingest.us.sentry.io". Every browser event from every merchant was being
-      // refused by our own policy (server events were unaffected, which is why the
-      // health check's browserMonitoring flag looked fine). "*.sentry.io" covers all
-      // regions.
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://challenges.cloudflare.com",
-      // data: is REQUIRED here, not a convenience loosening. The خط ثمانية licence allows
-      // embedding the font only as part of a compiled product, so every face is inlined in
-      // the stylesheet as a data: URI instead of being served as a file. The old value
-      // ("font-src 'self'") silently blocked all four faces — Chrome refused each one with
-      // «violates the following Content Security Policy directive: "font-src 'self'"», the
-      // @font-face rules reported status "error", and the entire product rendered in system
-      // fonts while every test stayed green.
-      // Still no third-party font origin: fonts.gstatic.com / fonts.googleapis.com stay dead.
-      "font-src 'self' data:",
-      // Coverage the policy never declared: these fell back to default-src, which
-      // happened to be 'self' — declaring them is explicit and blocks <object>/<embed>
-      // outright. blob: on worker-src is required by Sentry's Replay compression worker.
-      "object-src 'none'",
-      "worker-src 'self' blob:",
-      "manifest-src 'self'",
-      // Turnstile renders an iframe on this origin. Narrowest allowance that still works —
-      // 'none' silently broke the widget (the challenge never appeared, and the server then
-      // refused signup for a missing token).
-      "frame-src https://challenges.cloudflare.com",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      // only when the site is really served over https (see siteIsHttps above).
-      ...(siteIsHttps ? ['upgrade-insecure-requests'] : []),
-    ].join('; '),
-  },
+  // F-18: the Content-Security-Policy is NOT configured here any more. It lives in
+  // `src/lib/csp.ts` and is emitted per request by `src/proxy.ts`, because the app
+  // needs two policies: dynamic routes (`/dashboard/*`, `/super-admin/*`) get a
+  // strict nonce policy, while prerendered/ISR pages keep `'unsafe-inline'` (a
+  // nonce cannot be attached to HTML rendered at build time, and ISR slugs are
+  // rendered per tenant at runtime). Declaring a second CSP here would send TWO
+  // policies on the nonce routes — browsers enforce both, and the looser one would
+  // defeat the strict one. Do not re-add it.
 ];
 
 const nextConfig: NextConfig = {

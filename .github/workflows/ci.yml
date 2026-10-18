@@ -201,22 +201,46 @@ jobs:
 
       - name: Assert security headers are configured
         run: |
-          node -e "
-            const m = require('./.next/routes-manifest.json');
-            const h = JSON.stringify(m.headers || '');
-            const need = ['content-security-policy','strict-transport-security',
-                          'x-content-type-options','frame-ancestors','referrer-policy'];
-            const lower = h.toLowerCase();
-            const missing = need.filter(k => !lower.includes(k));
-            if (missing.length) { console.error('MISSING HEADERS:', missing); process.exit(1); }
-            // audit T1 #22: the obsolete header must not creep back. It reads as "XSS is handled"
-            // while the real controls are the CSP and React's escaping.
-            if (lower.includes('x-xss-protection')) {
-              console.error('X-XSS-PROTECTION is back — obsolete, and it misrepresents the posture (audit T1 #22)');
+          # The CSP moved from next.config.ts to src/proxy.ts (F-18): dynamic routes get a
+          # per-request nonce, prerendered routes get the static policy. What CI can prove
+          # from the build output is (a) the header rules here still carry the non-CSP
+          # headers, (b) no CSP was left in the manifest — a second policy would be enforced
+          # alongside the proxy's and the looser one would win — and (c) the proxy still
+          # wires the policy in.
+          node -e '
+            const m = require("./.next/routes-manifest.json");
+            const h = JSON.stringify(m.headers || "").toLowerCase();
+            const need = ["strict-transport-security","x-content-type-options",
+                          "x-frame-options","referrer-policy","permissions-policy"];
+            const missing = need.filter(k => !h.includes(k));
+            if (missing.length) { console.error("MISSING HEADERS:", missing); process.exit(1); }
+            if (h.includes("content-security-policy")) {
+              console.error("CSP is back in next.config.ts — it would be sent alongside the proxy policy (F-18)");
               process.exit(1);
             }
-            console.log('ok — security headers present, none deprecated');
-          "
+            // audit T1 #22: the obsolete header must not creep back. It reads as "XSS is handled"
+            // while the real controls are the CSP and React escaping.
+            if (h.includes("x-xss-protection")) {
+              console.error("X-XSS-PROTECTION is back — obsolete, and it misrepresents the posture (audit T1 #22)");
+              process.exit(1);
+            }
+            console.log("ok — header rules present, none deprecated, no duplicate CSP");
+          '
+          grep -q "from '@/lib/csp'" src/proxy.ts \
+            || { echo '::error::proxy.ts no longer imports the CSP module'; exit 1; }
+          node -e '
+            // Next 16 (Turbopack) registers the proxy as a Node function, not in
+            // middleware-manifest.json — the matcher lives here.
+            const mf = require("./.next/server/functions-config-manifest.json");
+            const entry = (mf.functions || {})["/_middleware"];
+            if (!entry) { console.error("no /_middleware function in the build — the proxy was not compiled"); process.exit(1); }
+            const source = (entry.matchers || []).map((m) => m.originalSource || m.regexp).join(" ");
+            if (!source.includes("_next/static")) {
+              console.error("proxy matcher does not look like the page catch-all: " + source);
+              process.exit(1);
+            }
+            console.log("ok — proxy compiled and matches page routes");
+          '
 
   e2e-readiness:
     name: E2E is configured (not executed)

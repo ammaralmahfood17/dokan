@@ -928,11 +928,10 @@ test('R12 the landing page ships the full security header set with a locked-down
 });
 
 /**
- * The app serves a STATIC CSP from next.config.ts and never mints a nonce
- * (there is no middleware in the app that generates one; Next's own script
- * tags carry nonce="$undefined"). With a nonce-less policy, `script-src
- * 'self'` is only meaningful if the page's scripts are all same-origin — so
- * that is what is asserted here, per script src.
+ * The app serves a STATIC CSP for prerendered/ISR pages and a NONCE policy for
+ * per-request routes (F-18, src/lib/csp.ts + src/proxy.ts). With a nonce-less
+ * policy, `script-src 'self'` is only meaningful if the page's scripts are all
+ * same-origin — so that is what is asserted here, per script src.
  */
 test('R13 every script the page loads is same-origin, as the nonce-less CSP requires', async ({ request }) => {
   const res = await request.get('/');
@@ -951,6 +950,33 @@ test('R13 every script the page loads is same-origin, as the nonce-less CSP requ
   // No inline event handlers either — the classic way to defeat a CSP that
   // only restricts script sources.
   expect(html, 'page must not use inline on* event handlers').not.toMatch(/\son[a-z]+\s*=\s*["']/i);
+});
+
+/**
+ * F-18: a route rendered per request must ship a NONCE policy, not the static
+ * one. `/dashboard` is dynamic (session-dependent), so the policy is minted by
+ * src/proxy.ts on every hit — even the guest redirect carries it.
+ */
+test('R13b dynamic routes serve a nonce CSP with no unsafe-inline', async ({ request }) => {
+  const nonces = new Set<string>();
+  for (let i = 0; i < 2; i += 1) {
+    const res = await request.get('/dashboard', { maxRedirects: 0 });
+    const csp = res.headers()['content-security-policy'] ?? '';
+    expect(csp, 'dynamic routes must carry a CSP').toContain("script-src");
+
+    const scriptSrc = csp
+      .split(';')
+      .map((d) => d.trim())
+      .find((d) => d.startsWith('script-src')) ?? '';
+
+    expect(scriptSrc, 'the dynamic policy must not allow inline scripts').not.toContain("'unsafe-inline'");
+    expect(scriptSrc, 'the dynamic policy must carry a nonce').toMatch(/'nonce-[\w+/=]+'/);
+    expect(scriptSrc).toContain("'strict-dynamic'");
+    expect(csp).toContain("frame-ancestors 'none'");
+
+    nonces.add(scriptSrc.match(/'nonce-([^']+)'/)![1]!);
+  }
+  expect(nonces.size, 'each request must mint a fresh nonce').toBe(2);
 });
 
 /* ══════════════════════════════════════════════════════════════════════ *
