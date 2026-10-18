@@ -66,7 +66,7 @@ src/
 
 **القاعدة بعد الموجة 4:** كل **قاعدة** تعيش في `lib/` كدالة نقية مختبَرة، وكل **عرض** في `components/`. لا قاعدة داخل مكوّن عميل. أكبر ملف عميل اليوم ~666 سطرًا (كان 1048).
 
-## الـAPI Routes <!-- routes: 28 -->
+## الـAPI Routes <!-- routes: 29 -->
 
 <!-- الجدول محروس آليًا: scripts/check-architecture-doc.mjs -->
 
@@ -87,6 +87,7 @@ src/
 | `/api/revalidate-menu` | إبطال كاش القائمة بعد تعديل المنتجات | |
 | `/api/push/subscribe` | تسجيل اشتراك إشعارات | ✅ |
 | `/api/push/unsubscribe` | إلغاء اشتراك | |
+| `/api/notifications/test` | تنبيه تجريبي لقناتي الإشعارات (عضو، 5/10 دقائق) | ✅ |
 | `/api/telegram/link` | ربط/فك ربط بوت تيليجرام | |
 | `/api/telegram/webhook` | مستقبل تحديثات تيليجرام (سرّي) | ✅ |
 | `/api/super-admin/archive-project` | أرشفة (حذف ناعم) + سبب إلزامي | ✅ |
