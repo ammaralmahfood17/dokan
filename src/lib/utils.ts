@@ -130,7 +130,8 @@ export function formatMoney(value: number, currency = 'BHD'): string {
  *
  * The token goes in the FRAGMENT, not the query (F-18): fragments are never sent to the
  * server, so no render, log or Sentry event can contain it. Sheets printed before
- * 2026-10-18 carry `?k=`; src/proxy.ts answers those with a 307 to `#k=`, so both work.
+ * 2026-10-18 carry `?k=`; the menu is `force-static`, so that query never reaches the render
+ * either, and the client reads both.
  */
 export function menuPath(projectSlug: string, tableSlug: string, tableToken?: string): string {
   const path = `/${projectSlug}/menu/${tableSlug}`;

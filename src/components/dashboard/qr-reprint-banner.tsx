@@ -3,8 +3,9 @@
 /**
  * QR reprint banner — 2026-10 audit remediation, owner decision 1.
  *
- * The new table QR sheets carry the table's 128-bit scan token in `?k=`; the ones already
- * printed do not. Enforcement (`REQUIRE_TABLE_TOKEN`) stays OFF until tokenless orders have
+ * Table QR sheets printed from 2026-10-18 carry the 128-bit scan token in the FRAGMENT (`#k=`),
+ * so it never reaches the server; sheets printed earlier carry it as `?k=`. The ones already
+ * printed *without* a token at all also exist. Enforcement (`REQUIRE_TABLE_TOKEN`) stays OFF until tokenless orders have
  * been zero for 48h, so this banner is the merchant-facing half: it tells them to reprint
  * before the old sheets stop working, and it stays until they act.
  *

@@ -82,7 +82,7 @@ export function MenuClient({
 }: {
   project: Project;
   table: Table;
-  /** Table scan token, read on the client from `#k=` (the proxy moves a QR's `?k=` there). */
+  /** Table scan token, read on the client from `#k=` (new sheets) or `?k=` (older sheets). */
   /** D3: the page no longer receives the token - it is read from the URL on the client instead. */
   requireToken: boolean;
   /**
@@ -157,8 +157,8 @@ export function MenuClient({
     subscribeNever,
     () => {
       try {
-        // The proxy moves a QR link's `?k=` into the fragment (307) so the token never
-        // reaches the server render; older links may still arrive in the query.
+        // New sheets put the token in the fragment (`#k=`, never sent upstream); sheets
+        // printed before 2026-10-18 still use the query.
         const fromQuery = new URLSearchParams(window.location.search).get('k');
         if (fromQuery) return fromQuery;
         return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('k') ?? '';

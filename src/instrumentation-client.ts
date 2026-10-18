@@ -73,7 +73,8 @@ if (clientDsn) {
       // customer's menu URL is most likely to be reported.
       return scrubSentryEvent(event);
     },
-    // A2: every fetch to /api/public/order carries ?k=… in the breadcrumb trail.
+    // A2: the menu URL can carry the token (fragment on new sheets, query on old ones) and
+    // fetch breadcrumbs record URLs, so scrub every breadcrumb.
     beforeBreadcrumb(breadcrumb) {
       return scrubSentryBreadcrumb(breadcrumb);
     },

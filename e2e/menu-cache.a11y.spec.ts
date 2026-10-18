@@ -77,15 +77,33 @@ test('with REQUIRE_TABLE_TOKEN=true the gate follows the URL, client-side', asyn
   // which is how the first run of this test failed (two `next start` processes share .next/cache).
   // A `next dev` server with REQUIRE_TABLE_TOKEN=true is the easy target.
   test.skip(!STRICT_BASE, 'set E2E_BASE_URL_STRICT to a server rendered with REQUIRE_TABLE_TOKEN=true');
-  // the cart bar only exists once something is in the cart, so add one product first
-  const add = page.getByRole('button', { name: /إضافة .* إلى السلة/ }).first();
+
+  // The cart bar only exists once something is in the cart, so add one product first. Products
+  // with a required option group open a picker (size), and the confirm button stays disabled
+  // until one is chosen — the old version clicked once and waited for a bar that never appeared.
+  const addFirstProduct = async () => {
+    await page.getByRole('button', { name: /إضافة .* إلى السلة/ }).first().click();
+    const dialog = page.locator('[role="dialog"]');
+    if (await dialog.count()) {
+      const size = dialog.getByRole('radio').first();
+      // the option list scrolls inside a bottom sheet; a force click still refuses an
+      // element the browser reports as outside the viewport, so dispatch it directly
+      if (await size.count()) await size.evaluate((el) => (el as HTMLElement).click());
+      const confirm = dialog.getByRole('button', { name: 'أضف إلى السلة', exact: true });
+      if (await confirm.count()) {
+        await confirm.scrollIntoViewIfNeeded();
+        await confirm.click({ force: true });
+      }
+    }
+    await page.waitForTimeout(400);
+  };
+
   await html(page, `${STRICT_BASE}${MENU}`);
   await expect(page.getByRole('button', { name: /إضافة .* إلى السلة/ }).first()).toBeVisible();
-  await page.getByRole('button', { name: /إضافة .* إلى السلة/ }).first().click();
+  await addFirstProduct();
   await expect(page.getByText('مسح الرمز').first()).toBeVisible();
 
   await html(page, `${STRICT_BASE}${MENU}?k=anything-at-all`);
-  await page.getByRole('button', { name: /إضافة .* إلى السلة/ }).first().click();
+  await addFirstProduct();
   await expect(page.getByText('إتمام الطلب').first()).toBeVisible();
-  void add;
 });
