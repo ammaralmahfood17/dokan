@@ -6,10 +6,12 @@
  */
 import * as Sentry from '@sentry/nextjs';
 import { scrubSentryBreadcrumb, scrubSentryEvent } from '@/lib/sentry-scrub';
+import { shouldEnableSentry } from '@/lib/sentry-env';
 
 const dsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
 
-if (dsn) {
+// Same deployment gate as the server config — see src/lib/sentry-env.ts.
+if (dsn && shouldEnableSentry(process.env.VERCEL_ENV, process.env.SENTRY_ENABLE_DEV)) {
   Sentry.init({
     dsn,
     tracesSampleRate: 0.1,

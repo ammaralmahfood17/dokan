@@ -128,7 +128,11 @@ export async function sendPushToProject(
       `[Push] ALL ${failed} notification deliveries failed for project ${projectId} — merchant received nothing`,
       'error'
     );
-  } else if (failed > 0) {
+  } else if (failed > expiredEndpoints.length) {
+    // Only warn when a subscription failed for a reason OTHER than being expired.
+    // An expired endpoint (410/404) is already reported at info level above and deleted
+    // below, so warning about it on every order is noise: on 2026-10-16 one stale device
+    // produced "1/2 deliveries failed" for an order the merchant's other device received.
     Sentry.captureMessage(
       `[Push] ${failed}/${subs.length} deliveries failed for project ${projectId}`,
       'warning'

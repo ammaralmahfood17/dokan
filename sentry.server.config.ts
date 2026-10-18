@@ -7,10 +7,14 @@
  */
 import * as Sentry from '@sentry/nextjs';
 import { scrubSentryBreadcrumb, scrubSentryEvent } from '@/lib/sentry-scrub';
+import { shouldEnableSentry } from '@/lib/sentry-env';
 
 const dsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
 
-if (dsn) {
+// Report only from a real deployment. Without this gate every local `next start`
+// reported as environment=development (90 `Error: aborted` events from
+// localhost:3101/api/vitals were sitting in the project's unresolved list).
+if (dsn && shouldEnableSentry(process.env.VERCEL_ENV, process.env.SENTRY_ENABLE_DEV)) {
   Sentry.init({
     dsn,
     tracesSampleRate: 0.1,

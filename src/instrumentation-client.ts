@@ -24,6 +24,7 @@
  */
 import * as Sentry from '@sentry/nextjs';
 import { scrubSentryBreadcrumb, scrubSentryEvent } from '@/lib/sentry-scrub';
+import { shouldEnableSentry } from '@/lib/sentry-env';
 
 /**
  * Promote the deferred Thmanyah sheet to an applying stylesheet.
@@ -52,8 +53,15 @@ if (typeof document !== 'undefined') {
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
 
 const clientDsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+// Deployment gate for the browser bundle — see src/lib/sentry-env.ts. The browser
+// cannot read VERCEL_ENV (only NEXT_PUBLIC_* is inlined), so Vercel's
+// NEXT_PUBLIC_VERCEL_ENV is the signal; a local `next dev`/`next start` has neither.
+const clientVercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV;
 
-if (clientDsn) {
+if (
+  clientDsn &&
+  shouldEnableSentry(clientVercelEnv, process.env.NEXT_PUBLIC_SENTRY_ENABLE_DEV)
+) {
   Sentry.init({
     dsn: clientDsn,
     tracesSampleRate: 0.1,
