@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import { PushNotificationManager } from '@/components/push-notification-manager';
 import { TelegramManager } from '@/components/telegram-manager';
+import { NotificationsTest } from '@/components/notifications-test';
 import { NotificationPrefs } from '@/components/notification-prefs';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -144,6 +145,11 @@ export function SettingsClient({
       {/* Telegram Alert Settings */}
       <div className="mb-4 max-w-lg">
         <TelegramManager projectId={projectId} />
+      </div>
+
+      {/* One button that proves both channels (F-18 follow-up, 2026-10-18) */}
+      <div className="mb-4 max-w-lg">
+        <NotificationsTest projectId={projectId} />
       </div>
 
       {/* Per-staff notification channel prefs */}

@@ -20,7 +20,7 @@ export default async function KitchenPage() {
   // they share one barrier. The paging loop stays sequential (page N decides
   // whether page N+1 exists), but waiting for it before asking for the service
   // requests added a whole round trip (~150ms) to every kitchen render.
-  const [allOrders, serviceRequestsResult] = await Promise.all([
+  const [allOrders, serviceRequestsResult, notificationState] = await Promise.all([
     (async () => {
       const rows: unknown[] = [];
       let from = 0;
@@ -49,6 +49,19 @@ export default async function KitchenPage() {
       .eq('project_id', ctx.project.id)
       .eq('is_resolved', false)
       .order('created_at', { ascending: true }),
+    // Alert wiring for the banner. Both counts are head-only, so this costs no rows:
+    //   • telegram_links — project members may read it (RLS: is_project_member);
+    //   • push_subscriptions — RLS is per-user, so this is THIS staff member's devices.
+    (async () => {
+      const [{ count: telegram }, { count: push }] = await Promise.all([
+        supabase
+          .from('telegram_links')
+          .select('*', { count: 'exact', head: true })
+          .eq('project_id', ctx.project.id),
+        supabase.from('push_subscriptions').select('*', { count: 'exact', head: true }),
+      ]);
+      return { telegramLinked: (telegram ?? 0) > 0, pushDevices: push ?? 0 };
+    })(),
   ]);
   const serviceRequests = serviceRequestsResult.data;
 
@@ -63,6 +76,7 @@ export default async function KitchenPage() {
         })[]
       }
       initialServiceRequests={(serviceRequests ?? []) as unknown as ServiceRequestRow[]}
+      notificationState={notificationState}
     />
   );
 }

@@ -11,6 +11,7 @@ import {
 import { toast } from 'sonner';
 
 /* ========== FIX-C-002: Audio System (extracted hook) ========== */
+import { NotificationsBanner } from '@/components/dashboard/notifications-banner';
 import { useKitchenAudio } from '@/components/dashboard/kitchen/use-kitchen-audio';
 // FIX-C-002: بطاقة الطلب مستخرجة
 import { KitchenTicket } from '@/components/dashboard/kitchen/kitchen-ticket';
@@ -31,12 +32,15 @@ export function KitchenClient({
   projectName,
   initialOrders,
   initialServiceRequests = [],
+  notificationState,
 }: {
   projectId: string;
   projectName: string;
   initialOrders: OrderRow[];
   /** Open «طلب موظف / طلب فاتورة» rows, seeded by the server render. */
   initialServiceRequests?: ServiceRequestRow[];
+  /** Server-read alert wiring, shown as a prompt on the screen where a missed order costs money. */
+  notificationState?: { telegramLinked: boolean; pushDevices: number };
 }) {
   const [soundOn, setSoundOn] = useState(true);
   const [newOrderCount, setNewOrderCount] = useState(0);
@@ -336,6 +340,13 @@ export function KitchenClient({
             ))}
           </ul>
         </section>
+      )}
+
+      {notificationState && (
+        <NotificationsBanner
+          telegramLinked={notificationState.telegramLinked}
+          pushDevices={notificationState.pushDevices}
+        />
       )}
 
       {/* Board — Calm Surface mockup: three fixed stage columns */}

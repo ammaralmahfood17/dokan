@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs';
 import { createAdminClient } from './supabase/admin';
 
 /**
@@ -62,14 +63,26 @@ async function telegramRecipients(projectId: string) {
   );
 }
 
-/** Fan a plain text alert out to every eligible chat of the project. */
+/**
+ * Fan a plain text alert out to every eligible chat of the project.
+ *
+ * Failures are REPORTED, not swallowed: a Telegram alert that never lands means a merchant
+ * never heard their order, and until 2026-10-18 this module had no Sentry hook at all while
+ * every caller wrapped it in `.catch(() => {})` — a dead bot looked exactly like a quiet shift.
+ * Report the first error per run (a revoked token fails every chat identically) plus a
+ * total-loss error when nobody received anything.
+ */
 async function broadcast(projectId: string, text: string) {
-  if (!TOKEN) return { sent: 0, failed: 0 };
+  if (!TOKEN) {
+    Sentry.captureMessage('[Telegram] TELEGRAM_BOT_TOKEN is not configured — alerts cannot be sent', 'warning');
+    return { sent: 0, failed: 0 };
+  }
   const recipients = await telegramRecipients(projectId);
   if (!recipients.length) return { sent: 0, failed: 0 };
 
   let sent = 0;
   let failed = 0;
+  let firstError: string | null = null;
   for (const link of recipients) {
     const result = await callTelegram('sendMessage', {
       chat_id: link.chat_id,
@@ -77,7 +90,16 @@ async function broadcast(projectId: string, text: string) {
       disable_web_page_preview: true,
     });
     if (result?.ok) sent++;
-    else failed++;
+    else {
+      failed++;
+      firstError ??= result?.description || 'network error';
+    }
+  }
+  if (failed > 0) {
+    Sentry.captureMessage(
+      `[Telegram] ${failed}/${recipients.length} alert deliveries failed for project ${projectId}: ${firstError}`,
+      failed === recipients.length ? 'error' : 'warning'
+    );
   }
   return { sent, failed };
 }
@@ -111,9 +133,6 @@ export async function sendTelegramAlert(
 ): Promise<{ sent: number; failed: number }> {
   if (!TOKEN) return { sent: 0, failed: 0 };
 
-  const recipients = await telegramRecipients(projectId);
-  if (!recipients.length) return { sent: 0, failed: 0 };
-
   const text = [
     '🔔 طلب جديد',
     `الطلب #${alert.orderNumber}`,
@@ -121,19 +140,16 @@ export async function sendTelegramAlert(
     ...(alert.tableNumber !== undefined ? [`الطاولة ${alert.tableNumber}`] : []),
     ...(alert.context ? [alert.context] : []),
   ].join('\n');
+  return broadcast(projectId, text);
+}
 
-  let sent = 0;
-  let failed = 0;
-  for (const link of recipients) {
-    const result = await callTelegram('sendMessage', {
-      chat_id: link.chat_id,
-      text,
-      disable_web_page_preview: true,
-    });
-    if (result?.ok) sent++;
-    else failed++;
-  }
-  return { sent, failed };
+/**
+ * A deliberately-labelled test alert, fanned out through the same recipient filter as a real
+ * order so the test proves the wiring rather than bypassing it. The «🧪» prefix keeps a live
+ * shift from mistaking it for a customer order.
+ */
+export async function sendTelegramTestAlert(projectId: string) {
+  return broadcast(projectId, '🧪 تنبيه تجريبي من الإعدادات — لو وصلك هذا، إشعارات تيليجرام تعمل. تجاهله.');
 }
 
 /** Reply to a chat (used by the webhook to confirm/cancel a link). */
