@@ -77,9 +77,10 @@ DECLARE
   v_ok    boolean := false;
   v_res   jsonb;
   v_err   text := 'no candidate worked';
+  v_detail text;
   i       int;
 BEGIN
-  v_hosts := ARRAY[coalesce(current_setting('race.host', true), '127.0.0.1')];
+  v_hosts := ARRAY['/var/run/postgresql', '/tmp', '127.0.0.1'];
   IF inet_server_addr() IS NOT NULL AND inet_server_addr()::text <> '127.0.0.1' THEN
     v_hosts := v_hosts || inet_server_addr()::text;
   END IF;
@@ -103,7 +104,8 @@ BEGIN
         v_ok := true; v_h := v_host; v_p := v_port;
         EXIT;
       EXCEPTION WHEN OTHERS THEN
-        v_err := SQLERRM;
+        GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+        v_err := SQLERRM || coalesce(' / ' || v_detail, '') || ' [' || v_host || ':' || v_port || ']';
         BEGIN PERFORM dblink_disconnect('race1'); EXCEPTION WHEN OTHERS THEN NULL; END;
         BEGIN PERFORM dblink_disconnect('race2'); EXCEPTION WHEN OTHERS THEN NULL; END;
       END;
