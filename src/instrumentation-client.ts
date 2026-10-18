@@ -69,7 +69,10 @@ if (
     // Errors still sample, so a broken flow can be replayed on demand later.
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0.1,
-    environment: process.env.VERCEL_ENV || 'development',
+    // The browser cannot read VERCEL_ENV (only NEXT_PUBLIC_* is inlined), so without
+    // this a production browser error was tagged environment=development, which is
+    // exactly how local noise and real customer errors became indistinguishable.
+    environment: clientVercelEnv || 'development',
     // PII policy: never send user data. The merchant's customers are PII.
     sendDefaultPii: false,
     beforeSend(event) {
