@@ -146,11 +146,13 @@ BEGIN
     END LOOP;
 
     UPDATE race_env SET connected = true, reason = NULL;
+    RAISE NOTICE 'race harness: second backend connected, both races executed';
   EXCEPTION WHEN OTHERS THEN
     v_err := SQLERRM;
     BEGIN PERFORM dblink_disconnect('race1'); EXCEPTION WHEN OTHERS THEN NULL; END;
     BEGIN PERFORM dblink_disconnect('race2'); EXCEPTION WHEN OTHERS THEN NULL; END;
     UPDATE race_env SET connected = false, reason = v_err;
+    RAISE NOTICE 'race harness: skipped, no second backend (%)', v_err;
   END;
 END
 $race$;
