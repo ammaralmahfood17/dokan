@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCsp, buildStaticCsp, isNoncePath, isStaticCspPath } from './csp';
+import { buildCsp, isNoncePath } from './csp';
 
 /** Parse a policy into directive → sources, so assertions read like the header. */
 function directives(policy: string): Map<string, string[]> {
@@ -90,41 +90,5 @@ describe('isNoncePath', () => {
     for (const path of ['/api/pos/orders', '/api/public/order', '/api/revalidate-menu']) {
       expect(isNoncePath(path), path).toBe(false);
     }
-  });
-});
-
-describe('isStaticCspPath — the cached customer menu is the only exception', () => {
-  it('matches the menu routes', () => {
-    for (const path of ['/estikana/menu/table-1', '/fofo/menu/t12', '/x/menu/y/']) {
-      expect(isStaticCspPath(path), path).toBe(true);
-    }
-  });
-
-  it('matches nothing else', () => {
-    for (const path of ['/', '/estikana', '/login', '/dashboard', '/estikana/menu', '/estikana/menu/a/b']) {
-      expect(isStaticCspPath(path), path).toBe(false);
-    }
-  });
-});
-
-describe('buildStaticCsp — the cacheable menu only', () => {
-  const d = directives(buildStaticCsp());
-
-  it('allows inline scripts, because the page is built once and cached', () => {
-    expect(d.get('script-src')).toContain("'unsafe-inline'");
-    expect(d.get('script-src')?.some((s) => s.startsWith("'nonce-"))).toBe(false);
-    expect(d.get('script-src')).not.toContain("'strict-dynamic'");
-  });
-
-  it('keeps every other guarantee', () => {
-    const strict = directives(buildCsp({ nonce: NONCE }));
-    for (const name of ['default-src', 'frame-ancestors', 'object-src', 'base-uri', 'form-action', 'connect-src', 'img-src', 'font-src', 'worker-src', 'style-src']) {
-      expect(d.get(name), name).toEqual(strict.get(name));
-    }
-  });
-
-  it('ships unsafe-eval to dev only', () => {
-    expect(d.get('script-src')).not.toContain("'unsafe-eval'");
-    expect(directives(buildStaticCsp({ dev: true })).get('script-src')).toContain("'unsafe-eval'");
   });
 });

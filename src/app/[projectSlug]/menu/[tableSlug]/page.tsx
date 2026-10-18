@@ -9,10 +9,9 @@ import type { Category, Product, ProductOptionGroup, Project, Table } from '@/li
 import { buildRestaurantJsonLd, serializeJsonLd } from '@/lib/jsonld';
 import { isTableTokenRequired } from '@/lib/public-write-guard';
 
-// The page is `force-static` (bottom of this header): every QR scan is served from the CDN, which
-// is the point of D3. The cost of that choice is stated with the config at the bottom: a
-// deactivated store can stay visible for up to the 60 s revalidate window (or until the menu tag
-// is purged). Data reads below are `unstable_cache`, project-tagged, purged on edit.
+// The page renders per request (F-18): the root layout is `force-dynamic`, and a nested
+// `force-static` makes Next throw "Dynamic server usage" on every request. Data reads below are
+// `unstable_cache`, project-tagged, purged on edit, so the database is not hit per scan.
 
 // M5: on-demand invalidation. Product/category edits call
 // /api/revalidate-menu, which revalidateTag()s `menu-${projectId}`. The menu
@@ -78,16 +77,12 @@ async function getMenuData(projectId: string, tableId: string) {
 // server-side by /api/public/order, which is the security boundary. Data reads stay cached
 // (`unstable_cache` + the `menu-${projectId}` tag), so edits still show up immediately.
 //
-// F-18 (2026-10-18): this is the ONE route that keeps `force-static`. The strict nonce policy
-// needs a per-request render, and measured on production that cost the QR flow 0.6-0.9 s (the
-// page renders ~100 KB of menu HTML per request) — at a table, on a phone, that is the wrong
-// trade. A build-time page cannot carry a nonce, so src/lib/csp.ts gives this path the static
-// policy (`buildStaticCsp`, the only place `'unsafe-inline'` remains) and src/proxy.ts skips the
-// nonce here. `force-static` is also what keeps `?k=` out of the Flight payload: the route
-// ignores the query entirely, the client reads the token from its own URL (query on sheets
-// printed before 2026-10-18, fragment on newer ones), and /api/public/order enforces it.
-export const dynamic = 'force-static';
-export const revalidate = 60;
+// F-18 (2026-10-18): this route renders per request, like every other page, so the CSP can carry
+// a nonce. `force-static` is NOT possible while the root layout is `force-dynamic` — Next throws
+// "Dynamic server usage" on every request (measured: the menu 500'd on production). The cost is
+// measured and accepted: see docs/audit-2026-10/REMEDIATION.md F-18. The token stays out of the
+// render because the client reads it from its own URL and the server never sees it as state;
+// /api/public/order enforces it.
 
 // A2/UX-report: every public menu served under 3 hostnames had no canonical —
 // search engines saw duplicates. Store name also becomes the tab/OG title.

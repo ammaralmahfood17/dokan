@@ -952,12 +952,11 @@ test('R13 every script the page loads is same-origin, as script-src self require
 });
 
 /**
- * F-18: every page renders per request and ships a NONCE policy — except the cached customer
- * menu, which is `force-static` for QR-scan speed and keeps the static policy (its own spec
- * below asserts that). Two hits on a nonce route must mint two different nonces.
+ * F-18: every page renders per request and ships a NONCE policy. Two hits must mint two
+ * different nonces (a cached nonce would be shared).
  */
-test('R13b every rendered page serves a nonce CSP with no unsafe-inline', async ({ request }) => {
-  for (const path of ['/', '/login', '/terms', '/dashboard']) {
+test('R13b every page serves a nonce CSP with no unsafe-inline', async ({ request }) => {
+  for (const path of ['/', '/login', '/terms', '/dashboard', '/estikana/menu/table-1']) {
     const nonces = new Set<string>();
     for (let i = 0; i < 2; i += 1) {
       const res = await request.get(path, { maxRedirects: 0 });

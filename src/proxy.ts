@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
-import { buildCsp, buildStaticCsp, isStaticCspPath, siteIsHttps } from '@/lib/csp';
+import { buildCsp, siteIsHttps } from '@/lib/csp';
 
 /**
  * Next.js 16 proxy (replaces middleware.ts).
@@ -9,8 +9,7 @@ import { buildCsp, buildStaticCsp, isStaticCspPath, siteIsHttps } from '@/lib/cs
  *  1. Refresh the Supabase session and apply the UX-level route gates
  *     (`updateSession`) — only on the routes that need it.
  *  2. Emit the Content-Security-Policy. Every page renders per request and gets a
- *     fresh nonce, EXCEPT the cached customer menu (`/…/menu/…`), which stays
- *     `force-static` for QR-scan speed and therefore gets the static policy.
+ *     fresh nonce.
  *
  * The nonce must be on the REQUEST header: that is how Next learns to stamp
  * `nonce="…"` onto its own script tags during server rendering.
@@ -49,8 +48,8 @@ export async function proxy(request: NextRequest) {
   const env = { dev: process.env.NODE_ENV !== 'production', https: siteIsHttps() };
 
   // API responses are JSON — a CSP scope there is noise.
-  const nonce = !isApi && !isStaticCspPath(pathname) ? mintNonce() : null;
-  const csp = isApi ? null : nonce ? buildCsp({ nonce, ...env }) : buildStaticCsp(env);
+  const nonce = !isApi ? mintNonce() : null;
+  const csp = nonce ? buildCsp({ nonce, ...env }) : null;
 
   if (nonce && csp) {
     request.headers.set('x-nonce', nonce);
