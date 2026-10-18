@@ -216,22 +216,44 @@ SELECT CASE WHEN connected THEN 1 ELSE 0 END AS race_connected FROM race_env \gs
 
 \if :race_connected
 SELECT is((SELECT count(*)::int FROM race_a WHERE outcome = 'ok'), 1,
-  'race A: exactly one of two concurrent orders wins the last unit');
+  'race A: exactly one of two concurrent orders wins the last unit (ok=' ||
+  (SELECT count(*) FROM race_a WHERE outcome = 'ok') || ')');
 SELECT is((SELECT count(*)::int FROM race_a WHERE outcome = 'out_of_stock'), 1,
-  'race A: the loser is rejected with OUT_OF_INGREDIENT_STOCK');
-SELECT is((SELECT count(*)::int FROM public.orders WHERE project_id = 'd1400000-0000-0000-0000-000000000001'),
-  1, 'race A: only one order row exists');
+  'race A: the loser is rejected with OUT_OF_INGREDIENT_STOCK (losers=' ||
+  (SELECT count(*) FROM race_a WHERE outcome = 'out_of_stock') || ')');
+SELECT is((SELECT count(*)::int FROM public.orders
+    WHERE project_id = 'd1400000-0000-0000-0000-000000000001'
+      AND client_request_id IN ('c1400000-0000-0000-0000-000000000001',
+                                'c1400000-0000-0000-0000-000000000002')),
+  1, 'race A: only one order row exists (rows=' ||
+  (SELECT count(*) FROM public.orders
+    WHERE project_id = 'd1400000-0000-0000-0000-000000000001'
+      AND client_request_id IN ('c1400000-0000-0000-0000-000000000001',
+                                'c1400000-0000-0000-0000-000000000002')) || ')');
 SELECT is((SELECT quantity_on_hand FROM public.ingredients WHERE id = 'f1400000-0000-0000-0000-000000000001'),
-  0::numeric, 'race A: the last unit is gone, never negative');
-SELECT is((SELECT count(*)::int FROM public.inventory_movements
-    WHERE project_id = 'd1400000-0000-0000-0000-000000000001' AND movement_type = 'consume'),
-  1, 'race A: exactly one consume movement was written');
+  0::numeric, 'race A: the last unit is gone, never negative (left=' ||
+  (SELECT quantity_on_hand FROM public.ingredients WHERE id = 'f1400000-0000-0000-0000-000000000001') || ')');
+SELECT is((SELECT count(*)::int FROM public.inventory_movements m
+    JOIN public.orders o ON o.id = m.order_id
+    WHERE o.client_request_id IN ('c1400000-0000-0000-0000-000000000001',
+                                  'c1400000-0000-0000-0000-000000000002')
+      AND m.movement_type = 'consume'),
+  1, 'race A: exactly one consume movement was written (movements=' ||
+  (SELECT count(*) FROM public.inventory_movements m
+    JOIN public.orders o ON o.id = m.order_id
+    WHERE o.client_request_id IN ('c1400000-0000-0000-0000-000000000001',
+                                  'c1400000-0000-0000-0000-000000000002')
+      AND m.movement_type = 'consume') || ')');
 SELECT is((SELECT count(*)::int FROM race_b WHERE (result ->> 'replayed')::boolean IS TRUE), 1,
-  'race B: one submit replays, the other inserts');
+  'race B: one submit replays, the other inserts (replays=' ||
+  (SELECT count(*) FROM race_b WHERE (result ->> 'replayed')::boolean IS TRUE) || ')');
 SELECT is((SELECT count(*)::int FROM public.orders
     WHERE project_id = 'd1400000-0000-0000-0000-000000000001'
       AND client_request_id = 'c1400000-0000-0000-0000-0000000000ff'),
-  1, 'race B: one idempotency key produced one order row');
+  1, 'race B: one idempotency key produced one order row (rows=' ||
+  (SELECT count(*) FROM public.orders
+    WHERE project_id = 'd1400000-0000-0000-0000-000000000001'
+      AND client_request_id = 'c1400000-0000-0000-0000-0000000000ff') || ')');
 \else
 SELECT skip('dblink could not open a second backend: ' || coalesce((SELECT reason FROM race_env), '?'), 7);
 \endif
