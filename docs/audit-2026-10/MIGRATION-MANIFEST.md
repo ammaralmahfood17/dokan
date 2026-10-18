@@ -191,3 +191,20 @@ job, and `phase4_5_advisor_hardening.sql` drops its two assertions for the remov
 tables had no visible retention index. They DO: `impersonation_sessions_expires_idx (expires_at)`
 and `super_admin_audit_log_created_at_idx (created_at DESC)` both exist, so the sweeps are indexed
 and the sizes (216KB / 160KB) are just data volume. No migration written for it.
+
+## 2026-10-18 — drop the unused reservations schema (#45)
+
+Production carried `public.reservations`, its `reservation_status` enum, four RLS policies, five
+indexes and three SECURITY DEFINER RPCs (`create_reservation` / `update_reservation` /
+`delete_reservation`, EXECUTE to `authenticated` + `service_role`) that **no migration in this repo
+ever created** — the repo↔production drift recorded in `REMEDIATION.md`. The feature was reverted
+(owner decision 2026-10-09) and `src/` has zero references, so the schema is dead weight that also
+makes a fresh `db reset` diverge from production.
+
+Measured on production before writing the file: **0 rows**, 0 dependent views, the enum used by
+`reservations.status` only, no `anon` EXECUTE, 0 callers in `src/`. Dry-run inside a transaction
+that ended in `ROLLBACK`: all five objects dropped, then verified restored.
+
+| # | file | purpose | destructive | rollback | apply |
+|---|---|---|---|---|---|
+| 45 | `20261018202853_drop_unused_reservations.sql` | drops the dead reservations table + enum + 3 RPCs (repo↔prod drift cleanup) | **yes** (0 rows; no code path uses it) | recreate from the production backup — nothing in the repo defines them | **approved 2026-10-18, applies on the next push to `master`** |
