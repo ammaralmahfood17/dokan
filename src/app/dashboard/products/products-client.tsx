@@ -108,6 +108,32 @@ export function ProductsClient({
 
   // Delete confirmation state
   const [confirmDelete, setConfirmDelete] = useState<ProductWithOptions | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  /**
+   * «نفد» from the card (UX-18). Optimistic: the badge flips immediately, then the row is
+   * written and the public menu cache purged. On failure the badge is rolled back — a
+   * cashier must never be shown an availability state the menu does not have.
+   */
+  async function toggleAvailability(p: ProductWithOptions) {
+    const next = !p.is_available;
+    setProducts((prev) => prev.map((x) => (x.id === p.id ? { ...x, is_available: next } : x)));
+    setTogglingId(p.id);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('products')
+      .update({ is_available: next })
+      .eq('id', p.id)
+      .eq('project_id', projectId);
+    setTogglingId(null);
+    if (error) {
+      setProducts((prev) => prev.map((x) => (x.id === p.id ? { ...x, is_available: !next } : x)));
+      toast.error('تعذّر تحديث حالة المنتج');
+      return;
+    }
+    toast.success(next ? 'المنتج متاح الآن' : 'تم إيقاف المنتج');
+    revalidateMenuCache(projectId);
+  }
 
   async function deleteProduct(id: string) {
     const supabase = createClient();
@@ -207,6 +233,8 @@ export function ProductsClient({
                 selected={bulk.selectedIds.has(p.id)}
                 onOpen={() => openEdit(p)}
                 onToggleSelect={() => bulk.toggleSelect(p.id)}
+                onToggleAvailability={() => toggleAvailability(p)}
+                toggling={togglingId === p.id}
               />
             ))}
           </div>

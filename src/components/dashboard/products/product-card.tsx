@@ -4,7 +4,7 @@
 // products-client.tsx. Grid card: 4:3 image/placeholder, bulk-select ring,
 // "متوقف" badge, name/description/price, addon chips. No behavior change.
 import Image from 'next/image';
-import { ImageIcon, Check } from 'lucide-react';
+import { ImageIcon, Check, Power } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
 import { isSoldOut, remainingStock } from '@/lib/product-stock';
 import type { Product, ProductOptionGroup } from '@/lib/types';
@@ -18,6 +18,8 @@ export function ProductCard({
   selected,
   onOpen,
   onToggleSelect,
+  onToggleAvailability,
+  toggling,
 }: {
   product: ProductWithOptions;
   currency: string;
@@ -25,6 +27,9 @@ export function ProductCard({
   selected: boolean;
   onOpen: () => void;
   onToggleSelect: () => void;
+  /** Flip «متاح للطلب» without opening the form — the peak-hour action. */
+  onToggleAvailability: () => void;
+  toggling?: boolean;
 }) {
   // Stock (0018): a tracked product with nothing left reads as unavailable to
   // the merchant too, without touching their manual «متاح للطلب» switch.
@@ -95,6 +100,26 @@ export function ProductCard({
             باقي <span dir="ltr">{left}</span>
           </span>
         ) : null}
+        {!bulkMode && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleAvailability();
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            disabled={toggling}
+            aria-label={p.is_available ? `إيقاف ${p.name}` : `تفعيل ${p.name}`}
+            aria-pressed={p.is_available}
+            className={`absolute bottom-2 start-2 flex h-11 w-11 items-center justify-center rounded-full border shadow-sm transition-colors disabled:opacity-50 ${
+              p.is_available
+                ? 'border-[var(--color-success)]/30 bg-[var(--color-success-tint)] text-[var(--color-success)]'
+                : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-muted)]'
+            }`}
+          >
+            <Power className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       <div className="p-3">
