@@ -38,21 +38,23 @@ if (!SRC) {
 /**
  * Which weights ship, and what each face covers.
  *
- * The family has five discrete weights (Light/Regular/Medium/Bold/Black), but the
- * UI asks for more: font-semibold (600) is used ~125 times and font-bold (700)
- * ~193. Missing weights would make the browser snap 600 to Bold and flatten the
- * whole hierarchy, so each shipped file declares a RANGE:
+ * TWO faces ship (owner decision 2026-10-19), not three:
  *
- *   400        Regular
- *   500 600    Medium   ← font-medium and font-semibold both land here
- *   700 800    Bold     ← font-bold and font-extrabold both land here
+ *   400 600    Medium   ← body, font-medium and font-semibold all land here
+ *   700 800    Bold     ← font-bold and font-extrabold land here
+ *
+ * The Regular face was dropped to cut the payload by a third (316KB → 212KB of
+ * CSS, 231KB → ~154KB transferred). Body text now renders in Medium — a small,
+ * uniform weight increase — instead of making 600 snap to Bold, which would have
+ * flattened the hierarchy. Subsetting the files to hit the 100KB target is NOT
+ * an option: the licence forbids modification and subsetting explicitly (see the
+ * header of this file).
  *
  * Ranges (not repeated @font-face rules) matter: two rules pointing at the same
  * file would inline the same ~100KB of base64 twice.
  */
 const CORE = [
-  { dir: 'thmanyahsans', file: 'thmanyahsans-Regular', family: 'thmanyah sans', weights: '400' },
-  { dir: 'thmanyahsans', file: 'thmanyahsans-Medium', family: 'thmanyah sans', weights: '500 600' },
+  { dir: 'thmanyahsans', file: 'thmanyahsans-Medium', family: 'thmanyah sans', weights: '400 600' },
   { dir: 'thmanyahsans', file: 'thmanyahsans-Bold', family: 'thmanyah sans', weights: '700 800' },
 ];
 
@@ -82,6 +84,10 @@ const NOTICE = `/* =============================================================
 
    GENERATED FILE — do not edit by hand.
    Rebuild with: node scripts/build-thmanyah-fonts.mjs "<thmanyah typeface dir>"
+   NOTE 2026-10-19: public/thmanyah.css was produced by dropping the Regular
+   @font-face from the previous build in place, because the licensed source
+   directory is not on this machine. A rebuild from source with the CORE list
+   below produces the same two faces.
    ========================================================================== */`;
 
 function face(entry, b64, order) {
