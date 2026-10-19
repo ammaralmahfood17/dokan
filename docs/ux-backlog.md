@@ -1,15 +1,15 @@
 # Backlog UX — Dokan (المرحلة 2: خطة فقط)
 
-**الحالة:** مقترح — لم يُنفَّذ أي بند. هذه المرحلة تخطيط فقط بحسب طلب المالك (Phase 1).
+**الحالة:** Wave 1 منفّذ جزئياً (7 بنود) — انظر «سجل التنفيذ» في نهاية الملف. الباقي مقترح.
 **الترتيب:** حسب `impact ÷ effort` تنازلياً. **P0** = يمنع الوعد الأساسي.
 
 | ID | المجال | المشكلة | الدليل | الإصلاح المقترح | Impact | Effort | Risk | الموجة |
 |---|---|---|---|---|---|---|---|---|
-| UX-01 | التسجيل | مسار إنشاء الحساب يفشل في الإنتاج: `admin.auth.admin.createUser` يرجع 500 رغم تمرير `app_metadata.provisioned_by`، والإدخال المباشر بنفس العلامة ينجح | قياس مباشر + `src/app/api/auth/signup/route.ts:101–117` + `auth_users_require_api_provisioning()` | تشخيص تفاعل GoTrue مع trigger الإنتاج، وإصلاح المسار (trigger بعد-الإدخال أو RPC provisioning) + اختبار pgTAP/HTTP يثبت النجاح | 5 | 3 | عالٍ (Auth) | Wave 1 (blocker) |
+| UX-01 | التسجيل | **السبب الجذري محدد:** أعمدة `auth.users` (`confirmation_token`, `recovery_token`, `email_change`, `email_change_token_new`) قيمتها الافتراضية `NULL` بدل `''` القياسي في Supabase؛ GoTrue يُدخل الصف ثم يفشل في قراءته ⇒ 500. أثبتُّه: صف مُدخل يدوياً بنفس العلامة صار قابلاً للدخول فقط بعد `coalesce(...,'')` | استعلام `information_schema.columns` على الإنتاج + تجربة دخول ناجحة بعد التصحيح | تنفيذ `ALTER TABLE auth.users ALTER COLUMN … SET DEFAULT ''` + تعبئة NULL الحالية. **محجوب:** دور psql الحالي ليس owner للجدول (`must be owner of table users`) ⇒ يحتاج SQL Editor في لوحة Supabase | 5 | 1 | متوسط (Auth) | محجوب على المالك |
 | UX-02 | التسجيل | زر «ابدأ مجاناً» يقود إلى 503 لأن `SIGNUP_ENABLED=false` | `route.ts:66` + `curl` = 503؛ `page.tsx:67,88,176` | قرار مالك: فتح التسجيل، أو تحويل CTA إلى «قائمة انتظار/واتساب» مع نص صادق | 5 | 1 | منخفض | Wave 1 |
 | UX-03 | KDS | عمودان مقصوصان على 375 بلا مؤشر تمرير | `11-kds-375.png` + `kitchen-client.tsx:354` | تحويل الأعمدة إلى تبويبات حالة على `<lg` (جديد/تحضير/جاهز) بدل التمرير الأفقي | 4 | 2 | منخفض | Wave 1 |
 | UX-04 | KDS | التايمر أضعف عنصر ولا تدرّج لوني قبل 15/30 دقيقة | `kitchen-ticket.tsx:32–45` + لقطة 1280 | تكبير التايمر (≥18px، tabular) + تدرّج: أخضر <5، كهرماني 5–10، أحمر ≥10 | 4 | 2 | منخفض | Wave 1 |
-| UX-05 | التايبوغرافي | حمولة الخط 231KB مقابل هدف <100KB | قياس CDN + `public/thmanyah.css` (3 أوجه × ~76KB، `unicode-range: all`) | subset عربي+لاتيني+أرقام لكل وجه عبر `scripts/build-thmanyah-fonts.mjs`، وإسقاط أي وزن غير مستخدم | 4 | 2 | متوسط (ترخيص/جودة) | Wave 1 |
+| UX-05 | التايبوغرافي | حمولة الخط 231KB مقابل هدف <100KB | قياس CDN + `public/thmanyah.css` (3 أوجه × ~76KB) | **مستحيل بموجب الترخيص:** نص رخصة ثمانية يمنع التعديل و«subsetting» صراحةً (`scripts/build-thmanyah-fonts.mjs:14–22`). البديل الوحيد: إسقاط وزن Medium (231→154KB) أو خط آخر — قرار مالك | 4 | 2 | عالٍ (قانوني) | يحتاج قرار |
 | UX-06 | منيو العميل | بطاقة بمساحة صورة فارغة 40% عند غياب الصورة → 4348px لـ9 أصناف | `product-card.tsx:85–95` + لقطة 17 | نمط «صف مضغوط» عند غياب `image_url` (بلا حاوية aspect) | 4 | 2 | منخفض | Wave 1 |
 | UX-07 | العملة | `formatMoney` يعيد «0.900 BHD» لكنها تُعرض «BHD 0.300» في RTL؛ شاشة الطلبات فقط تفرض ltr | `utils.ts:119–124`، `orders-client.tsx:50`، لقطة POS | مكوّن `Money` واحد يلفّ القيمة بـ`dir="ltr"` ويستخدمه كل الشاشات | 3 | 1 | منخفض | Wave 1 |
 | UX-08 | KDS | بانر الإشعارات دائم ويأكل ربع شاشة 375 | `notifications-banner.tsx` + لقطة 11 | زر إغلاق + نسخة مضغوطة (سطر واحد) بعد أول ظهور | 3 | 1 | منخفض | Wave 1 |
@@ -52,3 +52,40 @@
 - **Wave 1:** كل بند ≤ يوم، مع اختبار وحدة/Playwright، و`lint`+`tsc`+`vitest`+`a11y` خضراء، ولقطة قبل/بعد.
 - **Wave 2:** كل بند مع spec في `e2e/` (تدفق حقيقي) + تحديث `DESIGN_SYSTEM.md` عند إضافة tokens (حالة الطلب/التأخير).
 - **Wave 3:** مستند تصميم تقني فقط (نموذج البيانات، أثر RLS، خطة إطلاق، مخاطر) — بلا كود.
+
+---
+
+## سجل التنفيذ (Wave 1)
+
+| ID | الحالة | الـ commit | التحقق |
+|---|---|---|---|
+| UX-03 | ✅ منفّذ | `ef73ea4` | تبويبات مراحل على 375 (لقطة بعد النشر): عمود واحد كامل، لا اقتطاع |
+| UX-04 | ✅ منفّذ | `ef73ea4` | التايمر 15px؛ كهرماني عند 5د، أحمر عند 10د — مؤكَّد بلقطة `m-kds.png` |
+| UX-06 | ✅ منفّذ | `23faee1` + `33cc867` | منيو 7 أصناف: **988px** بدل 4348px لتسعة؛ بلاطات POS مضغوطة |
+| UX-07 | ✅ منفّذ | `c5d2785` | «0.900 BHD» على POS والمنيو والداشبورد (كانت «BHD 0.900») |
+| UX-08 | ✅ منفّذ | `ef73ea4` | زر إغلاق 44px + تذكّر خلال الجلسة |
+| UX-09 | ✅ منفّذ | `4cfc419` | لا بانر إعادة طباعة قبل وجود طاولات |
+| UX-12 | ✅ منفّذ | `ef73ea4` | `useWakeLock` + إعادة الطلب عند العودة للتبويب |
+| UX-13 | ✅ منفّذ | `ef73ea4` | الأصناف 15px، الإضافات 13px، الأزرار 14px |
+| UX-14 | ✅ منفّذ | `ef73ea4` | `arabicNewOrders()` مع 6 اختبارات |
+| UX-01 | ⛔ محجوب | — | SQL جاهز أدناه |
+| UX-05 | ⛔ محجوب | — | قيد الترخيص |
+
+**قياسات بعد التنفيذ:** منيو 375px = 988px لمتجر بـ7 أصناف (كان 4348px لـ9) · KDS 375: عمود واحد + 3 تبويبات، والتايمر 15px ملوّن · POS: 7 بلاطات في 4 أعمدة بارتفاع ~76px بدل ~250px.
+
+**الـ SQL المطلوب لفتح التسجيل (SQL Editor، مرة واحدة):**
+```sql
+alter table auth.users
+  alter column confirmation_token set default '',
+  alter column recovery_token  set default '',
+  alter column email_change    set default '',
+  alter column email_change_token_new set default '';
+update auth.users set
+  confirmation_token = coalesce(confirmation_token,''),
+  recovery_token = coalesce(recovery_token,''),
+  email_change = coalesce(email_change,''),
+  email_change_token_new = coalesce(email_change_token_new,'')
+where confirmation_token is null or recovery_token is null
+   or email_change is null or email_change_token_new is null;
+```
+بعدها: `SIGNUP_ENABLED=true` على Vercel، ثم اختبار `POST /api/auth/signup` والتأكد من وصول رسالة التأكيد.
