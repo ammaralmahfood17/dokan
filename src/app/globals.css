@@ -277,7 +277,7 @@
    exactly the device a counter/POS merchant uses. A narrow desktop window with a
    mouse keeps the 36px enterprise density. */
 @media (pointer: coarse) {
-  .btn, .btn-sm, [class*="btn-sm"] { min-height: 44px; }
+  .btn, .btn-sm, [class*="btn-sm"] { min-height: 44px; min-width: 44px; }
 }
 
 /* ==========================================================================

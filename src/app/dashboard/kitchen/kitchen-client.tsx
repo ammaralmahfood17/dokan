@@ -314,7 +314,7 @@ export function KitchenClient({
             }}
             aria-label={soundOn ? 'كتم الصوت' : 'تفعيل الصوت'}
             aria-pressed={soundOn}
-            className="flex min-h-[44px] items-center rounded-[7px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)]"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-[7px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)]"
           >
             <span aria-hidden="true">{soundOn ? '🔊' : '🔇'}</span>
           </button>
@@ -327,7 +327,7 @@ export function KitchenClient({
               toast.success('🔔 صوت التنبيه', { description: 'صوت الإشعار يعمل ✅' });
             }}
             title="اختبار الصوت"
-            className="flex min-h-[44px] items-center rounded-[7px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-success)]"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-[7px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-success)]"
           >
             <span aria-hidden="true">🔊</span> <span className="hidden sm:inline">اختبار</span>
           </button>

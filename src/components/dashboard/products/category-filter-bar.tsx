@@ -86,7 +86,7 @@ export function CategoryFilterBar({
                 type="button"
                 onClick={() => onPickCat(activeCat === c.id ? null : c.id)}
                 aria-pressed={activeCat === c.id}
-                className="flex items-center gap-1.5 rounded-full py-1.5"
+                className="flex min-h-[44px] items-center gap-1.5 rounded-full py-1.5"
               >
                 {c.name}
                 <span
