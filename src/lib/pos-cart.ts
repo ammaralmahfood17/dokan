@@ -80,6 +80,25 @@ export function searchPosProducts<T extends { name: string; name_en?: string | n
   );
 }
 
+/**
+ * Category filter for the POS grid.
+ *
+ * WHY (UX-17, docs/ux-audit.md §3.8): the POS had search only. A cashier facing a
+ * 30-item menu had to scroll or type to find «شاي كرك» while a queue formed; every
+ * other surface (customer menu, products page) already filters by category.
+ *
+ * `null` means «الكل» and must be the identity filter — a category id that no longer
+ * exists (deleted while the page is open) then shows an empty grid, which is the honest
+ * state, not a silent fallback to everything.
+ */
+export function filterPosByCategory<T extends { category_id?: string | null }>(
+  products: T[],
+  categoryId: string | null
+): T[] {
+  if (!categoryId) return products;
+  return products.filter((p) => p.category_id === categoryId);
+}
+
 export type PosStockCheck = { ok: true } | { ok: false; message: string };
 
 /**

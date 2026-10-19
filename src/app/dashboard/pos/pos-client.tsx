@@ -30,6 +30,7 @@ import {
   changePosQty,
   posStockCheck,
   searchPosProducts,
+  filterPosByCategory,
   setPosQty,
 } from '@/lib/pos-cart';
 
@@ -45,12 +46,15 @@ export function PosClient({
   currency,
   products,
   productFrequency,
+  categories = [],
 }: {
   projectId: string;
   currency: string;
   products: ProductWithOptions[];
   /** UX-U12: تكرار طلبات آخر 7 أيام لكل منتج — لتصدر الأكثر طلبًا */
   productFrequency?: Record<string, number>;
+  /** Menu categories for the cashier filter (UX-17). */
+  categories?: { id: string; name: string }[];
 }) {
   const [type, setType] = useState<OrderType>('walkin');
   const [lines, setLines] = useState<PosLine[]>([]);
@@ -60,6 +64,7 @@ export function PosClient({
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<string | null>(null);
   // Last successful order — drives the "وصل المطبخ" confirmation banner.
   const [lastConfirmed, setLastConfirmed] = useState<{
     orderNumber: number;
@@ -106,7 +111,8 @@ export function PosClient({
   // hit. `q` is kept for the empty state: "no match" and "no products" are
   // different messages to a cashier.
   const q = query.trim().toLowerCase();
-  const filtered = useMemo(() => searchPosProducts(available, query), [available, query]);
+  const inCategory = useMemo(() => filterPosByCategory(available, category), [available, category]);
+  const filtered = useMemo(() => searchPosProducts(inCategory, query), [inCategory, query]);
 
   // Cashier keyboard shortcuts (desktop): "/" focuses search, Enter in the
   // search field quick-adds the top filtered product (addon products open the
@@ -355,6 +361,9 @@ export function PosClient({
           onSearchKeyDown={onSearchKeyDown}
           searchRef={searchRef}
           products={filtered}
+          categories={categories}
+          category={category}
+          onCategoryChange={setCategory}
           queryIsActive={Boolean(q)}
           currency={currency}
           onSelect={(prod) => openProduct(prod as ProductWithOptions)}

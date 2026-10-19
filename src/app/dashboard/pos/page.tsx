@@ -16,6 +16,7 @@ const PosClient = dynamic<{
   products: (Product & { option_groups: ProductOptionGroup[] })[];
   // UX-U12: تكرار المنتجات
   productFrequency?: Record<string, number>;
+  categories?: { id: string; name: string }[];
 }>(
   () => import('./pos-client').then((mod) => ({ default: mod.PosClient })),
   {
@@ -88,7 +89,7 @@ export default async function PosPage() {
   // project id). In sequence the second cost a full round trip before the grid
   // could render — and the POS is opened dozens of times a shift.
   const since = new Date(new Date().getTime() - 7 * 86400e3).toISOString();
-  const [{ data: products }, { data: orderRows }] = await Promise.all([
+  const [{ data: products }, { data: orderRows }, { data: categories }] = await Promise.all([
     supabase
       .from('products')
       .select('*, option_groups(*, option_choices(*))')
@@ -102,6 +103,11 @@ export default async function PosPage() {
       .eq('project_id', ctx.project.id)
       .is('service_type', null)
       .gte('created_at', since),
+    supabase
+      .from('categories')
+      .select('id,name')
+      .eq('project_id', ctx.project.id)
+      .order('sort_order'),
   ]);
 
   const frequency: Record<string, number> = {};
@@ -119,6 +125,7 @@ export default async function PosPage() {
         (products ?? []) as (Product & { option_groups: ProductOptionGroup[] })[]
       }
       productFrequency={frequency}
+      categories={(categories ?? []) as { id: string; name: string }[]}
     />
   );
 }

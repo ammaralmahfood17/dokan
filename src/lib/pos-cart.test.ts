@@ -7,6 +7,7 @@ import {
   posLineKey,
   posStockCheck,
   searchPosProducts,
+  filterPosByCategory,
   setPosQty,
   type PosLineLike,
 } from './pos-cart';
@@ -102,6 +103,26 @@ describe('availablePosProducts', () => {
     const before = products.map((p) => p.id);
     availablePosProducts(products, { a: 9 });
     expect(products.map((p) => p.id)).toEqual(before);
+  });
+});
+
+describe('filterPosByCategory', () => {
+  const items = [
+    { id: 'a', category_id: 'hot' },
+    { id: 'b', category_id: 'cold' },
+    { id: 'c', category_id: null },
+  ];
+
+  it('is the identity filter for «الكل»', () => {
+    expect(filterPosByCategory(items, null)).toHaveLength(3);
+  });
+
+  it('keeps only the requested category', () => {
+    expect(filterPosByCategory(items, 'hot').map((p) => p.id)).toEqual(['a']);
+  });
+
+  it('returns an empty list for an unknown category instead of everything', () => {
+    expect(filterPosByCategory(items, 'deleted')).toEqual([]);
   });
 });
 

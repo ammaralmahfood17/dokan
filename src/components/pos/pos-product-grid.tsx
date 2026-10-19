@@ -32,6 +32,9 @@ export function PosProductGrid({
   onSearchKeyDown,
   searchRef,
   products,
+  categories = [],
+  category,
+  onCategoryChange,
   queryIsActive,
   currency,
   onSelect,
@@ -44,6 +47,10 @@ export function PosProductGrid({
   onSearchKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   searchRef: RefObject<HTMLInputElement | null>;
   products: ProductWithOptions[];
+  /** Menu categories for the cashier filter (UX-17); empty = no chips rendered. */
+  categories?: { id: string; name: string }[];
+  category: string | null;
+  onCategoryChange: (id: string | null) => void;
   /** The trimmed query — decides which empty state to show. */
   queryIsActive: boolean;
   currency: string;
@@ -103,6 +110,35 @@ export function PosProductGrid({
           </button>
         )}
       </div>
+
+      {/* Category filter — the menu's own categories, so a cashier reaches «شاي كرك»
+          in one tap instead of scrolling a 30-item grid (UX-17). */}
+      {categories.length > 0 && (
+        <div
+          className="mb-3 flex gap-2 overflow-x-auto pb-1"
+          role="group"
+          aria-label="تصنيفات المنتجات"
+        >
+          {[{ id: null, name: 'الكل' }, ...categories].map((c) => {
+            const active = category === c.id;
+            return (
+              <button
+                key={c.id ?? 'all'}
+                type="button"
+                onClick={() => onCategoryChange(c.id)}
+                aria-pressed={active}
+                className={`min-h-[44px] shrink-0 whitespace-nowrap rounded-full border px-4 text-[13px] font-semibold transition-colors ${
+                  active
+                    ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)] text-[var(--color-primary)]'
+                    : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
+                }`}
+              >
+                {c.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {!products.length ? (
         <div className="card empty">
