@@ -100,7 +100,15 @@ export function KitchenTicket({
           </p>
         </div>
         <p
-          className={`text-[12px] font-bold tabular-nums ${overdue ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-tertiary)]'}`}
+          className={`rounded-full px-2 py-0.5 font-mono text-[15px] font-extrabold tabular-nums ${
+            overdue
+              ? 'bg-[var(--color-danger-tint)] text-[var(--color-danger)]'
+              : mins >= 10
+                ? 'bg-[var(--color-danger-tint)] text-[var(--color-danger)]'
+                : mins >= 5
+                  ? 'bg-[var(--color-warn-tint)] text-[var(--color-warn)]'
+                  : 'bg-[var(--color-bg)] text-[var(--color-text-secondary)]'
+          }`}
           dir="ltr"
         >
           {/* The clock glyph keeps the width stable while the value is unknown, so
@@ -109,21 +117,19 @@ export function KitchenTicket({
         </p>
       </div>
 
-      {/* Timing badge — warn ≥5min, danger 3-layer when overdue */}
+      {/* Timing badge — the timer pill above already turns amber/red; the badge adds the
+          word «متأخر» only once the ticket is actually overdue, so the card does not carry
+          the same number twice before that. */}
       {overdue ? (
-        <span className="mb-2.5 inline-block rounded-full bg-[var(--color-danger-tint)] px-2.5 py-0.5 text-[11.5px] font-bold text-[var(--color-danger)]">
+        <span className="mb-2.5 inline-block rounded-full bg-[var(--color-danger-tint)] px-2.5 py-0.5 text-[12.5px] font-bold text-[var(--color-danger)]">
           ⏱ متأخر — {mins} د
-        </span>
-      ) : mins >= 5 ? (
-        <span className="mb-2.5 inline-block rounded-full bg-[var(--color-warn-tint)] px-2.5 py-0.5 text-[11.5px] font-bold text-[var(--color-warn)]">
-          ⏱ {mins} د
         </span>
       ) : null}
 
       {/* Items — mockup: qty box + name, addons/notes indented under */}
       <ul className="mb-3 list-none space-y-1.5 p-0">
         {lines.map((l) => (
-          <li key={l.key} className="text-[13.5px]">
+          <li key={l.key} className="text-[15px] leading-6">
             <div className="flex items-center gap-2">
               <span
                 className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] bg-[var(--color-primary-tint)] font-mono text-[12px] font-extrabold tabular-nums text-[var(--color-primary)]"
@@ -134,19 +140,19 @@ export function KitchenTicket({
               <span className="font-semibold">{l.productName}</span>
             </div>
             {l.addons.length > 0 && (
-              <p className="ms-[30px] mt-0.5 text-[11.5px] text-[var(--color-text-tertiary)]">
+              <p className="ms-[30px] mt-0.5 text-[13px] text-[var(--color-text-tertiary)]">
                 {l.addons.map((a) => a.name).join(' · ')}
               </p>
             )}
             {l.notes && (
-              <p className="ms-[30px] mt-0.5 text-[11.5px] text-[var(--color-text-tertiary)]">
+              <p className="ms-[30px] mt-0.5 text-[13px] text-[var(--color-text-tertiary)]">
                 ملاحظة: {l.notes}
               </p>
             )}
           </li>
         ))}
         {order.notes && (
-          <li className="mt-1.5 rounded-[var(--radius-md)] bg-[var(--color-bg)] px-2 py-1.5 text-[11.5px] text-[var(--color-danger)]">
+          <li className="mt-1.5 rounded-[var(--radius-md)] bg-[var(--color-bg)] px-2 py-1.5 text-[13px] text-[var(--color-danger)]">
             {order.notes}
           </li>
         )}
@@ -158,7 +164,7 @@ export function KitchenTicket({
           <button
             type="button"
             onClick={onStart}
-            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-primary)] px-4 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-primary)] px-4 text-[14px] font-bold text-white transition-colors hover:bg-[var(--color-primary-hover)]"
           >
             بدء التحضير
           </button>
@@ -167,7 +173,7 @@ export function KitchenTicket({
           <button
             type="button"
             onClick={onReady}
-            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-success-tint)] px-4 text-[13px] font-bold text-[var(--color-success)] transition-colors hover:bg-[var(--color-success)] hover:text-white"
+            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-success-tint)] px-4 text-[14px] font-bold text-[var(--color-success)] transition-colors hover:bg-[var(--color-success)] hover:text-white"
           >
             جاهز للتسليم
           </button>

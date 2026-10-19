@@ -9,6 +9,8 @@ import {
   type OrderRow,
 } from '@/lib/kitchen-tickets';
 import { toast } from 'sonner';
+import type { OrderStatus } from '@/lib/types';
+import { arabicNewOrders } from '@/lib/arabic';
 
 /* ========== FIX-C-002: Audio System (extracted hook) ========== */
 import { NotificationsBanner } from '@/components/dashboard/notifications-banner';
@@ -20,6 +22,7 @@ import { KitchenTicket } from '@/components/dashboard/kitchen/kitchen-ticket';
 import { useTitleFlash } from '@/components/dashboard/kitchen/use-title-flash';
 import { useKitchenOrders } from '@/components/dashboard/kitchen/use-kitchen-orders';
 import { useKitchenActions } from '@/components/dashboard/kitchen/use-kitchen-actions';
+import { useWakeLock } from '@/components/dashboard/kitchen/use-wake-lock';
 import {
   useKitchenServiceRequests,
   type ServiceRequestRow,
@@ -54,6 +57,13 @@ export function KitchenClient({
   const [time, setTime] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
   const [tab, setTab] = useState<'all' | 'dinein' | 'drivethru' | 'walkin'>('all');
+  // The board is three columns (~840px). At 375px it used to clip the second and third
+  // stage behind a horizontal scroll with no affordance — the first ticket was cut off.
+  // Below `lg` the stages become tabs (one column at a time); on tablet+ all stay visible.
+  const [stage, setStage] = useState<OrderStatus>('pending');
+
+  // A kitchen tablet must not dim mid-shift; no-op where the Wake Lock API is absent.
+  useWakeLock();
 
   const { playChime, preloadChime, attachAudioResumeOnInteraction } = useKitchenAudio();
   const { flashTitle, clearFlash, syncTitle, resetTitle } = useTitleFlash();
@@ -248,7 +258,7 @@ export function KitchenClient({
 
         {/* FIX-A-006: إعلام قارئ الشاشة بوصول طلبات جديدة */}
         <div aria-live="polite" aria-atomic="true" className="sr-only">
-          {pendingCount > 0 ? `وصل ${pendingCount} طلبات جديدة` : ''}
+          {arabicNewOrders(pendingCount)}
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -349,9 +359,35 @@ export function KitchenClient({
         />
       )}
 
+      {/* Mobile stage switcher — the three-column board cannot fit 375px. */}
+      <nav
+        className="flex gap-1 border-b border-[var(--color-border)] px-5 lg:hidden"
+        aria-label="مراحل الطلبات"
+      >
+        {STAGE_COLUMNS.map(([s, label]) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setStage(s)}
+            aria-pressed={stage === s}
+            className={`relative min-h-[48px] flex-1 text-[13px] font-bold transition-colors ${
+              stage === s ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'
+            }`}
+          >
+            {label}
+            <span dir="ltr" className="ms-1 inline-block font-mono text-[11.5px] tabular-nums opacity-70">
+              · {String((stageBuckets.get(s) ?? []).length).padStart(2, '0')}
+            </span>
+            {stage === s && (
+              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--color-primary)]" />
+            )}
+          </button>
+        ))}
+      </nav>
+
       {/* Board — Calm Surface mockup: three fixed stage columns */}
       <main
-        className="flex gap-4 overflow-x-auto p-5"
+        className="flex gap-4 overflow-x-hidden p-5 lg:overflow-x-auto"
         role="region"
         aria-label="تذاكر المطبخ"
         tabIndex={0}
@@ -362,12 +398,15 @@ export function KitchenClient({
             <span className="mt-2 text-[13px]">بانتظار الطلبات…</span>
           </div>
         ) : (
-          STAGE_COLUMNS.map(([stage, label]) => {
-            const stageTickets = stageBuckets.get(stage) ?? [];
+          STAGE_COLUMNS.map(([columnStage, label]) => {
+            const stageTickets = stageBuckets.get(columnStage) ?? [];
             return (
               <section
-                key={stage}
-                className={`flex shrink-0 flex-col gap-3 min-w-[280px] flex-1`}
+                key={columnStage}
+                data-stage={columnStage}
+                className={`min-w-0 flex-1 shrink-0 flex-col gap-3 lg:flex lg:min-w-[280px] ${
+                  columnStage === stage ? 'flex' : 'hidden'
+                }`}
                 aria-label={label}
               >
                 <div className="flex items-center justify-between px-0.5">
