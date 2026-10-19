@@ -12,6 +12,7 @@ import { getCurrentProject } from '@/lib/project';
 import { recordOnboardingProgress } from '@/lib/onboarding-funnel';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import type { ChecklistItem } from '@/lib/types';
 import {
   buildDashboardRollup,
@@ -235,20 +236,43 @@ export default async function DashboardPage() {
 
       <ChecklistSection checklist={checklist} doneCount={doneCount} allDone={allDone} />
 
-      {/* Grid 2 — hourly sales + latest orders table */}
-      <section className="mb-8 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <HourlySalesChart hourBuckets={hourBuckets} currency={ctx.project.currency} />
-        <RecentOrdersTable
-          recentOrders={rollup.recentOrders}
-          currency={ctx.project.currency}
-        />
-      </section>
+      {/* A store with zero orders used to render four empty panels (hourly chart, latest
+          orders, 7-day chart, top products) one under another — the same sentence four
+          times, and nothing to do (docs/ux-audit.md §3.3). One actionable block instead. */}
+      {totalOrderCount === 0 ? (
+        <section className="dashboard-card card mb-8 p-6 text-center">
+          <p className="section-title">أول طلب</p>
+          <h2 className="mt-1 text-lg font-bold">ما فيه طلبات بعد — جرّب الدورة كاملة</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--color-text-secondary)]">
+            افتح نقطة البيع وسجّل طلباً، أو افتح قائمة الطاولة من جوالك مثل ما يسوي الزبون.
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Link href="/dashboard/pos" className="btn btn-primary">
+              افتح نقطة البيع
+            </Link>
+            <Link href={`/${ctx.project.slug}/menu/table-1`} className="btn btn-secondary">
+              قائمة الطاولة (كعميل)
+            </Link>
+          </div>
+        </section>
+      ) : (
+        <>
+          {/* Grid 2 — hourly sales + latest orders table */}
+          <section className="mb-8 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+            <HourlySalesChart hourBuckets={hourBuckets} currency={ctx.project.currency} />
+            <RecentOrdersTable
+              recentOrders={rollup.recentOrders}
+              currency={ctx.project.currency}
+            />
+          </section>
 
-      {/* Last 7 days + top 3 */}
-      <section className="mb-8 grid gap-6 lg:grid-cols-2">
-        <WeeklySalesChart byDay7={byDay7} currency={ctx.project.currency} />
-        <TopProducts top3={top3} currency={ctx.project.currency} />
-      </section>
+          {/* Last 7 days + top 3 */}
+          <section className="mb-8 grid gap-6 lg:grid-cols-2">
+            <WeeklySalesChart byDay7={byDay7} currency={ctx.project.currency} />
+            <TopProducts top3={top3} currency={ctx.project.currency} />
+          </section>
+        </>
+      )}
     </div>
   );
 }
