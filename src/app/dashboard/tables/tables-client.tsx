@@ -266,7 +266,12 @@ export function TablesClient({
         </div>
       </div>
 
-      {!reprinted && <QrReprintBanner onDismiss={() => void markReprinted()} />}
+      {/* Only a store that already has tables can be holding old printed sheets. A brand-new
+          store used to see «أعد طباعة رموز QR» before it had ever created one — nonsense on the
+          first screen a merchant opens. */}
+      {!reprinted && tables.length > 0 && (
+        <QrReprintBanner onDismiss={() => void markReprinted()} />
+      )}
 
       {/* D2: رابط المتجر — يشاركه التاجر مع زبائنه (يفتح صفحة المتجر العامة) */}
       <section className="mb-6">
