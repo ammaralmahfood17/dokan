@@ -87,7 +87,7 @@ export default async function DashboardPage() {
       .order('created_at', { ascending: false }),
     supabase
       .from('orders')
-      .select('id, status, table_id')
+      .select('id, status, table_id, total_amount')
       .eq('project_id', ctx.project.id)
       .is('service_type', null)
       .in('status', ['pending', 'preparing', 'ready']),
@@ -149,7 +149,7 @@ export default async function DashboardPage() {
 
   const {
     todayOrders, yesterdayOrders, todaySales, yesterdaySales,
-    pendingCount, occupiedTableIds, byDay7, hourBuckets, peakHour, topProducts,
+    pendingCount, pendingValue, occupiedTableIds, byDay7, hourBuckets, peakHour, topProducts,
   } = rollup;
 
   const checklist = checklistFromRollup(
@@ -228,6 +228,7 @@ export default async function DashboardPage() {
         todayOrders={todayOrders}
         ordersDelta={ordersDelta}
         pendingCount={pendingCount}
+        pendingValue={pendingValue}
         occupiedCount={occupiedCount}
         totalActiveTables={totalActiveTables}
       />

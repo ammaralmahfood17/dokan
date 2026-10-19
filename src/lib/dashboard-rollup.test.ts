@@ -458,3 +458,29 @@ describe('checklistFromRollup', () => {
     expect(quiet.every((c) => !c.done)).toBe(true);
   });
 });
+describe('pendingValue', () => {
+  const now = NOW_ISHES[0];
+  const rollupWith = (open: OpenOrder[]) =>
+    buildDashboardRollup({
+      windowOrders: [],
+      openOrders: open,
+      recentOrders: [],
+      now,
+      hourLabels: new Map(),
+      dayLabels: new Map(),
+    });
+
+  it('sums pending + preparing only — a ready order is cooked, not waiting', () => {
+    const got = rollupWith([
+      { id: '1', status: 'pending', table_id: null, total_amount: 3.5 },
+      { id: '2', status: 'preparing', table_id: null, total_amount: '1.2' },
+      { id: '3', status: 'ready', table_id: null, total_amount: 9.9 },
+    ]);
+    expect(got.pendingCount).toBe(2);
+    expect(got.pendingValue).toBe(4.7);
+  });
+
+  it('is zero when nothing is waiting', () => {
+    expect(rollupWith([]).pendingValue).toBe(0);
+  });
+});

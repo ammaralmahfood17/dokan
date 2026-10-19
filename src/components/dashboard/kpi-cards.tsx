@@ -12,6 +12,7 @@ export function KpiCards({
   todayOrders,
   ordersDelta,
   pendingCount,
+  pendingValue,
   occupiedCount,
   totalActiveTables,
 }: {
@@ -22,6 +23,8 @@ export function KpiCards({
   todayOrders: number | null;
   ordersDelta: number;
   pendingCount: number | null;
+  /** Value of orders still in the kitchen — shown so «مبيعات اليوم» is not read as cash. */
+  pendingValue: number;
   occupiedCount: number;
   totalActiveTables: number;
 }) {
@@ -41,6 +44,11 @@ export function KpiCards({
           </p>
         ) : (
           <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">— لا مبيعات أمس</p>
+        )}
+        {pendingValue > 0 && (
+          <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">
+            منها {formatMoney(pendingValue, currency)} قيد التحضير
+          </p>
         )}
         {peakHour && peakHour.revenue > 0 && (
           <p className="mt-1.5 text-[11.5px] text-[var(--color-text-secondary)]">

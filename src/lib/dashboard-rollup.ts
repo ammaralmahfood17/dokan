@@ -19,7 +19,7 @@
  *     → todayOrders, yesterdayOrders, todaySales, yesterdaySales,
  *       hourBuckets, peakHour, byDay7, topProducts
  *   openOrders (ANY date, status in pending|preparing|ready)
- *     → pendingCount, occupiedTableIds
+ *     → pendingCount, pendingValue, occupiedTableIds
  *   recentOrders (ANY date, newest 5)
  *     → the latest-orders table
  *
@@ -61,11 +61,12 @@ export type RecentOrder = {
   tables?: { number: number } | null;
 };
 
-/** Minimal shape for the open-order probe — no items, no amounts needed. */
+/** Minimal shape for the open-order probe — amounts are needed only for pendingValue. */
 export type OpenOrder = {
   id: string;
   status: string;
   table_id: string | null;
+  total_amount?: number | string | null;
 };
 
 export type ProductStat = { qty: number; revenue: number };
@@ -97,6 +98,8 @@ export type DashboardRollup = {
   todaySales: number;
   yesterdaySales: number;
   pendingCount: number;
+  /** Total of pending+preparing orders — the part of «مبيعات اليوم» not yet served. */
+  pendingValue: number;
   occupiedTableIds: Set<string>;
   byDay7: DayBucket[];
   hourBuckets: HourBucket[];
@@ -252,9 +255,13 @@ export function buildDashboardRollup(input: RollupInput): DashboardRollup {
 
   // Live state — from openOrders, which is NOT windowed.
   let pendingCount = 0;
+  let pendingValue = 0;
   const occupiedTableIds = new Set<string>();
   for (const o of openOrders) {
-    if (o.status === 'pending' || o.status === 'preparing') pendingCount++;
+    if (o.status === 'pending' || o.status === 'preparing') {
+      pendingCount++;
+      pendingValue += Number(o.total_amount ?? 0);
+    }
     if (o.table_id !== null && o.table_id !== undefined) occupiedTableIds.add(o.table_id);
   }
 
@@ -265,6 +272,7 @@ export function buildDashboardRollup(input: RollupInput): DashboardRollup {
     todaySales: round3(todaySales),
     yesterdaySales: round3(yesterdaySales),
     pendingCount,
+    pendingValue: round3(pendingValue),
     occupiedTableIds,
     byDay7,
     hourBuckets,
