@@ -84,15 +84,14 @@ function MenuProductRowBase({
             }`}
           />
         ) : (
-          <div
-            className={`flex aspect-[1/0.82] w-full items-center justify-center bg-[var(--color-surface-sunken)] text-[12.5px] font-bold text-[var(--color-text-tertiary)] ${
-              soldOut ? 'opacity-50' : ''
-            }`}
-          >
-            صورة الصنف
-          </div>
+          // No image: do NOT reserve a 40%-height placeholder. A 9-item menu without
+          // photos measured 4348px tall at 375px, most of it empty grey boxes; the
+          // card now collapses to name + description and the grid stays scannable.
+          null
         )}
-        <div className={`flex min-w-0 flex-1 flex-col gap-1 px-3 pt-2.5 ${soldOut ? 'opacity-60' : ''}`}>
+        <div
+          className={`flex min-w-0 flex-1 flex-col gap-1 px-3 ${product.image_url ? 'pt-2.5' : 'pt-3'} ${soldOut ? 'opacity-60' : ''}`}
+        >
           {/* audit T1 #8: `displayName` is the English `name_en` when the toggle is EN, so an
               Arabic page can hold English text. Marked per element by the text's own script. */}
           <h3 lang={langOfText(displayName)} className="line-clamp-2 text-[14.5px] font-bold leading-[1.4]">
