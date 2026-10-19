@@ -52,3 +52,4 @@
 20261016123000_auth_signup_requires_api_marker.sql 2026-10-17
 20261016124000_restore_subscription_payment_policies.sql 2026-10-17
 20261018202853_drop_unused_reservations.sql 2026-10-18
+20261019000000_provision_auth_user.sql 2026-10-19
