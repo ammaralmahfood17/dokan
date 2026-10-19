@@ -115,12 +115,20 @@ function getMoneyFormatter(currency: string, decimals: number): Intl.NumberForma
 
 /** Format money for display with currency code (currency-aware decimals).
  * AR-1: Intl.NumberFormat بلوكيل عربي (ar-BH/ar-KW/...) مع numberingSystem
- * لاتيني إجباري — الأرقام تظهر 0-9 دائمًا، الصياغة والوحدة تبقى عربية. */
+ * لاتيني إجباري — الأرقام تظهر 0-9 دائمًا، الصياغة والوحدة تبقى عربية.
+ *
+ * BIDI (2026-10-19): "0.900 BHD" starts with weak digits, so inside an RTL paragraph the
+ * bidi algorithm moved the Latin currency to the front and the same price rendered as
+ * "BHD 0.900" on POS/products but "0.900 BHD" wherever the caller set dir="ltr" (orders).
+ * The value is wrapped in LRI…PDI (U+2066/U+2069) so it always reads number-then-currency,
+ * without every call site having to remember dir="ltr". The characters are zero-width and
+ * ignored by screen readers.
+ */
 export function formatMoney(value: number, currency = 'BHD'): string {
   const decimals = currencyDecimals(currency);
   const n = Number.isFinite(value) ? money(value, decimals) : 0;
   const formatted = getMoneyFormatter(currency, decimals).format(n);
-  return `${formatted} ${currency}`;
+  return `\u2066${formatted} ${currency}\u2069`;
 }
 
 /**

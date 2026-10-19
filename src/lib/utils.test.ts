@@ -102,7 +102,16 @@ describe('formatMoney()', () => {
     const out = formatMoney(12.5, 'BHD');
     expect(out).toMatch(/[0-9]/);
     expect(out).not.toMatch(/[٠-٩]/);
-    expect(out.endsWith('BHD')).toBe(true);
+    expect(out).toMatch(/BHD\u2069$/);
+  });
+
+  it('isolates the value so RTL paragraphs cannot flip currency order', () => {
+    // Without LRI…PDI, "0.900 BHD" starts with weak digits and the bidi algorithm renders
+    // it "BHD 0.900" inside an RTL paragraph — the same price looked different per screen.
+    const out = formatMoney(0.9, 'BHD');
+    expect(out.startsWith('\u2066')).toBe(true);
+    expect(out.endsWith('\u2069')).toBe(true);
+    expect(out).toContain('0.900 BHD');
   });
 
   it('applies the currency decimals to the rendered string', () => {
