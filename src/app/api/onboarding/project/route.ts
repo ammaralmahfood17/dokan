@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateSlug, isReservedSlug } from '@/lib/utils';
 import { DEFAULT_PRIMARY_COLOR, CURRENCIES } from '@/lib/types';
+import { MENU_TEMPLATES, isMenuTemplateId, templatePrice } from '@/lib/menu-templates';
 
 const VALID_CURRENCIES = new Set(CURRENCIES.map((c) => c.value));
 
@@ -69,6 +70,8 @@ export async function POST(request: NextRequest) {
       slug?: string;
       currency?: string;
       primaryColor?: string;
+      /** Optional starter menu: coffee | tea | juice (see src/lib/menu-templates.ts). */
+      template?: string;
     };
 
     const name = body.name?.trim() ?? '';
@@ -163,12 +166,54 @@ export async function POST(request: NextRequest) {
     }
 
     const created = project as unknown as { id: string; name: string; slug: string };
+
+    // Starter menu (optional). Best-effort by design: the store EXISTS at this point, so a
+    // seeding failure must not turn a successful signup into a 500 and strand the merchant
+    // on the onboarding screen with a project they cannot re-create.
+    let seeded: { categories: number; products: number } | null = null;
+    if (isMenuTemplateId(body.template)) {
+      try {
+        const template = MENU_TEMPLATES[body.template];
+        const { data: catRows, error: catErr } = await admin
+          .from('categories')
+          .insert(
+            template.categories.map((c, i) => ({
+              project_id: created.id,
+              name: c.name,
+              sort_order: i + 1,
+            }))
+          )
+          .select('id,name');
+        if (catErr) throw catErr;
+
+        const byName = new Map((catRows ?? []).map((c) => [c.name as string, c.id as string]));
+        let order = 1;
+        const products = template.categories.flatMap((category) =>
+          category.items.map((item) => ({
+            project_id: created.id,
+            category_id: byName.get(category.name) ?? null,
+            name: item.name,
+            name_en: item.nameEn,
+            price: templatePrice(item.price, currency),
+            sort_order: order++,
+            is_available: true,
+          }))
+        );
+        const { error: prodErr } = await admin.from('products').insert(products);
+        if (prodErr) throw prodErr;
+        seeded = { categories: catRows?.length ?? 0, products: products.length };
+      } catch (err) {
+        console.error('Onboarding template seed failed:', err);
+      }
+    }
+
     return NextResponse.json({
       project: {
         id: created.id,
         name: created.name,
         slug: created.slug,
       },
+      seeded,
     });
   } catch (err) {
     console.error('Onboarding API error:', err);

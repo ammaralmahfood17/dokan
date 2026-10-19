@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { generateSlug } from '@/lib/utils';
 import { getSiteHost } from '@/lib/site-url';
 import { CURRENCIES, DEFAULT_PRIMARY_COLOR } from '@/lib/types';
+import { MENU_TEMPLATES, MENU_TEMPLATE_IDS, type MenuTemplateId } from '@/lib/menu-templates';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { Store, Globe, Palette, Check } from 'lucide-react';
@@ -19,6 +20,8 @@ export default function OnboardingPage() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [currency, setCurrency] = useState('BHD');
   const [primaryColor, setPrimaryColor] = useState(DEFAULT_PRIMARY_COLOR);
+  // Optional starter menu. 'list' = no template, keep the store empty.
+  const [template, setTemplate] = useState<MenuTemplateId | ''>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -75,6 +78,7 @@ export default function OnboardingPage() {
           slug: effectiveSlug.trim(),
           currency,
           primaryColor,
+          template: template || undefined,
         }),
       });
       const data = (await res.json()) as { error?: string; redirect?: string };
@@ -347,6 +351,52 @@ export default function OnboardingPage() {
                   <span className="text-sm font-bold">
                     {CURRENCIES.find((c) => c.value === currency)?.label || currency}
                   </span>
+                </div>
+              </div>
+              <div className="field">
+                <span className="label">ابدأ بقائمة جاهزة (اختياري)</span>
+                <p className="hint mb-2">
+                  نضيف تصنيفات وأصنافاً بأسعار تقدر تعدّلها أو تحذفها — يأخذ منك ثانية واحدة بدل
+                  كتابة كل صنف.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {MENU_TEMPLATE_IDS.map((id) => {
+                    const t = MENU_TEMPLATES[id];
+                    const active = template === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setTemplate(active ? '' : id)}
+                        aria-pressed={active}
+                        className={`min-h-[64px] rounded-[var(--radius-md)] border px-3 py-2 text-start transition-colors ${
+                          active
+                            ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)]'
+                            : 'border-[var(--color-border)] bg-[var(--color-surface)]'
+                        }`}
+                      >
+                        <span className="block text-sm font-bold">{t.label}</span>
+                        <span className="mt-0.5 block text-[11.5px] text-[var(--color-text-secondary)]">
+                          {t.hint}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setTemplate('')}
+                    aria-pressed={template === ''}
+                    className={`min-h-[64px] rounded-[var(--radius-md)] border px-3 py-2 text-start transition-colors ${
+                      template === ''
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)]'
+                        : 'border-[var(--color-border)] bg-[var(--color-surface)]'
+                    }`}
+                  >
+                    <span className="block text-sm font-bold">بدون قائمة</span>
+                    <span className="mt-0.5 block text-[11.5px] text-[var(--color-text-secondary)]">
+                      أدخل أصنافك بنفسك
+                    </span>
+                  </button>
                 </div>
               </div>
               <div className="flex gap-2">
