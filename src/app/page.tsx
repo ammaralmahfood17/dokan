@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { DokanMark } from '@/components/brand/dokan-mark';
 import {
   QrCode,
@@ -8,7 +9,15 @@ import {
   Smartphone,
   Zap,
   CreditCard,
+  MessageCircle,
+  ExternalLink,
 } from 'lucide-react';
+
+/** Support channel — WhatsApp is the Gulf default, so it is a primary CTA, not a footer line. */
+const WHATSAPP_NUMBER = '97336897959';
+const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('مرحبا، عندي سؤال عن دكان')}`;
+/** A real, publicly readable menu. Browse-only (a table token is required to order). */
+const DEMO_MENU = '/estikana/menu/table-1';
 
 /** F-18: rendered per request so the proxy's CSP nonce reaches this page. */
 export const dynamic = 'force-dynamic';
@@ -88,24 +97,39 @@ export default function LandingPage() {
                 <Link href="/register" className="btn btn-primary btn-lg">
                   إنشاء حساب — 14 يوم مجاناً
                 </Link>
+                <Link href={DEMO_MENU} className="btn btn-secondary btn-lg">
+                  <ExternalLink className="h-4 w-4" />
+                  شاهد قائمة حقيقية
+                </Link>
+                <a
+                  href={WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-ghost btn-lg"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  واتساب
+                </a>
               </div>
             </div>
-            <div className="hidden shrink-0 lg:block" aria-hidden="true">
-              <div className="relative mx-auto" style={{ width: '240px' }}>
-                <div className="overflow-hidden rounded-[2.5rem] border-[6px] border-[var(--color-text)] bg-[var(--color-primary)] shadow-xl">
-                  <div className="mx-auto mt-2 h-5 w-28 rounded-full bg-[var(--color-text)]" />
-                  <div className="flex flex-col items-center justify-center px-4 pb-8 pt-6 text-center text-white">
-                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white">
-                      <DokanMark className="h-9 w-9" />
-                    </div>
-                    <p className="text-sm font-bold">دكان</p>
-                    <p className="mt-1 text-[11.5px] text-white/90">قائمة طعامك في جوال الزبون</p>
-                    <div className="mt-4 flex h-16 w-16 items-center justify-center rounded-lg bg-white/10">
-                      <QrCode className="h-8 w-8 text-white/90" />
-                    </div>
-                    <p className="mt-2 text-[11.5px] text-white/90">امسح واطلب</p>
-                  </div>
+            <div className="hidden shrink-0 lg:block">
+              <div className="relative mx-auto" style={{ width: '250px' }}>
+                <div className="overflow-hidden rounded-[2.5rem] border-[6px] border-[var(--color-text)] bg-[var(--color-surface)] shadow-xl">
+                  <div className="mx-auto my-2 h-5 w-28 rounded-full bg-[var(--color-text)]" />
+                  {/* A real menu from a live store — the screenshot is the proof, not an illustration. */}
+                  <Image
+                    src="/demo/menu.png"
+                    alt="قائمة QR حقيقية لمتجر على دكان"
+                    width={390}
+                    height={844}
+                    sizes="250px"
+                    className="h-[430px] w-full object-cover object-top"
+                    priority
+                  />
                 </div>
+                <p className="mt-3 text-center text-[11.5px] text-[var(--color-text-muted)]">
+                  قائمة حقيقية — جرّبها بنفسك
+                </p>
               </div>
             </div>
           </div>
@@ -130,6 +154,53 @@ export default function LandingPage() {
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* Proof — a live menu, not a mockup. The rest of the landing is words; this is the
+            one section a sceptical owner can verify in ten seconds on their own phone. */}
+        <section className="mx-auto max-w-6xl px-4 py-16 sm:py-20">
+          <div className="grid items-center gap-8 lg:grid-cols-[1.1fr_1fr]">
+            <div>
+              <p className="section-title mb-2">شاهد المنتج</p>
+              <h2 className="text-2xl font-extrabold text-[var(--color-text)]">
+                قائمة حقيقية، لا لقطات تصميم
+              </h2>
+              <p className="mt-3 max-w-xl text-sm leading-7 text-[var(--color-text-secondary)]">
+                هذه قائمة متجر يعمل على دكان الآن. افتحها من جوالك، أو راسلنا على واتساب ونرتب
+                لك عرضاً مباشراً على متجرك أنت.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link href={DEMO_MENU} className="btn btn-primary btn-lg">
+                  <ExternalLink className="h-4 w-4" />
+                  افتح القائمة
+                </Link>
+                <a
+                  href={WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-secondary btn-lg"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  واتساب الدعم
+                </a>
+              </div>
+              <p className="mt-3 text-[11.5px] text-[var(--color-text-muted)]" dir="ltr">
+                +973 3689 7959
+              </p>
+            </div>
+            <div className="mx-auto w-full max-w-[300px]">
+              <div className="overflow-hidden rounded-[2rem] border-[6px] border-[var(--color-text)] bg-[var(--color-surface)] shadow-xl">
+                <Image
+                  src="/demo/menu.png"
+                  alt="لقطة من قائمة عميل حقيقية على دكان"
+                  width={390}
+                  height={844}
+                  sizes="300px"
+                  className="h-[520px] w-full object-cover object-top"
+                />
+              </div>
+            </div>
           </div>
         </section>
         {/* ── E2: Pricing ── */}
@@ -199,6 +270,14 @@ export default function LandingPage() {
           >
             سياسة الخصوصية
           </Link>
+          <a
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline"
+          >
+            واتساب
+          </a>
         </div>
       </footer>
     </div>
