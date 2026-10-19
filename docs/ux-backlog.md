@@ -112,3 +112,26 @@ where confirmation_token is null or recovery_token is null
 
 | UX-16 | ✅ منفّذ | `02093b6` | متجر بصفر طلبات: كتلة «أول طلب» تظهر، والرسوم الأربع لا تُرسم |
 | UX-18 | ✅ منفّذ | `4cc94dd` | نقرة على البطاقة غيّرت `is_available` إلى false في قاعدة البيانات وظهر زر «تفعيل» |
+
+## تصميم Wave 3 — الفروع (UX-23)
+
+**الفجوة:** الهبوط يذكر «الفروع»، والمخطط يحمل `tables.branch_id` فقط (عمود نائم، بلا جدول `branches`). لا توجد شاشة إدارة ولا طريقة لربط طاولة بفرع.
+
+**نموذج البيانات (migration جديدة، واحدة):**
+- `branches (id uuid pk, project_id uuid not null references projects on delete cascade, name text not null, slug text not null, address text, is_active boolean default true, created_at timestamptz default now(), unique (project_id, slug))`.
+- `tables.branch_id` يُربط بـ`branches(id)` (FK `on delete set null`) + فهرس `(project_id, branch_id)`.
+- `orders.branch_id` (nullable) يُملأ من طاولة الطلب أو من اختيار الكاشير — يفيد التقارير لاحقاً؛ لا يغيّر منطق التسعير.
+
+**أثر RLS:** سياسة `branches` بنفس شكل `tables`: `project_id in (select project_id from staff_members where user_id = auth.uid())` للقراءة، و`owner|manager` للكتابة عبر `has_project_role_for`. لا تُمنح أي صلاحية لـ`anon`، والمنيو العام يقرأ الفرع عبر دالة `security definer` مُقيّدة بالـslug (كما `resolve_table_by_token`).
+
+**خطة الإطلاق:** (1) migration + pgTAP للعزل، (2) شاشة `/dashboard/branches` (CRUD + ربط الطاولات)، (3) منتقي فرع في POS للمتاجر متعددة الفروع فقط، (4) تقارير مقسّمة بالفرع، (5) e2e: مستخدم A لا يرى فروع B، وطلب من طاولة فرع يظهر بفرعه.
+
+**لماذا لا الآن:** ميزة بنية تحتية كاملة (جدول + RLS + شاشة + اختبارات) وليست تحسين UX؛ ولا يوجد متجر متعدد الفروع على المنصة بعد.
+
+## تصميم Wave 3 — تصدير CSV للتحليلات (UX-24)
+
+**الفجوة:** التحليلات تعرض الفترة لكن لا تصدّرها؛ التاجر يحتاج الأرقام في Excel/Muhaseb.
+
+**التصميم:** `GET /api/analytics/export?from&to` بجلسة المستخدم (عميل Supabase العادي، لا service role) — RLS هو الحد. يُعيد `text/csv; charset=utf-8` مع BOM (ليقرأ Excel العربية) وأعمدة: رقم الطلب، التاريخ (Asia/Bahrain)، النوع، الحالة، الإجمالي، الأصناف. الحد الأقصى 31 يوماً و10000 صف، وإلا 400 واضح.
+
+**الأثر:** لا تغيير في المخطط أو RLS. الاختبار: مستخدم من مشروع آخر لا يستطيع تصدير صفوف مشروعك (اختبار عزل مباشر على الـendpoint)، وCSV يفتح بالعربية بدون تشويش.
