@@ -44,22 +44,10 @@ export function ProductCard({
           className="aspect-[4/3] w-full shrink-0 bg-[var(--color-surface-sunken)] object-cover"
         />
       ) : (
-        <div className="flex aspect-[4/3] w-full shrink-0 items-center justify-center bg-[var(--color-surface-sunken)] text-[var(--color-text-secondary)]">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-6 w-6"
-            aria-hidden="true"
-          >
-            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-            <path d="M3 6h18" />
-            <path d="M16 10a4 4 0 0 1-8 0" />
-          </svg>
-        </div>
+        // No image: do not spend 4:3 of the tile on an empty grey box. The POS grid is
+        // the cashier's fastest surface and most stores launch without photos; the tile
+        // collapses to name + price and the grid fits far more items per screen.
+        null
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1 p-2.5">
         <p

@@ -222,7 +222,7 @@ export function KitchenClient({
     >
       {/* Header — Scan Grid: title + tabs + actions */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="font-display text-[16px] font-bold text-[var(--color-text)]">
             {projectName} — شاشة المطبخ
           </h1>
@@ -261,7 +261,7 @@ export function KitchenClient({
           {arabicNewOrders(pendingCount)}
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           {pendingCount > 0 && (
             <button
               type="button"
@@ -275,7 +275,7 @@ export function KitchenClient({
           <span className="flex items-center gap-1.5 rounded-[7px] bg-[var(--color-primary-tint)] px-3 py-1.5 text-[12px] font-bold tabular-nums text-[var(--color-primary)]" aria-live="polite">
             قيد التحضير: {preparingCount}
           </span>
-          <span className="font-mono text-[15px] tabular-nums text-[var(--color-text-muted)]" dir="ltr">
+          <span className="whitespace-nowrap font-mono text-[15px] tabular-nums text-[var(--color-text-muted)]" dir="ltr">
             {time ?? '--:--'}
           </span>
           <button
@@ -301,7 +301,7 @@ export function KitchenClient({
             title="اختبار الصوت"
             className="flex min-h-[44px] items-center rounded-[7px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-success)]"
           >
-            <span aria-hidden="true">🔊</span> اختبار
+            <span aria-hidden="true">🔊</span> <span className="hidden sm:inline">اختبار</span>
           </button>
         </div>
       </header>
