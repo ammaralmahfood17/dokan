@@ -85,10 +85,11 @@ export const POST = withSuperAdmin(
           { status: 409 }
         );
       }
-      if (message.includes('SUPABASE_JWT_EXPIRY_TOO_LONG')) {
+      if (message.includes('SUPABASE_JWT_EXPIRY_TOO_SHORT')) {
+        // The token is about to expire, so there is no honest support window to offer.
         Sentry.captureException(err);
         return NextResponse.json(
-          { error: 'وضع الدعم متوقف بأمان: يجب ضبط مدة JWT في Supabase على 1800 ثانية' },
+          { error: 'انتهت صلاحية جلسة المستخدم الهدف تقريباً — أعد المحاولة بعد لحظات' },
           { status: 503 }
         );
       }

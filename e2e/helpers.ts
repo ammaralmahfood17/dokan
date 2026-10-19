@@ -50,14 +50,20 @@ export function makeEmail(): string {
 }
 
 export async function createTestUser(email: string): Promise<{ id: string }> {
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password: TEST_PASSWORD,
-    email_confirm: true,
-    user_metadata: { full_name: 'E2E Test', from_api: 'true' },
+  // WHY the RPC instead of admin.auth.admin.createUser (2026-10-19): GoTrue's admin
+  // createUser answers 500 "Database error creating new user" on this project because
+  // auth.users carries NULL defaults on its token columns while GoTrue reads them as
+  // strings — every e2e run died at fixture creation with `createTestUser failed: {}`.
+  // public.provision_auth_user writes the same row in the shape GoTrue expects and is
+  // granted to service_role only (migration 20261019000000).
+  const { data, error } = await admin.rpc('provision_auth_user', {
+    p_email: email,
+    p_password: TEST_PASSWORD,
+    p_full_name: 'E2E Test',
+    p_email_confirm: true,
   });
-  if (error || !data.user) throw new Error(`createTestUser failed: ${error?.message}`);
-  return { id: data.user.id };
+  if (error) throw new Error(`createTestUser failed: ${error.message} (${error.code ?? 'no code'})`);
+  return { id: String(data) };
 }
 
 /** Supabase auth cookies for a fresh session (bypasses flaky UI login). */

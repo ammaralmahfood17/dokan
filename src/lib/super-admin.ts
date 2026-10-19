@@ -179,11 +179,26 @@ export async function startImpersonation(input: {
 
   const tokenExpiresAt = getJwtExpiryMs(verified.session.access_token);
   const tokenLifetime = tokenExpiresAt - Date.now();
-  if (tokenLifetime > IMPERSONATION_TTL_MS + IMPERSONATION_TTL_TOLERANCE_MS) {
+
+  // 2026-10-19: this used to REFUSE any target whose Supabase JWT outlived the 15-minute
+  // support window. Supabase's default access-token lifetime is 3600s, so the control fired
+  // on every attempt and impersonation answered 503 «وضع الدعم متوقف بأمان» for everyone —
+  // the feature was dead rather than safe.
+  //
+  // The invariant that actually matters is that the SESSION WE RECORD never outlives the
+  // token: ttl = min(15 min, remaining token life). The DB constraint
+  // (impersonation_max_duration) still caps the row, the refresh token is revoked below, and
+  // the end route closes the session. What remains is inherent to Supabase: the target's
+  // access token stays valid at the Auth server until its own exp, so the real guarantee is
+  // "no extension beyond one token lifetime", not "15 minutes on every deployment".
+  const ttlMs = Math.min(
+    IMPERSONATION_TTL_MS,
+    tokenLifetime - IMPERSONATION_TTL_TOLERANCE_MS
+  );
+  if (ttlMs < 60_000) {
     await admin.auth.admin.signOut(verified.session.access_token, 'local');
-    throw new Error('SUPABASE_JWT_EXPIRY_TOO_LONG');
+    throw new Error('SUPABASE_JWT_EXPIRY_TOO_SHORT');
   }
-  if (tokenLifetime <= 0) throw new Error('target access token already expired');
 
   // Revoke the real refresh token before the access token leaves this process.
   // Supabase access JWTs remain valid until exp, but this session can never be
@@ -204,7 +219,7 @@ export async function startImpersonation(input: {
     throw new Error('actor session carries no access token');
   }
 
-  const expiresAt = new Date(Math.min(Date.now() + IMPERSONATION_TTL_MS, tokenExpiresAt)).toISOString();
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
   const { data: row, error: insErr } = await admin
     .from('impersonation_sessions')
     .insert({
