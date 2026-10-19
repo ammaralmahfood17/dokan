@@ -133,7 +133,14 @@ export async function startImpersonation(input: {
   targetProjectId: string | null;
 }): Promise<{
   sessionId: string;
-  targetSession: { access_token: string; refresh_token: string };
+  targetSession: {
+    access_token: string;
+    refresh_token: string;
+    token_type: string;
+    expires_in: number;
+    expires_at: number;
+    user: unknown;
+  };
   expiresAt: string;
 }> {
   const admin = createAdminClient();
@@ -234,14 +241,20 @@ export async function startImpersonation(input: {
     .single();
   if (insErr || !row) throw new Error(`impersonation persist failed: ${insErr?.message}`);
 
+  // The whole session is returned so the ROUTE can write the @supabase/ssr cookie
+  // (base64-<base64url(JSON)>) itself. The browser cannot do it with setSession():
+  // supabase-js validates the refresh token and answers "Auth session missing!" for the
+  // deliberate non-refreshable placeholder (measured 2026-10-19 — the button failed with
+  // «تعذّر تفعيل جلسة الدعم» while the API had already returned 200).
   return {
     sessionId: row.id,
     targetSession: {
       access_token: verified.session.access_token,
-      // setSession requires a non-empty value. It is never sent to GoTrue
-      // because the access token is still valid, and auto-refresh is disabled
-      // while the support-mode cookie exists.
       refresh_token: `non-refreshable-${row.id}`,
+      token_type: verified.session.token_type ?? 'bearer',
+      expires_in: Math.max(0, Math.floor(tokenLifetime / 1000)),
+      expires_at: Math.floor(tokenExpiresAt / 1000),
+      user: verified.session.user,
     },
     expiresAt,
   };

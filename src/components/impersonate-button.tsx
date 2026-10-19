@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
 /**
@@ -40,19 +39,10 @@ export function ImpersonateButton({
         toast.error(data.error || 'فشل بدء الجلسة');
         return;
       }
-      // The refresh token is an intentionally unusable placeholder. The real
-      // target refresh token was revoked server-side before this response.
-      const supabase = createClient();
-      const { error } = await supabase.auth.setSession({
-        access_token: data.targetSession.access_token,
-        refresh_token: data.targetSession.refresh_token,
-      });
-      if (error) {
-        toast.error('تعذّر تفعيل جلسة الدعم');
-        return;
-      }
-      // dokan-impersonation marker is set by the API response (httpOnly —
-      // see impersonate/route.ts). Never write it from JS.
+      // The API already wrote the SSR auth cookie (and the two support cookies) in this
+      // response. Calling supabase.auth.setSession() here used to fail — supabase-js
+      // validates the deliberately non-refreshable refresh token — so the browser stayed
+      // an admin while the server thought the swap had happened.
       toast.success(`دخلت باسم ${ownerEmail}`);
       // Full navigation rebuilds the browser client with auto-refresh disabled
       // for support mode. SPA navigation would retain the pre-existing client.

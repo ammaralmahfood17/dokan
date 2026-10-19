@@ -56,8 +56,24 @@ export const POST = withSuperAdmin(
       ok: true,
       sessionId: result.sessionId,
       expiresAt: result.expiresAt,
-      targetSession: result.targetSession,
     });
+
+    // Write the SSR auth cookie here, in the exact shape @supabase/ssr reads
+    // (`base64-` + base64url(JSON)). The client used to call supabase.auth.setSession(),
+    // which validates the refresh token and fails with "Auth session missing!" for the
+    // non-refreshable placeholder — the API said 200 while the browser never logged in.
+    const ref = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split('.')[0];
+    const maxAge = Math.max(60, Math.floor((Date.parse(result.expiresAt) - Date.now()) / 1000));
+    response.cookies.set(
+      `sb-${ref}-auth-token`,
+      `base64-${Buffer.from(JSON.stringify(result.targetSession)).toString('base64url')}`,
+      {
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge,
+      }
+    );
     // Support-mode marker: httpOnly so page JS (including any XSS on public
     // surfaces) can never read it. The end route is the only consumer.
     response.cookies.set(MARKER_COOKIE, result.sessionId, {
