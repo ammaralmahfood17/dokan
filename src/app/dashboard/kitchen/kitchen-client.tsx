@@ -9,6 +9,7 @@ import {
   type OrderRow,
 } from '@/lib/kitchen-tickets';
 import { toast } from 'sonner';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import type { OrderStatus } from '@/lib/types';
 import { arabicNewOrders } from '@/lib/arabic';
 
@@ -61,9 +62,27 @@ export function KitchenClient({
   // stage behind a horizontal scroll with no affordance — the first ticket was cut off.
   // Below `lg` the stages become tabs (one column at a time); on tablet+ all stay visible.
   const [stage, setStage] = useState<OrderStatus>('pending');
+  // A kitchen tablet runs this screen all shift; the dashboard chrome (sidebar, header) is
+  // pure overhead at the counter. Fullscreen keeps one surface on the glass (UX-22).
+  const [isFull, setIsFull] = useState(false);
 
   // A kitchen tablet must not dim mid-shift; no-op where the Wake Lock API is absent.
   useWakeLock();
+
+  useEffect(() => {
+    const sync = () => setIsFull(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
+
+  const toggleFullscreen = () => {
+    try {
+      if (document.fullscreenElement) void document.exitFullscreen();
+      else void document.documentElement.requestFullscreen?.();
+    } catch {
+      // browser refused (iOS Safari has no element fullscreen) — the screen still works
+    }
+  };
 
   const { playChime, preloadChime, attachAudioResumeOnInteraction } = useKitchenAudio();
   const { flashTitle, clearFlash, syncTitle, resetTitle } = useTitleFlash();
@@ -278,6 +297,15 @@ export function KitchenClient({
           <span className="whitespace-nowrap font-mono text-[15px] tabular-nums text-[var(--color-text-muted)]" dir="ltr">
             {time ?? '--:--'}
           </span>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            aria-label={isFull ? 'إنهاء ملء الشاشة' : 'ملء الشاشة'}
+            aria-pressed={isFull}
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-[7px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)]"
+          >
+            {isFull ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+          </button>
           <button
             type="button"
             onClick={(e) => {
