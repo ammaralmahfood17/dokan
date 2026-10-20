@@ -203,7 +203,6 @@ export async function startImpersonation(input: {
     tokenLifetime - IMPERSONATION_TTL_TOLERANCE_MS
   );
   if (ttlMs < 60_000) {
-    await admin.auth.admin.signOut(verified.session.access_token, 'local');
     throw new Error('SUPABASE_JWT_EXPIRY_TOO_SHORT');
   }
 
@@ -299,10 +298,19 @@ export async function endImpersonation(sessionId: string): Promise<{
   const admin = createAdminClient();
   const { data: row } = await admin
     .from('impersonation_sessions')
-    .select('id, super_admin_session, super_admin_user_id, target_project_id, target_user_id, ended_at')
+    .select(
+      'id, super_admin_session, super_admin_user_id, target_project_id, target_user_id, ended_at, target_session'
+    )
     .eq('id', sessionId)
     .maybeSingle();
   if (!row || row.ended_at) return null;
+
+  // Kill the session we minted, now that support is over. Best-effort: the row still has to
+  // be closed even if GoTrue is unreachable, and the access token dies at its own exp anyway.
+  const targetToken = (row.target_session as { access_token?: string } | null)?.access_token;
+  if (targetToken) {
+    await admin.auth.admin.signOut(targetToken, 'local').catch(() => {});
+  }
 
   const { error: updateError } = await admin
     .from('impersonation_sessions')
