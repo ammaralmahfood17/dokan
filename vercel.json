@@ -2,5 +2,8 @@
   "framework": "nextjs",
   "buildCommand": "npm run env:validate && npm run build",
   "installCommand": "npm ci",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "regions": [
+    "bom1"
+  ]
 }
