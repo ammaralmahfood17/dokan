@@ -206,14 +206,14 @@ export async function startImpersonation(input: {
     throw new Error('SUPABASE_JWT_EXPIRY_TOO_SHORT');
   }
 
-  // Revoke the real refresh token before the access token leaves this process.
-  // Supabase access JWTs remain valid until exp, but this session can never be
-  // extended beyond that cryptographic deadline.
-  const { error: revokeError } = await admin.auth.admin.signOut(
-    verified.session.access_token,
-    'local'
-  );
-  if (revokeError) throw new Error(`target refresh revocation failed: ${revokeError.message}`);
+  // DO NOT sign the session out here. `admin.signOut(token, 'local')` invalidates the
+  // session at GoTrue: the JWT still parses, but `/auth/v1/user` answers
+  // 403 `session_not_found`, and every server component resolves the user with
+  // `supabase.auth.getUser()` -> the freshly written cookie is dead on arrival
+  // (measured on production 2026-10-20). The refresh token never leaves this process
+  // (the cookie carries the deliberate `non-refreshable-<id>` placeholder and
+  // auto-refresh is off in support mode), and the session is revoked in
+  // endImpersonation() before the row is closed.
 
   // Persist the admin session for restoration. The target JSON intentionally
   // contains no refresh token; the DB constraint enforces that invariant.
