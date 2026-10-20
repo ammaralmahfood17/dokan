@@ -12,10 +12,8 @@ import {
   MessageCircle,
   ExternalLink,
 } from 'lucide-react';
+import { SUPPORT_WHATSAPP_URL, SIGNUP_WHATSAPP_URL } from '@/lib/support';
 
-/** Support channel — WhatsApp is the Gulf default, so it is a primary CTA, not a footer line. */
-const WHATSAPP_NUMBER = '97336897959';
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('مرحبا، عندي سؤال عن دكان')}`;
 /** A real, publicly readable menu. Browse-only (a table token is required to order). */
 const DEMO_MENU = '/estikana/menu/table-1';
 
@@ -73,9 +71,14 @@ export default function LandingPage() {
             <Link href="/login" className="btn btn-ghost btn-sm">
               دخول
             </Link>
-            <Link href="/register" className="btn btn-primary btn-sm">
-              ابدأ مجاناً
-            </Link>
+            <a
+              href={SIGNUP_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary btn-sm"
+            >
+              اطلب متجرك
+            </a>
           </div>
         </div>
       </header>
@@ -94,22 +97,19 @@ export default function LandingPage() {
                 شاشة المطبخ ونقطة البيع — بالعربية وRTL بالكامل.
               </p>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-                <Link href="/register" className="btn btn-primary btn-lg">
-                  إنشاء حساب — 14 يوم مجاناً
-                </Link>
+                <a
+                  href={SIGNUP_WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary btn-lg"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  اطلب متجرك — 14 يوم مجاناً
+                </a>
                 <Link href={DEMO_MENU} className="btn btn-secondary btn-lg">
                   <ExternalLink className="h-4 w-4" />
                   شاهد قائمة حقيقية
                 </Link>
-                <a
-                  href={WHATSAPP_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-ghost btn-lg"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  واتساب
-                </a>
               </div>
             </div>
             <div className="hidden shrink-0 lg:block">
@@ -176,7 +176,7 @@ export default function LandingPage() {
                   افتح القائمة
                 </Link>
                 <a
-                  href={WHATSAPP_URL}
+                  href={SUPPORT_WHATSAPP_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-secondary btn-lg"
@@ -211,7 +211,7 @@ export default function LandingPage() {
               باقة واحدة بسيطة
             </h2>
             <p className="mx-auto mb-10 max-w-lg text-sm leading-relaxed text-[var(--color-text-secondary)]">
-              لا رسوم خفية. لا عقود. ابدأ مجاناً وادفع لما تكون جاهز.
+              لا رسوم خفية. لا عقود. جرّب 14 يوماً كاملة وادفع لما تكون جاهز.
             </p>
           </div>
           <div className="mx-auto max-w-sm">
@@ -244,11 +244,17 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/register" className="btn btn-primary btn-lg mt-7 w-full">
-                  ابدأ تجربتك المجانية
-                </Link>
+                <a
+                  href={SIGNUP_WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary btn-lg mt-7 w-full"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  اطلب تجربتك المجانية
+                </a>
                 <p className="mt-3 text-[11.5px] text-[var(--color-text-tertiary)]">
-                  لا حاجة لبطاقة ائتمان. 14 يوم مجاناً كاملة.
+                  نفتح لك الحساب ونجهّزه معك — بلا بطاقة ائتمان.
                 </p>
               </div>
             </div>
@@ -271,7 +277,7 @@ export default function LandingPage() {
             سياسة الخصوصية
           </Link>
           <a
-            href={WHATSAPP_URL}
+            href={SUPPORT_WHATSAPP_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-[44px] items-center underline-offset-4 hover:underline"

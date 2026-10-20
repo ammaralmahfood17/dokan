@@ -122,7 +122,13 @@ test('A1 landing: RTL, hero, CTA, legal footer — no duplicate login CTA', asyn
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('من التسجيل إلى أول طلب');
-  await expect(page.getByRole('link', { name: 'ابدأ مجاناً' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'اطلب متجرك — 14 يوم مجاناً' })).toBeVisible();
+  // UX-02: signups are closed (SIGNUP_ENABLED=false), so the CTA must open WhatsApp rather
+  // than send the visitor into a form that answers 503.
+  await expect(page.getByRole('link', { name: 'اطلب متجرك — 14 يوم مجاناً' })).toHaveAttribute(
+    'href',
+    /wa\.me/
+  );
   await expect(page.getByRole('link', { name: 'الشروط والأحكام' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'سياسة الخصوصية' })).toBeVisible();
   // Phase-2 regression guard: the removed duplicate must stay gone.
@@ -180,6 +186,12 @@ test('B1 login: wrong credentials → Arabic error (no crash)', async ({ page })
 test('B2 register: client validation exposes aria-invalid, valid signup lands on /onboarding', async ({ page }) => {
   const newUser = makeEmail();
   await page.goto('/register');
+  // UX-02: while SIGNUP_ENABLED=false the route renders the WhatsApp hand-off instead of the
+  // form. Skipping is the honest outcome — this spec cannot pass against a closed signup.
+  test.skip(
+    (await page.locator('#fullName').count()) === 0,
+    'self-serve signup is closed (SIGNUP_ENABLED=false)'
+  );
   const emailInput = page.locator('input[type="email"]');
   await emailInput.fill('not-an-email');
   await emailInput.blur();
