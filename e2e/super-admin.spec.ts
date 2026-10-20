@@ -191,18 +191,27 @@ test('Phase C: impersonation — start, banner, audit, end (session restored)', 
   const data = await res.json();
   expect(res.status, JSON.stringify(data)).toBe(200);
   expect(data.sessionId).toBeTruthy();
-  expect(data.targetSession?.access_token).toBeTruthy();
+  // HARDENING: the target session is delivered as a Set-Cookie only — never in the body.
+  expect(data.targetSession).toBeUndefined();
+  expect(JSON.stringify(data)).not.toContain('access_token');
 
-  // 2. Swap cookie to the target session + set marker (mirrors ImpersonateButton).
+  // 2. The API already swapped the session on that response. Read the cookie it wrote (the value
+  // is `base64-<base64url(JSON)>`, exactly what @supabase/ssr reads) and install it in the jar.
+  const authName = `sb-${new URL(url).hostname.split('.')[0]}-auth-token`;
+  const setCookies = res.headers.getSetCookie();
+  const authSetCookie = setCookies.find((c) => c.startsWith(`${authName}=`));
+  const markerSetCookie = setCookies.find((c) => c.startsWith('dokan-impersonation='));
+  expect(authSetCookie, 'impersonate must write the SSR auth cookie').toBeTruthy();
+  expect(authSetCookie).toContain('Max-Age=');
+  const authValue = authSetCookie!.slice(authName.length + 1).split(';')[0];
+  expect(authValue.startsWith('base64-'), 'cookie must use the @supabase/ssr encoding').toBe(true);
+  const markerValue = markerSetCookie!.slice('dokan-impersonation='.length).split(';')[0];
+
   await context.clearCookies();
   await context.addCookies([
-    {
-      name: `sb-${new URL(url).hostname.split('.')[0]}-auth-token`,
-      value: JSON.stringify(data.targetSession),
-      domain: E2E_HOST,
-      path: '/',
-    },
-    { name: 'dokan-impersonation', value: data.sessionId, domain: E2E_HOST, path: '/' },
+    { name: authName, value: authValue, domain: E2E_HOST, path: '/' },
+    { name: 'dokan-impersonation', value: markerValue, domain: E2E_HOST, path: '/' },
+    { name: 'dokan-support-mode', value: '1', domain: E2E_HOST, path: '/' },
   ]);
 
   // 3. Dashboard shows the persistent banner with the target's identity.
@@ -225,7 +234,7 @@ test('Phase C: impersonation — start, banner, audit, end (session restored)', 
   const endRes = await fetch(`${E2E_BASE_URL}/api/super-admin/impersonate/end`, {
     method: 'POST',
     headers: {
-      Cookie: `${cookieHeader}; sb-${new URL(url).hostname.split('.')[0]}-auth-token=${encodeURIComponent(JSON.stringify(data.targetSession))}; dokan-impersonation=${data.sessionId}`,
+      Cookie: `${cookieHeader}; ${authName}=${authValue}; dokan-impersonation=${markerValue}; dokan-support-mode=1`,
     },
   });
   const endData = await endRes.json();
@@ -236,13 +245,15 @@ test('Phase C: impersonation — start, banner, audit, end (session restored)', 
   const endSetCookies = endRes.headers.get('set-cookie') ?? '';
   expect(endSetCookies.includes('auth-token'), 'restored session must arrive via Set-Cookie').toBe(true);
 
-  // 5b. Negative: ending again (marker consumed/cleared) is not authorized.
+  // 5b. Idempotent: a consumed marker closes support again but cannot resurrect the session.
   const endAgain = await fetch(`${E2E_BASE_URL}/api/super-admin/impersonate/end`, {
     method: 'POST',
     headers: { Cookie: `dokan-impersonation=${data.sessionId}` },
   });
-  expect(endAgain.status, 'a stale marker must not resurrect an ended session').toBe(200);
-  expect((await endAgain.json()).ok).toBe(false);
+  expect(endAgain.status, 'a stale marker must not error out').toBe(200);
+  const again = await endAgain.json();
+  expect(again.ok).toBe(true);
+  expect(again.restored, 'a stale marker cannot restore an admin session').toBe(false);
 
   // 6. Audit end row exists.
   const { data: endLogs } = await admin

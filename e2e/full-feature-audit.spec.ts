@@ -450,26 +450,21 @@ test('E3 deactivate → public order blocked → reactivate', async ({ page, req
 });
 
 test('E4 impersonate → support banner → end restores admin session', async ({ page }) => {
-  const { E2E_HOST, url } = await import('./helpers');
   await page.context().addCookies(await SA_COOKIES());
   const start = await page.request.post('/api/super-admin/impersonate', {
     data: { targetUserId: ownerId, projectId },
   });
-  expect(start.status(), await start.text().catch(() => '')).toBe(200);
-  const body = (await start.json()) as { sessionId?: string; targetSession?: { access_token: string } };
-  expect(body.sessionId, 'start returns session id + target session (ImpersonateButton contract)').toBeTruthy();
-  expect(body.targetSession?.access_token).toBeTruthy();
+  // Read the body ONCE: response.text() consumes it, and the old code then called start.json().
+  const startText = await start.text();
+  expect(start.status(), startText).toBe(200);
+  const body = JSON.parse(startText) as { sessionId?: string; targetSession?: unknown };
+  expect(body.sessionId, 'start returns a session id').toBeTruthy();
+  // HARDENING: tokens never transit the body — the session arrives as Set-Cookie only.
+  expect(body.targetSession).toBeUndefined();
+  expect(JSON.stringify(body)).not.toContain('access_token');
 
-  // Mirror ImpersonateButton: the browser jar must SWAP to the target's
-  // session + marker — the marker alone doesn't switch who /dashboard renders for.
-  // Cookie name must match Supabase project ref — the SSR
-  // client reads sb-<ref>-auth-token, and <ref> comes from the SUPABASE_URL.
-  const SUPABASE_REF = new URL(url).hostname.split('.')[0];
-  await page.context().clearCookies();
-  await page.context().addCookies([
-    { name: `sb-${SUPABASE_REF}-auth-token`, value: JSON.stringify(body.targetSession), domain: E2E_HOST, path: '/' },
-    { name: 'dokan-impersonation', value: body.sessionId!, domain: E2E_HOST, path: '/' },
-  ]);
+  // page.request shares this browser context's cookie jar, so the start response has already
+  // replaced the admin session with the target's. Nothing to swap by hand.
   await page.goto('/dashboard');
   await expect(page.getByText(/وضع الدعم الفني/).first()).toBeVisible({ timeout: 20_000 });
 
