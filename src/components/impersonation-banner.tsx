@@ -42,6 +42,12 @@ export function ImpersonationBanner({
       // this browser as the one that started the impersonation.
       const res = await fetch('/api/super-admin/impersonate/end', { method: 'POST' });
       const data = await res.json();
+      if (res.status === 401) {
+        // The marker was already invalid/consumed; the API cleared the support cookies, so a
+        // reload is the way out. Without this the banner stayed and every click re-toasted.
+        window.location.assign('/login');
+        return;
+      }
       if (!res.ok || !data.ok) {
         toast.error(data.error || 'فشل إنهاء الجلسة');
         setEnding(false);

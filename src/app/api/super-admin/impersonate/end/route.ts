@@ -8,6 +8,17 @@ import {
   SUPPORT_MODE_COOKIE,
   type StoredSession,
 } from '@/lib/super-admin';
+import { clearAuthCookies } from '@/lib/impersonation-cookies';
+import { getPublicSupabaseConfig } from '@/lib/env/public';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Clear the two support cookies on any response shape. */
+function clearSupportCookies(response: NextResponse): void {
+  const options = { path: '/', maxAge: 0 };
+  response.cookies.set(MARKER_COOKIE, '', options);
+  response.cookies.set(SUPPORT_MODE_COOKIE, '', options);
+}
 
 /**
  * POST /api/super-admin/impersonate/end
@@ -21,8 +32,11 @@ import {
  * The admin's own session is restored SERVER-SIDE (setSession writes the
  * auth cookies on this response) — super admin tokens are never returned in
  * a body again. Marks the row ended and writes an audit end entry. The
- * The caller's current auth cookies (the TARGET's session) are never signed out
- * here — that would log the store owner out of their own devices.
+ * caller's current auth cookies (the TARGET's session) are not signed out at
+ * GoTrue here — that would log the store owner out of their own devices — but
+ * they ARE removed from this browser whenever the admin session cannot be
+ * restored: leaving the target's cookie behind while the banner disappears
+ * means the operator keeps acting as the tenant with no support indicator.
  *
  * NO RATE LIMIT HERE, unlike its seven sibling super-admin routes (audit
  * 2026-09-26). Those are token-authenticated and keyed on the admin's user id;
@@ -35,8 +49,16 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const marker = request.cookies.get(MARKER_COOKIE)?.value;
-    if (!marker || marker.length !== 36) {
-      return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
+    // A corrupt/absent marker used to be a permanent dead end: 401 without clearing anything, so
+    // the dashboard kept rendering the "expired" banner and every click re-hit the same 401.
+    const wasInSupportMode = request.cookies.has(SUPPORT_MODE_COOKIE);
+    if (!marker || !UUID_RE.test(marker)) {
+      const denied = NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
+      // Only drop the session cookie when this browser claims to be in support mode; a tenant
+      // who pokes this endpoint must not be logged out of their own store.
+      if (wasInSupportMode) clearAuthCookies(denied, getPublicSupabaseConfig().url);
+      clearSupportCookies(denied);
+      return denied;
     }
 
     const result = await endImpersonation(marker);
@@ -80,8 +102,14 @@ export async function POST(request: NextRequest) {
     // A stale/invalidated marker is still safely "ended": clear local state
     // and send the operator to login when no admin session can be restored.
     const response = NextResponse.json({ ok: true, restored });
-    response.cookies.set(MARKER_COOKIE, '', { path: '/', maxAge: 0 });
-    response.cookies.set(SUPPORT_MODE_COOKIE, '', { path: '/', maxAge: 0 });
+    if (!restored) {
+      // Either the admin's token expired or the row was already ended/consumed. Never leave the
+      // browser holding the TARGET's session once support mode closes: without the banner the
+      // operator would keep acting as the tenant with no indicator (the cookie is capped at the
+      // support window, but that window can be up to 15 minutes).
+      clearAuthCookies(response, getPublicSupabaseConfig().url);
+    }
+    clearSupportCookies(response);
     return response;
   } catch (err) {
     Sentry.captureException(err);

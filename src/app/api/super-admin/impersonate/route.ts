@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
-import { withSuperAdmin, readJsonBody } from '@/lib/api/handler';
+import { withSuperAdmin, readJsonBody, isUuid } from '@/lib/api/handler';
 import {
   startImpersonation,
   logSuperAdminAction,
   MARKER_COOKIE,
   SUPPORT_MODE_COOKIE,
 } from '@/lib/super-admin';
+import { writeAuthCookie } from '@/lib/impersonation-cookies';
+import { getPublicSupabaseConfig } from '@/lib/env/public';
 import type { Json } from '@/lib/database.types';
 
 /**
@@ -22,13 +24,16 @@ import type { Json } from '@/lib/database.types';
  */
 export const POST = withSuperAdmin(
   'impersonate',
-  async (request, { userId, client }) => {
+  async (request, { userId, admin, client }) => {
     const parsed = await readJsonBody(request);
     if (!parsed.ok) return parsed.response;
     const body = parsed.body as { targetUserId?: string; projectId?: string };
 
-    if (!body.targetUserId || typeof body.targetUserId !== 'string') {
+    if (!isUuid(body.targetUserId)) {
       return NextResponse.json({ error: 'targetUserId مطلوب' }, { status: 400 });
+    }
+    if (body.projectId !== undefined && body.projectId !== null && !isUuid(body.projectId)) {
+      return NextResponse.json({ error: 'projectId غير صالح' }, { status: 400 });
     }
 
     // Capture the admin's CURRENT session BEFORE swapping (restore on end).
@@ -50,6 +55,13 @@ export const POST = withSuperAdmin(
       targetProjectId: body.projectId ?? null,
       targetUserId: body.targetUserId,
       metadata: { sessionId: result.sessionId, expiresAt: result.expiresAt },
+    }).catch(async (err: unknown) => {
+      // The session row and the target's GoTrue session already exist at this point. If the
+      // audit write fails, no cookie has been written, so close the row rather than leave an
+      // "active" impersonation nobody can see in the log. The minted access token is never
+      // stored anywhere and dies at its own exp.
+      await admin.from('impersonation_sessions').delete().eq('id', result.sessionId);
+      throw err;
     });
 
     const response = NextResponse.json({
@@ -58,22 +70,20 @@ export const POST = withSuperAdmin(
       expiresAt: result.expiresAt,
     });
 
-    // Write the SSR auth cookie here, in the exact shape @supabase/ssr reads
-    // (`base64-` + base64url(JSON)). The client used to call supabase.auth.setSession(),
-    // which validates the refresh token and fails with "Auth session missing!" for the
-    // non-refreshable placeholder — the API said 200 while the browser never logged in.
-    const ref = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split('.')[0];
+    // Swap the browser's session here, on the server. Tokens must never transit JS (they were
+    // removed from this response body for that reason), and the support window — not the JWT's
+    // own lifetime — must cap the cookie. `writeAuthCookie` owns the @supabase/ssr byte format,
+    // including chunking: a single oversize cookie is dropped by browsers, which is exactly the
+    // "API 200 but the browser never logged in" failure this route was fixed for.
     const maxAge = Math.max(60, Math.floor((Date.parse(result.expiresAt) - Date.now()) / 1000));
-    response.cookies.set(
-      `sb-${ref}-auth-token`,
-      `base64-${Buffer.from(JSON.stringify(result.targetSession)).toString('base64url')}`,
-      {
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge,
-      }
-    );
+    const { url: supabaseUrl } = getPublicSupabaseConfig();
+    try {
+      writeAuthCookie(response, supabaseUrl, result.targetSession, maxAge);
+    } catch (err) {
+      // An unrepresentable session must not leave an "active" row behind.
+      await admin.from('impersonation_sessions').delete().eq('id', result.sessionId);
+      throw err;
+    }
     // Support-mode marker: httpOnly so page JS (including any XSS on public
     // surfaces) can never read it. The end route is the only consumer.
     response.cookies.set(MARKER_COOKIE, result.sessionId, {
@@ -98,6 +108,12 @@ export const POST = withSuperAdmin(
       if (message.includes('MFA')) {
         return NextResponse.json(
           { error: 'المستخدم مفعّل لديه MFA — لا يمكن انتحال الجلسة' },
+          { status: 409 }
+        );
+      }
+      if (message.includes('TARGET_IS_SUPER_ADMIN')) {
+        return NextResponse.json(
+          { error: 'هذا الحساب مشرف منصة — لا يُسمح بانتحال جلسة مشرف' },
           { status: 409 }
         );
       }

@@ -58,6 +58,9 @@ beforeEach(() => {
   vi.stubEnv('TURNSTILE_SECRET', '');
   vi.stubEnv('VERCEL_ENV', '');
   vi.stubEnv('NODE_ENV', 'test');
+  // The route fails CLOSED: only the literal "true" opens signup. These tests exercise the
+  // account-creation path, so the switch must be explicit — an unset value is a 503 now.
+  vi.stubEnv('SIGNUP_ENABLED', 'true');
 });
 
 afterEach(() => {
@@ -207,4 +210,16 @@ describe('the created account is UNCONFIRMED (decision 7)', () => {
     expect(text).not.toContain('merchant@example.com');
     expect(text).not.toContain('already registered');
   });
+});
+
+describe('the signup switch fails closed', () => {
+  it.each(['', '1', 'True', 'TRUE', 'yes'])(
+    'answers 503 and creates nothing when SIGNUP_ENABLED=%j',
+    async (value) => {
+      vi.stubEnv('SIGNUP_ENABLED', value);
+      const res = await json(VALID);
+      expect(res.status).toBe(503);
+      expect(createUser).not.toHaveBeenCalled();
+    }
+  );
 });

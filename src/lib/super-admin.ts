@@ -99,10 +99,11 @@ export async function logSuperAdminAction(input: {
 // building — see the live probe):
 //   admin.generateLink({type:'magiclink'}) + verifyOtp(token_hash) mints a
 //   short-lived session for the target user with NO password exposure. The
-//   real target refresh token is revoked before any response is sent; the
-//   browser receives only the access token plus a deliberately unusable local
-//   placeholder. Supabase Auth must therefore be configured with a JWT expiry
-//   of at most 30 minutes, which is checked at runtime and fails closed.
+//   minted refresh token never leaves this process — it is never stored, and
+//   the browser receives only the access token plus a deliberately unusable
+//   local placeholder. The real target session is revoked in
+//   endImpersonation(). The support window is min(15 min, remaining JWT life),
+//   checked at runtime; it never extends a token's own lifetime.
 //
 // LIMITATION (reported explicitly): this requires the target user to not
 // have MFA / TOTP enabled — verifyOtp with a magiclink token_hash bypasses
@@ -148,6 +149,16 @@ export async function startImpersonation(input: {
   const { data: targetUser } = await admin.auth.admin.getUserById(input.targetUserId);
   if (!targetUser?.user?.email) throw new Error('target user not found');
   const targetEmail = targetUser.user.email;
+
+  // Refuse platform admins. Impersonation exists to help a tenant, and a super admin needs no
+  // help: minting a session for one would put a second admin's full privileges behind the
+  // support banner and make the audit trail ambiguous about who acted.
+  const { data: targetIsSuperAdmin } = await admin
+    .from('super_admins')
+    .select('user_id')
+    .eq('user_id', input.targetUserId)
+    .maybeSingle();
+  if (targetIsSuperAdmin) throw new Error('TARGET_IS_SUPER_ADMIN');
 
   if (input.targetProjectId) {
     const { data: ownerMembership } = await admin
@@ -216,7 +227,9 @@ export async function startImpersonation(input: {
   // endImpersonation() before the row is closed.
 
   // Persist the admin session for restoration. The target JSON intentionally
-  // contains no refresh token; the DB constraint enforces that invariant.
+  // contains no refresh token; the DB constraint enforces that invariant. The
+  // email rides along so the dashboard banner does not need a GoTrue admin call
+  // on every render (support mode) — it is not a secret on this table.
   // W6-T3 (A8 option A): keep the actor's ACCESS token only. The admin's browser still holds its own
   // session cookie, so restoration does not need a refresh token - and a refreshable credential for
   // the highest-privileged account must not sit in a plaintext column. The DB CHECK enforces it.
@@ -233,7 +246,7 @@ export async function startImpersonation(input: {
       target_user_id: input.targetUserId,
       target_project_id: input.targetProjectId,
       super_admin_session: { access_token: actorAccessToken },
-      target_session: { access_token: verified.session.access_token },
+      target_session: { access_token: verified.session.access_token, email: targetEmail },
       expires_at: expiresAt,
     })
     .select('id')
@@ -241,10 +254,8 @@ export async function startImpersonation(input: {
   if (insErr || !row) throw new Error(`impersonation persist failed: ${insErr?.message}`);
 
   // The whole session is returned so the ROUTE can write the @supabase/ssr cookie
-  // (base64-<base64url(JSON)>) itself. The browser cannot do it with setSession():
-  // supabase-js validates the refresh token and answers "Auth session missing!" for the
-  // deliberate non-refreshable placeholder (measured 2026-10-19 — the button failed with
-  // «تعذّر تفعيل جلسة الدعم» while the API had already returned 200).
+  // itself. Tokens must never transit page JS — that is the 2026-09-20 hardening
+  // contract — so the browser only ever sees the Set-Cookie header.
   return {
     sessionId: row.id,
     targetSession: {
@@ -267,7 +278,7 @@ export async function getImpersonationById(
   const admin = createAdminClient();
   const { data } = await admin
     .from('impersonation_sessions')
-    .select('id, target_user_id, target_project_id, expires_at, ended_at, used_at')
+    .select('id, target_user_id, target_project_id, expires_at, ended_at, used_at, target_session')
     .eq('id', sessionId)
     .maybeSingle();
   if (!data || data.ended_at) return null;
@@ -276,12 +287,19 @@ export async function getImpersonationById(
   if (data.used_at) return null;
   const expired = new Date(data.expires_at as string).getTime() <= Date.now();
 
-  const { data: targetUser } = await admin.auth.admin.getUserById(data.target_user_id as string);
+  // The email is stored at start so the banner does not pay a GoTrue admin round-trip on every
+  // dashboard render. Rows written before that change fall back to the API.
+  const storedEmail = (data.target_session as { email?: unknown } | null)?.email;
+  let targetEmail = typeof storedEmail === 'string' ? storedEmail : '';
+  if (!targetEmail) {
+    const { data: targetUser } = await admin.auth.admin.getUserById(data.target_user_id as string);
+    targetEmail = targetUser?.user?.email ?? 'unknown';
+  }
   return {
     id: data.id as string,
     targetUserId: data.target_user_id as string,
     targetProjectId: data.target_project_id as string | null,
-    targetEmail: targetUser?.user?.email ?? 'unknown',
+    targetEmail,
     expiresAt: data.expires_at as string,
     expired,
   };

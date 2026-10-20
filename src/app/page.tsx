@@ -59,6 +59,15 @@ const FEATURES = [
   },
 ] as const;
 export default function LandingPage() {
+  // One source of truth for the signup path. When self-serve is open the CTAs must land on the
+  // form, not on WhatsApp — otherwise flipping SIGNUP_ENABLED still needs a code edit, which is
+  // exactly what the register page's comment promises it does not.
+  const signupOpen = process.env.SIGNUP_ENABLED === 'true';
+  const signupHref = signupOpen ? '/register' : SIGNUP_WHATSAPP_URL;
+  const signupLinkProps = signupOpen
+    ? {}
+    : { target: '_blank' as const, rel: 'noopener noreferrer' };
+
   return (
     <div className="storefront landing-shell min-h-dvh">
       <header className="landing-nav sticky top-0 z-[var(--z-sticky)] border-b border-white/70">
@@ -72,9 +81,8 @@ export default function LandingPage() {
               دخول
             </Link>
             <a
-              href={SIGNUP_WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={signupHref}
+              {...signupLinkProps}
               className="btn btn-primary btn-sm"
             >
               اطلب متجرك
@@ -98,12 +106,11 @@ export default function LandingPage() {
               </p>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
                 <a
-                  href={SIGNUP_WHATSAPP_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={signupHref}
+                  {...signupLinkProps}
                   className="btn btn-primary btn-lg"
                 >
-                  <MessageCircle className="h-4 w-4" />
+                  {!signupOpen && <MessageCircle className="h-4 w-4" />}
                   اطلب متجرك — 14 يوم مجاناً
                 </a>
                 <Link href={DEMO_MENU} className="btn btn-secondary btn-lg">
@@ -245,12 +252,11 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <a
-                  href={SIGNUP_WHATSAPP_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={signupHref}
+                  {...signupLinkProps}
                   className="btn btn-primary btn-lg mt-7 w-full"
                 >
-                  <MessageCircle className="h-4 w-4" />
+                  {!signupOpen && <MessageCircle className="h-4 w-4" />}
                   اطلب تجربتك المجانية
                 </a>
                 <p className="mt-3 text-[11.5px] text-[var(--color-text-tertiary)]">

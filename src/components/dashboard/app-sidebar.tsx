@@ -72,6 +72,11 @@ export function AppSidebar({
 
       if (isBrowserSupportMode()) {
         const response = await fetch('/api/super-admin/impersonate/end', { method: 'POST' });
+        if (response.status === 401) {
+          // Marker already dead — the API cleared the support cookies. Leave support mode.
+          window.location.assign('/login');
+          return;
+        }
         const result = await response.json();
         if (!response.ok || !result.ok) throw new Error('support session end failed');
         window.location.assign(

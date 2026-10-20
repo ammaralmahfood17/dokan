@@ -11,7 +11,10 @@ import { SIGNUP_WHATSAPP_URL } from '@/lib/support';
  * form comes back; no code change.
  */
 export default function RegisterPage() {
-  if (process.env.SIGNUP_ENABLED !== 'false') {
+  // Fail CLOSED: only the literal `true` opens self-serve signup. Before this, any unset or
+  // mistyped value ("True", "1", a trailing space) rendered the form while the API answered 503 —
+  // the exact dead end UX-02 removed.
+  if (process.env.SIGNUP_ENABLED === 'true') {
     return <RegisterForm />;
   }
 

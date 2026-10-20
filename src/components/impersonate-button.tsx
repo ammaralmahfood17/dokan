@@ -39,10 +39,9 @@ export function ImpersonateButton({
         toast.error(data.error || 'فشل بدء الجلسة');
         return;
       }
-      // The API already wrote the SSR auth cookie (and the two support cookies) in this
-      // response. Calling supabase.auth.setSession() here used to fail — supabase-js
-      // validates the deliberately non-refreshable refresh token — so the browser stayed
-      // an admin while the server thought the swap had happened.
+      // The API wrote the SSR auth cookie on this response (tokens never transit JS). The body
+      // carries no session, so there is nothing to hand to supabase.auth.setSession() — and
+      // doing so used to leave the browser as the admin while the API said 200.
       toast.success(`دخلت باسم ${ownerEmail}`);
       // Full navigation rebuilds the browser client with auto-refresh disabled
       // for support mode. SPA navigation would retain the pre-existing client.

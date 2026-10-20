@@ -63,7 +63,8 @@ export async function POST(request: Request) {
     // deployment too, so a missing secret cannot go unnoticed.
     // Deliberate pause (owner decision 2026-10-06): signups are closed until Turnstile keys exist,
     // and they stay closed even if keys appear later - the switch is explicit, not implicit.
-    if (process.env.SIGNUP_ENABLED === 'false') {
+    // Fail CLOSED: only the literal `true` opens this endpoint (see /register's page gate).
+    if (process.env.SIGNUP_ENABLED !== 'true') {
       return NextResponse.json({ error: 'التسجيل متوقف مؤقتًا، جرّب لاحقًا.' }, { status: 503 });
     }
 
