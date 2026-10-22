@@ -101,32 +101,6 @@ export function ProductCard({
             باقي <span dir="ltr">{left}</span>
           </span>
         ) : null}
-        {/* Availability: a labelled switch, not a bare power glyph. The merchant
-           has to be able to read the state off the card (audit 2026-10-22, P1);
-           the whole pill stops the click from opening the product. */}
-        {!bulkMode && (
-          <div
-            role="presentation"
-            onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-2 start-2 flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)]/95 py-1 ps-2 pe-3 shadow-sm backdrop-blur-sm"
-          >
-            <Toggle
-              checked={p.is_available}
-              onChange={() => onToggleAvailability()}
-              disabled={toggling}
-              aria-label={p.is_available ? `إيقاف ${p.name}` : `تفعيل ${p.name}`}
-            />
-            <span
-              className={`text-[11.5px] font-bold ${
-                p.is_available
-                  ? 'text-[var(--color-success)]'
-                  : 'text-[var(--color-text-secondary)]'
-              }`}
-            >
-              {toggling ? '…' : p.is_available ? 'متوفر' : 'متوقف'}
-            </span>
-          </div>
-        )}
       </div>
 
       <div className="p-3">
@@ -139,6 +113,31 @@ export function ProductCard({
         <p className="mt-1 text-sm font-bold tabular-nums text-[var(--color-text)]">
           {formatMoney(Number(p.price), currency)}
         </p>
+
+        {/* Availability lives in the footer, not as a floating power glyph over
+           the image: the label is what makes the state readable (audit
+           2026-10-22, P1), and a full-width row keeps the card grid aligned. */}
+        {!bulkMode && (
+          <div
+            role="presentation"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-2"
+          >
+            <span
+              className={`text-[11.5px] font-bold ${
+                p.is_available ? 'text-[var(--color-success)]' : 'text-[var(--color-text-secondary)]'
+              }`}
+            >
+              {toggling ? '…' : p.is_available ? 'متاح للطلب' : 'متوقف'}
+            </span>
+            <Toggle
+              checked={p.is_available}
+              onChange={() => onToggleAvailability()}
+              disabled={toggling}
+              aria-label={p.is_available ? `إيقاف ${p.name}` : `تفعيل ${p.name}`}
+            />
+          </div>
+        )}
 
         {p.option_groups?.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
