@@ -106,10 +106,10 @@ export default async function DashboardLayout({
             with no connection check until the 2026-10-22 audit, and this banner
             existed only on the customer menu. Bottom placement so it cannot
             cover the support-mode bar. */}
-        <OfflineBanner placement="bottom" />
+        <OfflineBanner placement="bottom" aboveNav />
 
         {/* Main */}
-        <main className="flex-1">
+        <main className="flex-1 pb-bottom-nav">
           <div>
             {children}
           </div>

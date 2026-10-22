@@ -45,6 +45,19 @@ const NAV_BOTTOM: NavItem[] = [
   { href: '/dashboard/settings', label: 'الإعدادات', shortLabel: 'إعدادات', icon: Settings, roles: ['owner'] },
 ];
 
+/**
+ * Bottom nav (phones only, <768). Four destinations a waiter switches between
+ * dozens of times a shift, plus «المزيد» which opens the drawer with the rest.
+ * Deliberately NOT derived from NAV_MAIN: the owner's first four entries are
+ * analytics/products/inventory, while the floor staff needs orders/POS/kitchen.
+ */
+const NAV_BAR: NavItem[] = [
+  { href: '/dashboard', label: 'الرئيسية', shortLabel: 'الرئيسية', icon: LayoutDashboard },
+  { href: '/dashboard/orders', label: 'الطلبات', shortLabel: 'طلبات', icon: ClipboardList },
+  { href: '/dashboard/pos', label: 'نقطة البيع', shortLabel: 'POS', icon: Monitor },
+  { href: '/dashboard/kitchen', label: 'شاشة المطبخ', shortLabel: 'مطبخ', icon: ChefHat },
+];
+
 export function AppSidebar({
   projectName,
   role,
@@ -116,7 +129,11 @@ export function AppSidebar({
         aria-current={active ? 'page' : undefined}
         className={cn(
           'group flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-semibold transition-all duration-200',
-          'lg:px-3 lg:py-2',
+          // Tablet (768–1023): 88px icon rail — icon above a 11.5px label, so
+          // the Arabic label is visible without a 270px drawer eating the
+          // counter screen. Back to a row at 1024.
+          'md:flex-col md:gap-1 md:px-1 md:py-2 md:text-[11.5px] md:leading-tight md:text-center',
+          'lg:flex-row lg:gap-3 lg:px-3 lg:py-2 lg:text-[13px]',
           active
             ? 'text-[var(--color-primary)]'
             : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]'
@@ -124,15 +141,16 @@ export function AppSidebar({
       >
         <div className={cn(
           'flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-md)] transition-all duration-200',
+          'md:h-9 md:w-9 lg:h-7 lg:w-7',
           active
             ? 'bg-[var(--color-primary-tint-strong)] text-[var(--color-primary)]'
             : 'bg-transparent text-[var(--color-text-muted)] group-hover:text-[var(--color-text)]'
         )}>
-          <Icon className={cn('h-4 w-4', active ? 'text-[var(--color-primary)]' : '')} />
+          <Icon className={cn('h-4 w-4 md:h-5 md:w-5 lg:h-4 lg:w-4', active ? 'text-[var(--color-primary)]' : '')} />
         </div>
-        <span>{item.label}</span>
+        <span className="md:max-w-full md:truncate">{item.label}</span>
         {active && (
-          <div className="ms-auto h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />
+          <div className="ms-auto h-1.5 w-1.5 rounded-full bg-[var(--color-primary)] md:hidden lg:block" />
         )}
       </Link>
     );
@@ -140,25 +158,14 @@ export function AppSidebar({
 
   return (
     <>
-      {/* Hamburger — mobile/tablet only. h-11 (44px), not h-9: a thumb needs 44px and
-          this is the only way into the nav on a phone, where it sits under the notch. */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className={cn(
-          'fixed end-3 top-3 z-[var(--z-drawer)] flex h-11 w-11 items-center justify-center rounded-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] backdrop-blur-sm',
-          'lg:hidden',
-          isOpen && 'hidden'
-        )}
-        aria-label="فتح القائمة"
-      >
-        <Menu className="h-5 w-5 text-[var(--color-text)]" />
-      </button>
+      {/* The floating hamburger is gone on phones: the bottom nav below is the
+          entry point, and «المزيد» opens this drawer. On a tablet (768–1023)
+          the sidebar is a permanent 88px rail, so there is nothing to open. */}
 
-      {/* Backdrop — mobile */}
+      {/* Backdrop — phones only; the rail is static at 768+ */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-[var(--z-drawer)] bg-black/50 backdrop-blur-sm lg:hidden animate-fade-in"
+          className="fixed inset-0 z-[var(--z-drawer)] bg-black/50 backdrop-blur-sm md:hidden animate-fade-in"
           /* audit T1 #20: a backdrop is not a control; the drawer's own close button is. */
           role="presentation"
           onClick={() => setIsOpen(false)}
@@ -172,17 +179,23 @@ export function AppSidebar({
         className={cn(
           'fixed start-0 top-0 z-[var(--z-drawer)] flex h-dvh w-[270px] flex-col border-e border-[var(--color-border)] bg-[var(--color-surface)] transition-transform duration-300',
           isOpen ? 'translate-x-0' : 'translate-x-full',
-          'lg:static lg:z-auto lg:h-auto lg:w-56 lg:translate-x-0 lg:shadow-none lg:border-e',
+          // 768–1023: a permanent 88px icon rail (a drawer would cost the
+          // cashier a tap on every switch); 1024+: the familiar 224px sidebar.
+          // Sticky at md+: a long products list must not scroll the nav (and
+          // the logout row) out of reach — that was the behaviour with
+          // `md:h-auto`, measured on a 20-card page.
+          'md:sticky md:top-0 md:z-auto md:h-dvh md:w-[88px] md:translate-x-0 md:self-start md:shadow-none',
+          'lg:w-56',
           'print:hidden'
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-3 lg:px-4 lg:py-4">
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-3 md:justify-center md:px-2 md:py-4 lg:justify-between lg:px-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[var(--color-primary)] text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[var(--color-primary)] text-white md:h-10 md:w-10 lg:h-9 lg:w-9">
               <Store className="h-4 w-4" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 md:hidden lg:block">
               <div className="truncate text-sm font-bold text-[var(--color-text)]">
                 {projectName}
               </div>
@@ -196,7 +209,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={() => setIsOpen(false)}
-            className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] hover:bg-[var(--color-bg)] lg:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] hover:bg-[var(--color-bg)] md:hidden"
             aria-label="إغلاق"
           >
             <X className="h-4 w-4 text-[var(--color-text-muted)]" />
@@ -204,27 +217,71 @@ export function AppSidebar({
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2 lg:p-2">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2 md:px-1.5 lg:p-2">
           {NAV_MAIN.filter((item) => !item.roles || item.roles.includes(role)).map(navItem)}
         </nav>
 
         {/* Bottom */}
-        <div className="border-t border-[var(--color-border)] p-2 space-y-0.5">
+        <div className="border-t border-[var(--color-border)] p-2 space-y-0.5 md:px-1.5 lg:p-2">
           {NAV_BOTTOM.filter((item) => !item.roles || item.roles.includes(role)).map(navItem)}
 
           {/* Logout */}
           <button
             type="button"
             onClick={logout}
-            className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-danger-tint)] hover:text-[var(--color-danger)] transition-all duration-200"
+            className="flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-danger-tint)] hover:text-[var(--color-danger)] transition-all duration-200 md:min-h-0 md:flex-col md:gap-1 md:px-1 md:py-2 md:text-[11.5px] md:leading-tight md:text-center lg:min-h-0 lg:flex-row lg:gap-3 lg:px-3 lg:py-2 lg:text-[13px]"
           >
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-md)]">
-              <LogOut className="h-4 w-4" />
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-md)] md:h-9 md:w-9 lg:h-7 lg:w-7">
+              <LogOut className="h-4 w-4 md:h-5 md:w-5 lg:h-4 lg:w-4" />
             </div>
-            <span>تسجيل الخروج</span>
+            <span className="md:hidden lg:max-w-full lg:truncate">تسجيل الخروج</span>
+            <span className="hidden md:inline lg:hidden">خروج</span>
           </button>
         </div>
       </aside>
+
+      {/* Bottom nav — phones only. 56px + the home-indicator inset; the same
+          destinations a waiter toggles between all shift, and «المزيد» opens the
+          drawer holding products/tables/analytics/settings. */}
+      <nav
+        aria-label="التنقل السريع"
+        className="fixed inset-x-0 bottom-0 z-[var(--z-sticky)] border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden print:hidden"
+      >
+        <ul className="flex h-14 items-stretch">
+          {NAV_BAR.filter((item) => !item.roles || item.roles.includes(role)).map((item) => {
+            const active = isActive(item.href);
+            const Icon = item.icon;
+            return (
+              <li key={item.href} className="flex-1">
+                <Link
+                  href={item.href}
+                  prefetch={false}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'flex h-14 w-full flex-col items-center justify-center gap-1 text-[11.5px] font-semibold',
+                    active
+                      ? 'text-[var(--color-primary)]'
+                      : 'text-[var(--color-text-secondary)]'
+                  )}
+                >
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                  <span>{item.shortLabel}</span>
+                </Link>
+              </li>
+            );
+          })}
+          <li className="flex-1">
+            <button
+              type="button"
+              onClick={() => setIsOpen(true)}
+              className="flex h-14 w-full flex-col items-center justify-center gap-1 text-[11.5px] font-semibold text-[var(--color-text-secondary)]"
+            >
+              <Menu className="h-5 w-5" aria-hidden="true" />
+              <span>المزيد</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
     </>
   );
 }

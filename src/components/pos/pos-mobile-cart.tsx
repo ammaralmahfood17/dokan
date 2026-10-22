@@ -41,7 +41,7 @@ export function PosMobileCart({
       {/* ── Mobile: floating total bar ───────────────────────────────── */}
       <div
         data-pos-floating-bar
-        className="fixed inset-x-0 bottom-0 z-[var(--z-drawer)] border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 p-3 pb-safe-bottom backdrop-blur-md md:hidden"
+        className="fixed bottom-[calc(var(--bottom-nav-h)+env(safe-area-inset-bottom))] start-0 end-0 z-[var(--z-drawer)] border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 p-3 pb-safe-bottom backdrop-blur-md md:bottom-0 md:start-[88px] lg:start-56 xl:hidden"
       >
         <button
           type="button"
@@ -64,7 +64,7 @@ export function PosMobileCart({
       {/* ── Mobile: cart bottom sheet ────────────────────────────────── */}
       {open && (
         <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/40 md:hidden"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/40 xl:hidden"
           role="dialog"
           aria-modal="true"
           aria-label="سلة الطلب"

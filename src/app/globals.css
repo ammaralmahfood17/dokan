@@ -52,6 +52,10 @@
   --motion-modal: 240ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 
+  /* Phone bottom nav (Wave 1). Anything fixed to the bottom of a dashboard
+     screen must sit above it: offset = this + env(safe-area-inset-bottom). */
+  --bottom-nav-h: 3.5rem;
+
   /* Containers — one source of width. 720 reading / 1280 app / 1440 marketing. */
   --container-reading: 45rem;
   --container-app: 80rem;
@@ -625,6 +629,25 @@
    ========================================================================== */
 .pb-safe-bottom { padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px)); }
 .mb-safe-bottom { margin-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Dashboard content clearance for the phone bottom nav (56px + home indicator).
+   Reset at 768 where the nav disappears and the tablet rail takes over. */
+.pb-bottom-nav {
+  padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 768px) {
+  .pb-bottom-nav { padding-bottom: 0; }
+}
+
+/* POS on phones: the cart summary bar is fixed ABOVE the bottom nav, and both
+   are outside `main`'s padding box, so the last tile row needs ~88px of its own.
+   Reset at 1024 where the cart becomes a docked column. */
+.page-pos {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 1280px) {
+  .page-pos { padding-bottom: 4rem; }
+}
 
 /* ==========================================================================
    Responsive

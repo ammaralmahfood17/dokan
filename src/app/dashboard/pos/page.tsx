@@ -34,7 +34,7 @@ function PosLoader() {
           <p>جاري التحميل…</p>
         </div>
       </div>
-      <div className="md:grid md:grid-cols-[minmax(0,1fr)_380px] md:items-start md:gap-4">
+      <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-4">
         <div className="min-w-0">
           <div className="mb-3 flex gap-1 rounded-[var(--radius-md)] bg-[var(--color-surface-sunken)] p-1">
             {[0, 1, 2].map((i) => (
@@ -60,8 +60,8 @@ function PosLoader() {
             ))}
           </div>
         </div>
-        <aside className="hidden md:block">
-          <div className="h-[calc(100dvh-57px)] rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:h-dvh">
+        <aside className="hidden xl:block">
+          <div className="h-dvh rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="h-6 w-20 animate-pulse rounded bg-[var(--color-border)]" />
             <div className="mt-6 space-y-4">
               {Array.from({ length: 4 }).map((_, i) => (

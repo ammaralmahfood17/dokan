@@ -343,14 +343,14 @@ export function PosClient({
   };
 
   return (
-    <div className="page md:max-w-[1440px]">
+    <div className="page page-pos md:max-w-[1440px]">
       <div className="page-header">
         <div>
           <h1>نقطة البيع</h1>
         </div>
       </div>
 
-      <div data-pos-shell className="md:grid md:grid-cols-[minmax(0,1fr)_380px] md:items-start md:gap-4">
+      <div data-pos-shell className="xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-4">
         {/* ── Left: product grid (extracted component, wave 4 phase b) ── */}
         <PosProductGrid
           type={type}
@@ -369,9 +369,12 @@ export function PosClient({
           onSelect={(prod) => openProduct(prod as ProductWithOptions)}
         />
 
-        {/* ── Right: cart panel (desktop, sticky full-height) ─────────── */}
-        <aside data-pos-cart className="hidden md:block">
-          <div className="md:sticky md:top-[57px] md:h-[calc(100dvh-57px)] lg:top-0 lg:h-dvh">
+        {/* ── Right: cart panel (desktop ≥1024 only) ───────────────────
+            Below 1280 the cart is the summary bar + bottom sheet: at 1024 a
+            360px docked column leaves ~390px for the grid — two tiles, when the
+            cashier needs four. The tile grid wins until there is real room. */}
+        <aside data-pos-cart className="hidden xl:block">
+          <div className="xl:sticky xl:top-0 xl:h-dvh">
             <CartPanel {...cartPanelProps} />
           </div>
         </aside>
