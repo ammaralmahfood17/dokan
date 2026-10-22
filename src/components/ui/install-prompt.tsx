@@ -14,6 +14,7 @@
 // scanned the QR wants to order, not install. Local dismissal still wins.
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useOnline } from '@/components/ui/use-online';
 import { Download, X } from 'lucide-react';
 
 const DISMISSED_AT_KEY = 'dokan-install-dismissed-at';
@@ -41,6 +42,9 @@ interface BeforeInstallPromptEvent extends Event {
 
 export function InstallPrompt() {
   const pathname = usePathname();
+  // Installing is a network action: the card used to sit under the «غير متصل»
+  // banner offering an install that cannot start.
+  const isOnline = useOnline();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   // Read before paint, like `dismissed`: the card may only render for a visitor
   // who has already loaded the product once (see the header comment).
@@ -99,7 +103,7 @@ export function InstallPrompt() {
   const onAppRoute = APP_ROUTE_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`)
   );
-  if (!deferred || dismissed || !returning || onAppRoute) return null;
+  if (!deferred || dismissed || !returning || onAppRoute || !isOnline) return null;
 
   return (
     <div

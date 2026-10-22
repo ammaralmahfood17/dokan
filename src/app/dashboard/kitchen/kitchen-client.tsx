@@ -9,7 +9,7 @@ import {
   type OrderRow,
 } from '@/lib/kitchen-tickets';
 import { toast } from 'sonner';
-import { Maximize2, Minimize2, Volume2, VolumeX } from 'lucide-react';
+import { Inbox, Maximize2, Minimize2, Volume2, VolumeX } from 'lucide-react';
 import type { OrderStatus } from '@/lib/types';
 import { arabicNewOrders } from '@/lib/arabic';
 
@@ -233,7 +233,7 @@ export function KitchenClient({
 
   return (
     <div
-      className="min-h-dvh bg-[var(--color-bg)]"
+      className="flex min-h-dvh flex-col bg-[var(--color-bg)]"
       /* audit T1 #20: a click-anywhere handler on a non-interactive div. It only clears a
          local badge - it is not an affordance - so it must not be announced or reachable;
          the explicit non-interactive role says so, and jsx-a11y accepts it. */
@@ -454,15 +454,16 @@ export function KitchenClient({
 
       {/* Board — Calm Surface mockup: three fixed stage columns */}
       <main
-        className="flex gap-4 overflow-x-hidden p-5 lg:overflow-x-auto"
+        className="flex min-h-0 flex-1 gap-4 overflow-x-hidden p-5 lg:overflow-x-auto"
         role="region"
         aria-label="تذاكر المطبخ"
         tabIndex={0}
       >
         {sorted.length === 0 ? (
           <div className="flex min-h-[40vh] w-full flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] text-[var(--color-text-tertiary)]">
-            <span className="text-2xl">📡</span>
+            <Inbox className="h-7 w-7" aria-hidden="true" />
             <span className="mt-2 text-[13px]">بانتظار الطلبات…</span>
+            <span className="mt-1 text-[12px] opacity-70">الطلب الجديد يظهر هنا تلقائيًا</span>
           </div>
         ) : (
           STAGE_COLUMNS.map(([columnStage, label]) => {
@@ -471,7 +472,7 @@ export function KitchenClient({
               <section
                 key={columnStage}
                 data-stage={columnStage}
-                className={`min-w-0 flex-1 shrink-0 flex-col gap-3 lg:flex lg:min-w-[280px] ${
+                className={`min-h-0 min-w-0 flex-1 shrink-0 flex-col gap-3 lg:flex lg:min-w-[280px] ${
                   columnStage === stage ? 'flex' : 'hidden'
                 }`}
                 aria-label={label}
@@ -484,7 +485,7 @@ export function KitchenClient({
                     {stageTickets.length}
                   </span>
                 </div>
-                <div className="flex flex-col gap-2.5 overflow-y-auto pb-2">
+                <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pb-2">
                   {stageTickets.map((t) => (
                     <KitchenTicket
                       key={t.order.id}

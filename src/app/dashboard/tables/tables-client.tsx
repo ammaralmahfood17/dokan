@@ -197,7 +197,15 @@ export function TablesClient({
           .card img { width: 160px; height: 160px; margin: 0 auto 8px; display: block; }
           .card .label { font-weight: 700; font-size: 14px; color: #1F2320; }
           .card .slug { font-size: 11px; color: #6B6F68; direction: ltr; }
-          @media print { body { padding: 10px; } }
+          /* 15 tables in a 3-column grid spilled one row onto a second A4 page —
+             a lone card on its own sheet. Four columns at print time (with a
+             130px code, still ~34mm) fits them on one page. */
+          @media print {
+            body { padding: 8px; }
+            .grid { grid-template-columns: repeat(4, 1fr); gap: 10px; }
+            .card { padding: 8px; }
+            .card img { width: 130px; height: 130px; }
+          }
         </style>
       </head>
       <body>
@@ -276,7 +284,7 @@ export function TablesClient({
       {/* D2: رابط المتجر — يشاركه التاجر مع زبائنه (يفتح صفحة المتجر العامة) */}
       <section className="mb-6">
         <p className="section-title">رابط المتجر</p>
-        <div className="dashboard-card card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="dashboard-card card flex flex-wrap items-center gap-3 px-4 py-3">
           <p className="text-sm text-[var(--color-text-secondary)]" dir="ltr">
             {siteUrl}/{projectSlug}
           </p>

@@ -177,11 +177,11 @@ export function PushNotificationManager({
               <Loader2 className="h-4 w-4 animate-spin" />
             </Button>
           ) : isActive ? (
-            <Button variant="secondary" size="sm" onClick={unsubscribe}>
+            <Button variant="secondary" size="sm" className="min-h-11" onClick={unsubscribe}>
               إيقاف
             </Button>
           ) : state === 'inactive' || state === 'denied' ? (
-            <Button size="sm" onClick={subscribe}>
+            <Button size="sm" className="min-h-11" onClick={subscribe}>
               تفعيل
             </Button>
           ) : null}
