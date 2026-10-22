@@ -51,6 +51,7 @@ const CartSheet = dynamic(() => import('@/components/menu/cart-sheet').then((m) 
   ssr: false,
 });
 import { OrderSuccessState } from '@/components/menu/order-success-state';
+import { DokanCredit } from '@/components/brand/dokan-credit';
 import { MenuHeader } from '@/components/menu/menu-header';
 import { MenuCategoryPills } from '@/components/menu/menu-category-pills';
 import { MenuProductArea } from '@/components/menu/menu-product-area';
@@ -678,6 +679,12 @@ export function MenuClient({
         categories={categories}
         renderProduct={renderProduct}
       />
+
+      {/* Platform credit — outside <main> so it never joins the product grid.
+          pb-24 keeps it clear of the fixed cart bar on a phone. */}
+      <div className="menu-shell px-3 pb-24 pt-2 text-center">
+        <DokanCredit />
+      </div>
 
       {/* CART FLOATING BAR — extracted component (wave 4 phase b) */}
       {cartBadge && (

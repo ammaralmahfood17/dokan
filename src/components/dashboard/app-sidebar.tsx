@@ -239,7 +239,7 @@ export function AppSidebar({
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-md)] md:h-9 md:w-9 lg:h-7 lg:w-7">
               <LogOut className="h-4 w-4 md:h-5 md:w-5 lg:h-4 lg:w-4" />
             </div>
-            <span className="md:hidden lg:max-w-full lg:truncate">تسجيل الخروج</span>
+            <span className="md:hidden lg:inline lg:max-w-full lg:truncate">تسجيل الخروج</span>
             <span className="hidden md:inline lg:hidden">خروج</span>
           </button>
         </div>

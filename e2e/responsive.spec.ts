@@ -49,6 +49,9 @@ const VIEWPORTS: Vp[] = [
   { name: '768-tablet', width: 768, height: 1024, touch: true },
   { name: '1024-tablet-landscape', width: 1024, height: 768, touch: true },
   { name: '1280-desktop', width: 1280, height: 800, touch: false },
+  // WCAG 1.4.10 reflow: a 1280×1024 window at 200% browser zoom is a 640×512
+  // viewport to CSS. No horizontal scroll allowed at that width either.
+  { name: '640-zoom200', width: 640, height: 512, touch: true },
 ];
 
 type Measurement = {

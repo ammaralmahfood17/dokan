@@ -4,6 +4,7 @@ import Image from 'next/image';
 import type { Metadata } from 'next';
 import { getPublicProject } from '@/lib/public-project';
 import { getSiteUrl } from '@/lib/site-url';
+import { DokanCredit } from '@/components/brand/dokan-credit';
 import { createAnonClient } from '@/lib/supabase/anon';
 import { Unavailable } from '@/components/menu/unavailable';
 import { compositeOver, resolveLegibleFill } from '@/lib/contrast';
@@ -183,13 +184,7 @@ export default async function StorefrontPage({
       {/* F-17: the closed-store state left half a phone screen empty with nothing to act on — the
           customer had scanned a QR and had no way out. This is that way out, at a 44px target. */}
       <div className="mt-auto pb-8 pt-6 text-center">
-        <Link
-          href="/"
-          className="inline-flex min-h-[44px] items-center text-caption text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
-          dir="ltr"
-        >
-          Powered by Dokan
-        </Link>
+        <DokanCredit />
       </div>
     </main>
   );

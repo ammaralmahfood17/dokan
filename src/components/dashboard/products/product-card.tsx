@@ -3,6 +3,13 @@
 // FIX-C-003 (audit 2.4): ProductCard — extracted verbatim from
 // products-client.tsx. Grid card: 4:3 image/placeholder, bulk-select ring,
 // "متوقف" badge, name/description/price, addon chips. No behavior change.
+//
+// Wave 5 a11y fix: the card was a `div[role=button]` CONTAINING the availability
+// <Toggle> (a real <button role="switch">). axe flagged `nested-interactive` at
+// 1280: a switch inside a clickable ancestor is unreachable in the focus order
+// and hidden from screen readers as its own control. The card is now a plain
+// container, only the media + text block is the edit button, and the
+// availability row is that button's SIBLING.
 import Image from 'next/image';
 import { ImageIcon, Check } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
@@ -36,128 +43,126 @@ export function ProductCard({
   // the merchant too, without touching their manual «متاح للطلب» switch.
   const left = remainingStock(p);
   const sold = isSoldOut(p);
+
+  const media = (
+    <div className="relative aspect-[4/3] w-full overflow-hidden bg-[var(--color-surface)]">
+      {p.image_url ? (
+        // Decorative: the surrounding button already carries the product name.
+        <Image
+          src={p.image_url}
+          alt=""
+          fill
+          sizes="(max-width: 768px) 50vw, 200px"
+          className={`object-cover ${sold ? 'grayscale' : ''}`}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-[var(--color-text-muted)]">
+          <ImageIcon className="h-7 w-7" aria-hidden="true" />
+        </div>
+      )}
+      {bulkMode ? (
+        <button
+          type="button"
+          onClick={onToggleSelect}
+          aria-label={`اختيار ${p.name}`}
+          aria-pressed={selected}
+          className={`absolute start-2 top-2 flex h-11 w-11 items-center justify-center rounded-full border-2 bg-[var(--color-surface)] transition-colors ${
+            selected
+              ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+              : 'border-[var(--color-border)] text-transparent'
+          }`}
+        >
+          <Check className="h-5 w-5" aria-hidden="true" />
+        </button>
+      ) : !p.is_available ? (
+        <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-caption font-bold text-[var(--color-surface)]">
+          متوقف
+        </span>
+      ) : left === 0 ? (
+        <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-caption font-bold text-[var(--color-surface)]">
+          خلص
+        </span>
+      ) : left !== null ? (
+        <span className="absolute end-2 top-2 rounded-[4px] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-caption font-bold text-[var(--color-text-secondary)]">
+          باقي <span dir="ltr">{left}</span>
+        </span>
+      ) : null}
+    </div>
+  );
+
+  const body = (
+    <div className="p-3">
+      <h3 className="line-clamp-1 text-sm font-bold">{p.name}</h3>
+      {p.description && (
+        <p className="mt-0.5 line-clamp-1 text-caption text-[var(--color-text-secondary)]">
+          {p.description}
+        </p>
+      )}
+      <p className="mt-1 text-sm font-bold tabular-nums text-[var(--color-text)]">
+        {formatMoney(Number(p.price), currency)}
+      </p>
+
+      {p.option_groups?.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {/* One chip per OPTION GROUP (with its variety count), not per variety. */}
+          {p.option_groups.slice(0, 2).map((g) => (
+            <span
+              key={g.id}
+              className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-caption font-semibold text-[var(--color-text-secondary)]"
+            >
+              {g.name} · {(g.option_choices ?? []).length}
+            </span>
+          ))}
+          {p.option_groups.length > 2 && (
+            <span className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-caption font-bold tabular-nums text-[var(--color-primary)]">
+              +{p.option_groups.length - 2}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div
       key={p.id}
-      role={bulkMode ? undefined : 'button'}
-      tabIndex={bulkMode ? undefined : 0}
-      onClick={bulkMode ? undefined : onOpen}
-      onKeyDown={
-        bulkMode
-          ? undefined
-          : (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onOpen();
-              }
-            }
-      }
-      aria-label={bulkMode ? undefined : `تعديل ${p.name}`}
       className={`dashboard-card card overflow-hidden text-start transition-all active:scale-[0.98] ${
         bulkMode && selected ? 'ring-2 ring-[var(--color-primary)]' : ''
       } ${sold ? 'opacity-60' : ''}`}
     >
-      {/* Image / placeholder — 4:3 like the POS grid. surface so no-image
-          cards read as one clean card instead of bleeding into the page bg */}
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-[var(--color-surface)]">
-        {p.image_url ? (
-          <Image
-            src={p.image_url}
-            alt={p.name}
-            fill
-            sizes="(max-width: 768px) 50vw, 200px"
-            className={`object-cover ${
-              sold ? 'grayscale' : ''
+      {bulkMode ? (
+        <div>
+          {media}
+          {body}
+        </div>
+      ) : (
+        <button type="button" onClick={onOpen} aria-label={`تعديل ${p.name}`} className="block w-full text-start">
+          {media}
+          {body}
+        </button>
+      )}
+
+      {/* Availability lives in the footer, not as a floating power glyph over
+          the image: the label is what makes the state readable (audit
+          2026-10-22, P1), and a full-width row keeps the card grid aligned.
+          It is a sibling of the edit button — never a child. */}
+      {!bulkMode && (
+        <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-3 pb-3 pt-2">
+          <span
+            className={`text-caption font-bold ${
+              p.is_available ? 'text-[var(--color-success)]' : 'text-[var(--color-text-secondary)]'
             }`}
+          >
+            {toggling ? '…' : p.is_available ? 'متاح للطلب' : 'متوقف'}
+          </span>
+          <Toggle
+            checked={p.is_available}
+            onChange={() => onToggleAvailability()}
+            disabled={toggling}
+            aria-label={p.is_available ? `إيقاف ${p.name}` : `تفعيل ${p.name}`}
           />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-[var(--color-text-muted)]">
-            <ImageIcon className="h-7 w-7" />
-          </div>
-        )}
-        {bulkMode ? (
-          <button
-            type="button"
-            onClick={onToggleSelect}
-            aria-label={`اختيار ${p.name}`}
-            className={`absolute start-2 top-2 flex h-11 w-11 items-center justify-center rounded-full border-2 bg-[var(--color-surface)] transition-colors ${
-              selected
-                ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                : 'border-[var(--color-border)] text-transparent'
-            }`}
-          >
-            <Check className="h-5 w-5" />
-          </button>
-        ) : !p.is_available ? (
-          <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-caption font-bold text-[var(--color-surface)]">
-            متوقف
-          </span>
-        ) : left === 0 ? (
-          <span className="absolute end-2 top-2 rounded-[4px] bg-[var(--color-danger)] px-2 py-0.5 text-caption font-bold text-[var(--color-surface)]">
-            خلص
-          </span>
-        ) : left !== null ? (
-          <span className="absolute end-2 top-2 rounded-[4px] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-caption font-bold text-[var(--color-text-secondary)]">
-            باقي <span dir="ltr">{left}</span>
-          </span>
-        ) : null}
-      </div>
-
-      <div className="p-3">
-        <h3 className="line-clamp-1 text-sm font-bold">{p.name}</h3>
-        {p.description && (
-          <p className="mt-0.5 line-clamp-1 text-caption text-[var(--color-text-secondary)]">
-            {p.description}
-          </p>
-        )}
-        <p className="mt-1 text-sm font-bold tabular-nums text-[var(--color-text)]">
-          {formatMoney(Number(p.price), currency)}
-        </p>
-
-        {/* Availability lives in the footer, not as a floating power glyph over
-           the image: the label is what makes the state readable (audit
-           2026-10-22, P1), and a full-width row keeps the card grid aligned. */}
-        {!bulkMode && (
-          <div
-            role="presentation"
-            onClick={(e) => e.stopPropagation()}
-            className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-2"
-          >
-            <span
-              className={`text-caption font-bold ${
-                p.is_available ? 'text-[var(--color-success)]' : 'text-[var(--color-text-secondary)]'
-              }`}
-            >
-              {toggling ? '…' : p.is_available ? 'متاح للطلب' : 'متوقف'}
-            </span>
-            <Toggle
-              checked={p.is_available}
-              onChange={() => onToggleAvailability()}
-              disabled={toggling}
-              aria-label={p.is_available ? `إيقاف ${p.name}` : `تفعيل ${p.name}`}
-            />
-          </div>
-        )}
-
-        {p.option_groups?.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {/* One chip per OPTION GROUP (with its variety count), not per variety. */}
-            {p.option_groups.slice(0, 2).map((g) => (
-              <span
-                key={g.id}
-                className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-caption font-semibold text-[var(--color-text-secondary)]"
-              >
-                {g.name} · {(g.option_choices ?? []).length}
-              </span>
-            ))}
-            {p.option_groups.length > 2 && (
-              <span className="rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-caption font-bold tabular-nums text-[var(--color-primary)]">
-                +{p.option_groups.length - 2}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

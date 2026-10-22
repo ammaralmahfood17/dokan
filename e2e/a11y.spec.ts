@@ -106,8 +106,18 @@ async function analyze(page: import('@playwright/test').Page, route: string) {
     .analyze() };
 }
 
+// Wave 5: the same route at three widths. A control can pass axe at 1280 and
+// fail at 390 (clipped labels, 0-height targets), and the phone is the majority
+// of the traffic — one viewport was a gate with a blind spot.
+const VIEWPORTS = [
+  { name: 'phone', width: 390, height: 844 },
+  { name: 'tablet', width: 768, height: 1024 },
+  { name: 'desktop', width: 1280, height: 900 },
+];
+
 for (const route of PUBLIC_ROUTES) {
-  test(`axe: ${route} has no serious or critical violations`, async ({ page }) => {
+  for (const vp of VIEWPORTS) test(`axe: ${route} @${vp.name} has no serious or critical violations`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
     const { results, status, errorPage } = await analyze(page, route);
     expect(status, `${route} must render, not error (HTTP ${status})`).toBeLessThan(400);
     expect(errorPage, `${route} rendered an error page`).toBe(0);
@@ -125,8 +135,9 @@ test('axe: public menu URL - set E2E_MENU_PATH to include it', async () => {
 });
 
 for (const route of AUTHED_ROUTES) {
-  test(`axe: ${route} has no serious or critical violations`, async ({ page }) => {
+  for (const vp of VIEWPORTS) test(`axe: ${route} @${vp.name} has no serious or critical violations`, async ({ page }) => {
     test.skip(!SEED, 'set A11Y_SEED=1 to seed a store and sign in');
+    await page.setViewportSize({ width: vp.width, height: vp.height });
     await signIn(page);
     const { landed, results, status, errorPage } = await analyze(page, route);
     test.skip(!landed.startsWith(route), `not signed in - ${route} redirected to ${landed}`);
