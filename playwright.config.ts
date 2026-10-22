@@ -37,5 +37,20 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chrome', use: { browserName: 'chromium', channel: 'chrome' } }],
+  projects: [
+    // The functional suite stays on the single phone viewport (see the WORKERS
+    // note above: it writes to production, so it is budgeted per file).
+    // Responsive assertions live in their own project — mixing 6 viewports into
+    // this one would multiply every fixture-creating spec by six.
+    {
+      name: 'chrome',
+      testIgnore: /responsive\.spec\.ts/,
+      use: { browserName: 'chromium', channel: process.env.PW_CHANNEL || 'chrome' },
+    },
+    {
+      name: 'responsive',
+      testMatch: /responsive\.spec\.ts/,
+      use: { browserName: 'chromium', channel: process.env.PW_CHANNEL || 'chrome' },
+    },
+  ],
 });

@@ -1,0 +1,65 @@
+name: Quality watch
+
+# Nightly lab measurement + responsive matrix. Both read production, write
+# nothing, and create no fixtures — which is why they are the only e2e-derived
+# checks allowed to run on a timer (the functional suite writes to the live
+# merchant database and stays manual, see ci.yml's e2e-readiness job).
+#
+# A red run here opens a task; it does not page anyone.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *' # 02:00 UTC = 05:00 Asia/Bahrain
+
+permissions:
+  contents: read
+
+jobs:
+  responsive:
+    name: Responsive matrix (6 viewports × 8 public routes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The config pins channel=chrome for the operator's machine; CI uses the
+      # bundled Chromium so the runner does not depend on a preinstalled Chrome.
+      - run: npx playwright install --with-deps chromium
+      - name: Responsive matrix
+        run: npx playwright test --project=responsive
+        env:
+          PW_CHANNEL: chromium
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'https://dokanstore.xyz' }}
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: responsive-failures
+          path: test-results/
+          retention-days: 7
+
+  lighthouse:
+    name: Core Web Vitals (mobile 360, 4× CPU, 1.6 Mbps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run Lighthouse CI
+        run: npm run lighthouse
+        env:
+          LH_BASE_URL: ${{ vars.LH_BASE_URL || 'https://dokanstore.xyz' }}
+          LH_RUNS: 3
+          # chrome-launcher finds Google Chrome on ubuntu-latest; pin it so a
+          # runner image change fails loudly here instead of picking a random
+          # Chromium build with different throttling.
+          CHROME_PATH: /usr/bin/google-chrome

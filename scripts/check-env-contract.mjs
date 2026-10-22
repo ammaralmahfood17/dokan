@@ -10,6 +10,9 @@ const platformProvided = new Set([
   'NEXT_RUNTIME',
   'VERCEL',
   'VERCEL_ENV',
+  // Set by GitHub Actions on pull_request events; the RTL gate reads it as a
+  // fallback diff base. Never configured by the app or the operator.
+  'GITHUB_BASE_REF',
 ]);
 const used = new Set(['SENTRY_ORG', 'SENTRY_PROJECT', 'SENTRY_AUTH_TOKEN']);
 

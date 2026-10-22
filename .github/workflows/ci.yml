@@ -68,7 +68,11 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      # fetch-depth 0: the RTL gate compares added lines against the base commit,
+      # and a shallow clone cannot resolve it. Full history is ~small here.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -123,6 +127,16 @@ jobs:
       # mid-rush. Cheap grep-level check, so it can afford to run on every push.
       - name: Assert icon-only controls are at least 44px
         run: node scripts/check-touch-targets.mjs
+
+      - name: Assert no new physical-direction CSS (RTL logical properties)
+        # Added lines only: the tree has a few documented physical exceptions
+        # (printable QR sheet, global-error fallback) and a tree sweep would fail
+        # on history forever. Self-test proves the patterns fire.
+        env:
+          RTL_DIFF_BASE: ${{ github.event.pull_request.base.sha || format('{0}~1', github.sha) }}
+        run: |
+          RTL_SELF_TEST=1 node scripts/check-rtl-logical.mjs
+          npm run check:rtl
 
       # 2026-10-16 (F-12/F-13): `outline-none` on a focusable control removes the only indicator
       # that survives forced-colors mode. It was on the orders date filter and the POS quantity

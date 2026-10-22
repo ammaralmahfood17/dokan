@@ -5,10 +5,12 @@
   "scripts": {
     "a11y": "playwright test --config=playwright.a11y.config.ts",
     "build": "node scripts/build-with-sentry-env.mjs",
+    "check:rtl": "node scripts/check-rtl-logical.mjs",
     "db:types": "supabase gen types typescript --linked --schema public > src/lib/database.types.ts",
     "dev": "next dev",
     "env:check": "node scripts/check-env-contract.mjs",
     "env:validate": "node scripts/validate-env.mjs",
+    "lighthouse": "lhci autorun",
     "lint": "eslint . --max-warnings 0",
     "start": "next start",
     "sweep:test-data": "node scripts/sweep-test-data.mjs",
@@ -18,6 +20,7 @@
     "test:e2e": "playwright test",
     "test:e2e:fast": "playwright test --grep-invert 'resilience|kitchen-ops'",
     "test:e2e:ui": "playwright test --ui",
+    "test:responsive": "playwright test --project=responsive",
     "test:watch": "vitest"
   },
   "engines": {
@@ -40,6 +43,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.0.9",
     "@types/node": "^22.5.0",
