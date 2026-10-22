@@ -4,7 +4,8 @@
 // products-client.tsx. Grid card: 4:3 image/placeholder, bulk-select ring,
 // "متوقف" badge, name/description/price, addon chips. No behavior change.
 import Image from 'next/image';
-import { ImageIcon, Check, Power } from 'lucide-react';
+import { ImageIcon, Check } from 'lucide-react';
+import { Toggle } from '@/components/ui/toggle';
 import { formatMoney } from '@/lib/utils';
 import { isSoldOut, remainingStock } from '@/lib/product-stock';
 import type { Product, ProductOptionGroup } from '@/lib/types';
@@ -100,25 +101,31 @@ export function ProductCard({
             باقي <span dir="ltr">{left}</span>
           </span>
         ) : null}
+        {/* Availability: a labelled switch, not a bare power glyph. The merchant
+           has to be able to read the state off the card (audit 2026-10-22, P1);
+           the whole pill stops the click from opening the product. */}
         {!bulkMode && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleAvailability();
-            }}
-            onKeyDown={(e) => e.stopPropagation()}
-            disabled={toggling}
-            aria-label={p.is_available ? `إيقاف ${p.name}` : `تفعيل ${p.name}`}
-            aria-pressed={p.is_available}
-            className={`absolute bottom-2 start-2 flex h-11 w-11 items-center justify-center rounded-full border shadow-sm transition-colors disabled:opacity-50 ${
-              p.is_available
-                ? 'border-[var(--color-success)]/30 bg-[var(--color-success-tint)] text-[var(--color-success)]'
-                : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-muted)]'
-            }`}
+          <div
+            role="presentation"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-2 start-2 flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)]/95 py-1 ps-2 pe-3 shadow-sm backdrop-blur-sm"
           >
-            <Power className="h-5 w-5" />
-          </button>
+            <Toggle
+              checked={p.is_available}
+              onChange={() => onToggleAvailability()}
+              disabled={toggling}
+              aria-label={p.is_available ? `إيقاف ${p.name}` : `تفعيل ${p.name}`}
+            />
+            <span
+              className={`text-[11.5px] font-bold ${
+                p.is_available
+                  ? 'text-[var(--color-success)]'
+                  : 'text-[var(--color-text-secondary)]'
+              }`}
+            >
+              {toggling ? '…' : p.is_available ? 'متوفر' : 'متوقف'}
+            </span>
+          </div>
         )}
       </div>
 

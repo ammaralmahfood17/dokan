@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addLine,
+  addUnits,
   buildPickedLine,
   buildQuickLine,
   cartItemCount,
@@ -14,6 +15,7 @@ import {
   needsPicker,
   productQtyInCart,
   qtyByProduct,
+  removeLine,
   toggleOptionSelection,
   toggleQuickNoteText,
   uncategorizedProducts,
@@ -250,6 +252,51 @@ describe('buildPickedLine', () => {
     const result = buildPickedLine(product(), [required], [], '', 'BHD');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toBeTruthy();
+  });
+
+  it('carries the picker quantity and never inflates the unit price', () => {
+    const result = buildPickedLine(product({ price: 1 }), [], [], '', 'BHD', 3);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.line.quantity).toBe(3);
+      expect(result.line.unitPrice).toBe(1);
+    }
+  });
+
+  it('clamps a zero/negative quantity to one unit', () => {
+    const zero = buildPickedLine(product(), [], [], '', 'BHD', 0);
+    const negative = buildPickedLine(product(), [], [], '', 'BHD', -2);
+    expect(zero.ok && zero.line.quantity).toBe(1);
+    expect(negative.ok && negative.line.quantity).toBe(1);
+  });
+});
+
+describe('addUnits / removeLine (picker quantity + edit)', () => {
+  function line(id: string, quantity: number): CartLine {
+    return {
+      key: `${id}::`,
+      productId: id,
+      productName: id,
+      unitPrice: 1,
+      quantity,
+      addons: [],
+      notes: '',
+    };
+  }
+
+  it('sums quantities instead of replacing them', () => {
+    const merged = addUnits([line('p1', 1)], line('p1', 2));
+    expect(merged).toHaveLength(1);
+    expect(merged[0].quantity).toBe(3);
+  });
+
+  it('appends a line whose key is new', () => {
+    expect(addUnits([line('p1', 1)], line('p2', 4))).toHaveLength(2);
+  });
+
+  it('removeLine drops exactly one line and leaves the rest', () => {
+    const rest = removeLine([line('p1', 1), line('p2', 1)], 'p1::');
+    expect(rest.map((l) => l.productId)).toEqual(['p2']);
   });
 });
 

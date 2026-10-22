@@ -3,6 +3,7 @@
 import { Search, X } from 'lucide-react';
 import type { RefObject } from 'react';
 import { ProductCard } from '@/components/pos/product-card';
+import { FilterPill } from '@/components/ui/filter-pill';
 import type { OrderType, Product, ProductWithOptions } from '@/lib/types';
 
 const ORDER_TYPES: [OrderType, string][] = [
@@ -119,24 +120,15 @@ export function PosProductGrid({
           role="group"
           aria-label="تصنيفات المنتجات"
         >
-          {[{ id: null, name: 'الكل' }, ...categories].map((c) => {
-            const active = category === c.id;
-            return (
-              <button
-                key={c.id ?? 'all'}
-                type="button"
-                onClick={() => onCategoryChange(c.id)}
-                aria-pressed={active}
-                className={`min-h-[44px] shrink-0 whitespace-nowrap rounded-full border px-4 text-[13px] font-semibold transition-colors ${
-                  active
-                    ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)] text-[var(--color-primary)]'
-                    : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                }`}
-              >
-                {c.name}
-              </button>
-            );
-          })}
+          {[{ id: null, name: 'الكل' }, ...categories].map((c) => (
+            <FilterPill
+              key={c.id ?? 'all'}
+              active={category === c.id}
+              onClick={() => onCategoryChange(c.id)}
+            >
+              {c.name}
+            </FilterPill>
+          ))}
         </div>
       )}
 

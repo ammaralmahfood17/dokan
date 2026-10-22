@@ -107,6 +107,26 @@ export function changeQuantity(lines: CartLine[], key: string, delta: number): C
     .filter((l) => l.quantity > 0);
 }
 
+/** Drop one line by key — an edited line loses its old identity first. */
+export function removeLine(lines: CartLine[], key: string): CartLine[] {
+  return lines.filter((l) => l.key !== key);
+}
+
+/**
+ * Add a line carrying its OWN quantity (the picker's stepper, or an edit).
+ *
+ * `addLine` exists for the "+" tap and always adds exactly one unit. The picker
+ * can submit 3 at once, and an edit must REPLACE rather than increment, so both
+ * go through here after `removeLine` when the key changed.
+ */
+export function addUnits(lines: CartLine[], line: CartLine): CartLine[] {
+  const exists = lines.some((l) => l.key === line.key);
+  if (!exists) return [...lines, line];
+  return lines.map((l) =>
+    l.key === line.key ? { ...l, quantity: l.quantity + line.quantity } : l
+  );
+}
+
 /** Category id + instant search, matching either language's name. */
 export function filterMenuProducts(
   products: ProductWithOptions[],
@@ -199,7 +219,8 @@ export function buildPickedLine(
   groups: ProductOptionGroup[],
   selectedOptionIds: string[],
   notesRaw: string,
-  currency: string
+  currency: string,
+  quantity = 1
 ): BuiltLine {
   const violation = validateOptionSelection(groups, selectedOptionIds);
   if (violation) return { ok: false, message: violation.message };
@@ -223,7 +244,7 @@ export function buildPickedLine(
       productId: product.id,
       productName: product.name,
       unitPrice: money(Number(product.price) + optionTotal, dec),
-      quantity: 1,
+      quantity: Math.max(1, Math.trunc(quantity)),
       addons: options,
       notes,
     },

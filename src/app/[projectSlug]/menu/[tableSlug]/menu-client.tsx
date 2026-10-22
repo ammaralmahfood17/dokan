@@ -17,6 +17,7 @@ import {
   buildQuickLine,
   cartItemCount,
   cartTotal,
+  addUnits,
   categoriesWithProducts,
   changeQuantity,
   filterMenuProducts,
@@ -25,6 +26,7 @@ import {
   needsPicker,
   productQtyInCart,
   qtyByProduct,
+  removeLine,
   toggleOptionSelection,
   toggleQuickNoteText,
   uncategorizedProducts,
@@ -100,6 +102,9 @@ export function MenuClient({
   const [picker, setPicker] = useState<ProductWithOptions | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [itemNotes, setItemNotes] = useState('');
+  const [pickerQty, setPickerQty] = useState(1);
+  /** Non-null while the sheet is editing an existing line instead of adding one. */
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [orderNotes, setOrderNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   // D10: persistent order error with a retry button (toast alone vanishes
@@ -284,7 +289,29 @@ export function MenuClient({
     setPicker(p);
     setSelectedOptions([]);
     setItemNotes('');
+    setPickerQty(1);
+    setEditingKey(null);
   }, []);
+
+  /**
+   * Re-open the picker on an existing line (audit 2026-10-22: changing a size
+   * meant deleting the line and rebuilding it from the product grid).
+   * Choice ids are seeded from the line's snapshot; a variety the merchant has
+   * since removed simply fails validation again, which is the honest outcome.
+   */
+  const openEdit = useCallback(
+    (line: CartLine) => {
+      const product = products.find((p) => p.id === line.productId);
+      if (!product) return;
+      setPicker(product);
+      setSelectedOptions(line.addons.map((a) => a.id));
+      setItemNotes(line.notes);
+      setPickerQty(line.quantity);
+      setEditingKey(line.key);
+      setCartOpen(false);
+    },
+    [products]
+  );
 
   /** UX-6: append/remove a quick-note phrase, keeping the 200-char cap. */
   function toggleQuickNote(note: string) {
@@ -302,27 +329,41 @@ export function MenuClient({
     // Validation + pricing + the line key live in lib/menu-cart (pure, tested):
     // a stale render can never add a half-configured line, and the quick-add path
     // and this one must agree on what "the same line" means.
-    const built = buildPickedLine(picker, groups, selectedOptions, itemNotes, currency);
+    const built = buildPickedLine(
+      picker,
+      groups,
+      selectedOptions,
+      itemNotes,
+      currency,
+      pickerQty
+    );
     if (!built.ok) {
       toast.error(built.message);
       return;
     }
     const { line } = built;
-    const alreadyInCart = cart.some((l) => l.key === line.key);
+    const editing = editingKey;
+    const alreadyInCart = !editing && cart.some((l) => l.key === line.key);
     const wasEmpty = cart.length === 0;
 
-    setCart((prev) => addLine(prev, line).lines);
+    // An edit removes the old line first: its identity may have changed (size,
+    // note), and adding without removing would leave a ghost of the old one.
+    setCart((prev) => addUnits(editing ? removeLine(prev, editing) : prev, line));
     setPicker(null);
+    setEditingKey(null);
+    setPickerQty(1);
 
     // Auto-open the cart on the FIRST item so the customer can review + send.
     // Later adds only toast (don't interrupt multi-item ordering).
-    if (wasEmpty) setCartOpen(true);
+    if (wasEmpty && !editing) setCartOpen(true);
 
     // Visual feedback: flash badge on the product card + toast
     setLastAddedKey(picker.id);
     if (lastAddedTimer.current) clearTimeout(lastAddedTimer.current);
     lastAddedTimer.current = setTimeout(() => setLastAddedKey(null), 800);
-    toast.success(alreadyInCart ? 'زادت الكمية' : 'أُضيف إلى السلة', { duration: 1200 });
+    toast.success(editing ? 'تم تعديل الصنف' : alreadyInCart ? 'زادت الكمية' : 'أُضيف إلى السلة', {
+      duration: 1200,
+    });
   }
 
   // Quick-Add: add directly without addon picker.
@@ -548,16 +589,24 @@ export function MenuClient({
   const pickerViolation = picker
     ? validateOptionSelection(picker.option_groups || [], selectedOptions)
     : null;
-  const pickerTotal = picker
-    ? money(
-        Number(picker.price) +
-          selectedChoices(picker.option_groups || [], selectedOptions).reduce(
-            (sum, c) => sum + Number(c.price),
-            0
-          ),
-        currencyDecimals(currency)
+  const pickerUnit = picker
+    ? Number(picker.price) +
+      selectedChoices(picker.option_groups || [], selectedOptions).reduce(
+        (sum, c) => sum + Number(c.price),
+        0
       )
     : 0;
+  // The header shows what the LINE costs, not the unit — once the sheet has a
+  // quantity stepper, a unit price there would contradict the cart.
+  const pickerTotal = picker ? money(pickerUnit * pickerQty, currencyDecimals(currency)) : 0;
+  // Stock ceiling for the stepper: what is left for this product, plus the units
+  // the line being edited already holds (they are its own).
+  const pickerMaxQty = picker
+    ? Math.max(
+        1,
+        maxOrderableQty(picker) - productQtyInCart(cart, picker.id) + (editingKey ? pickerQty : 0)
+      )
+    : 1;
 
   /** Render a single product card — mockup: bordered grid card + stepper. */
   function renderProduct(p: ProductWithOptions, isFirst = false) {
@@ -640,6 +689,9 @@ export function MenuClient({
           onToggleQuickNote={toggleQuickNote}
           onToggleOption={toggleOption}
           violation={pickerViolation}
+          quantity={pickerQty}
+          maxQuantity={pickerMaxQty}
+          onQuantityChange={setPickerQty}
           onConfirm={confirmAdd}
           onClose={() => setPicker(null)}
         />
@@ -655,6 +707,7 @@ export function MenuClient({
           orderNotes={orderNotes}
           onOrderNotesChange={(v) => setOrderNotes(v)}
           onQty={updateQty}
+          onEdit={openEdit}
           submitting={submitting}
           orderError={orderError}
           onRetry={() => {

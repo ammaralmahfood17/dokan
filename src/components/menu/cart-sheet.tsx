@@ -2,7 +2,7 @@
 
 // FIX-C-003: Cart sheet — extracted from menu-client.tsx. Renders the
 // customer's cart with qty steppers, order notes, total and submit + retry.
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Pencil, Plus } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
 import type { CartLine } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ export function CartSheet({
   orderNotes,
   onOrderNotesChange,
   onQty,
+  onEdit,
   submitting,
   orderError,
   onRetry,
@@ -34,6 +35,8 @@ export function CartSheet({
   orderNotes: string;
   onOrderNotesChange: (v: string) => void;
   onQty: (key: string, delta: number) => void;
+  /** Re-open the picker on this line (size, varieties, note, quantity). */
+  onEdit: (line: CartLine) => void;
   submitting: boolean;
   orderError: string | null;
   onRetry: () => void;
@@ -61,6 +64,14 @@ export function CartSheet({
                 <p className="text-xs text-[var(--color-text-secondary)]">{l.notes}</p>
               )}
               <p className="mt-0.5 text-xs font-semibold tabular-nums">{formatMoney(l.unitPrice, currency)}</p>
+              <button
+                type="button"
+                onClick={() => onEdit(l)}
+                className="mt-1 inline-flex min-h-[32px] items-center gap-1 text-[11.5px] font-bold text-[var(--color-primary)]"
+              >
+                <Pencil className="h-3 w-3" />
+                تعديل
+              </button>
             </div>
             <div className="flex items-center gap-1">
               <button

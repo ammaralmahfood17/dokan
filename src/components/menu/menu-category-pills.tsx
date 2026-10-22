@@ -1,5 +1,6 @@
 'use client';
 
+import { FilterPill } from '@/components/ui/filter-pill';
 import type { Category } from '@/lib/types';
 
 /**
@@ -19,13 +20,6 @@ export function MenuCategoryPills({
   activeCategory: string | 'all';
   onSelect: (categoryId: string | 'all') => void;
 }) {
-  const pill = (isActive: boolean) =>
-    `min-h-[44px] shrink-0 whitespace-nowrap rounded-full px-4 text-[13px] font-semibold transition-colors ${
-      isActive
-        ? 'bg-[var(--color-primary)] text-white'
-        : 'border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-tertiary)] hover:text-[var(--color-text)]'
-    }`;
-
   return (
     <div className="sticky top-[57px] z-[var(--z-sticky)] border-b border-[var(--color-border)] bg-[var(--color-bg)]">
       {/* FIX-R-003: fade على الحواف يشير لوجود محتوى إضافي (scrollbar مخفي) */}
@@ -37,13 +31,13 @@ export function MenuCategoryPills({
           WebkitMaskImage: 'linear-gradient(to left, transparent, black 24px)',
         }}
       >
-        <button type="button" onClick={() => onSelect('all')} className={pill(activeCategory === 'all')}>
+        <FilterPill active={activeCategory === 'all'} onClick={() => onSelect('all')}>
           الكل
-        </button>
+        </FilterPill>
         {categories.map((c) => (
-          <button key={c.id} type="button" onClick={() => onSelect(c.id)} className={pill(activeCategory === c.id)}>
+          <FilterPill key={c.id} active={activeCategory === c.id} onClick={() => onSelect(c.id)}>
             {c.name}
-          </button>
+          </FilterPill>
         ))}
       </div>
     </div>

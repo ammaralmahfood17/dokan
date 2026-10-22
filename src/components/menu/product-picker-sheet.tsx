@@ -1,6 +1,6 @@
 'use client';
 
-import { Check } from 'lucide-react';
+import { Check, Minus, Plus } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
 import { availableChoices, effectiveBounds } from '@/lib/product-options';
 import { Sheet } from '@/components/menu/sheet';
@@ -33,6 +33,9 @@ export function ProductPickerSheet({
   onToggleQuickNote,
   onToggleOption,
   violation,
+  quantity,
+  maxQuantity,
+  onQuantityChange,
   onConfirm,
   onClose,
 }: {
@@ -46,6 +49,12 @@ export function ProductPickerSheet({
   onToggleQuickNote: (note: string) => void;
   onToggleOption: (group: ProductOptionGroup, choiceId: string) => void;
   violation: { message: string } | null;
+  /** Units on this line. Ordering 3 teas used to mean tapping ＋ three times
+   *  outside the sheet, re-opening it for a different size each time. */
+  quantity: number;
+  /** Units left for this product — the stepper must not oversell the stock cap. */
+  maxQuantity: number;
+  onQuantityChange: (next: number) => void;
   onConfirm: () => void;
   onClose: () => void;
 }) {
@@ -112,9 +121,13 @@ export function ProductPickerSheet({
                             {choice.name}
                           </span>
                           <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
-                            {Number(choice.price) > 0
-                              ? `+${formatMoney(Number(choice.price), currency)}`
-                              : 'بدون زيادة'}
+                            {Number(choice.price) > 0 ? (
+                              /* The `+` must live INSIDE the isolate: outside it,
+                                 RTL renders the surcharge as «0.200 BHD+». */
+                              <span dir="ltr">+{formatMoney(Number(choice.price), currency)}</span>
+                            ) : (
+                              'بدون زيادة'
+                            )}
                           </span>
                         </button>
                       </li>
@@ -163,6 +176,32 @@ export function ProductPickerSheet({
           maxLength={200}
         />
         <p className="hint">{notes.length}/200</p>
+      </div>
+      <div className="mb-3 flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1.5">
+        <span className="text-sm font-semibold">الكمية</span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="إنقاص الكمية"
+            disabled={quantity <= 1}
+            onClick={() => onQuantityChange(quantity - 1)}
+            className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border-strong)] transition-colors hover:bg-[var(--color-bg)] disabled:opacity-40"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <span className="w-8 text-center text-sm font-bold tabular-nums" aria-live="polite">
+            {quantity}
+          </span>
+          <button
+            type="button"
+            aria-label="زيادة الكمية"
+            disabled={quantity >= maxQuantity}
+            onClick={() => onQuantityChange(quantity + 1)}
+            className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border-strong)] transition-colors hover:bg-[var(--color-bg)] disabled:opacity-40"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
       </div>
       <Button block disabled={violation !== null} onClick={onConfirm} style={{ background: 'var(--color-primary)' }}>
         أضف إلى السلة

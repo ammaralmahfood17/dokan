@@ -67,7 +67,7 @@ function MenuProductRowBase({
         onClick={() => (soldOut ? undefined : onQuickAdd(product))}
         aria-label={soldOut ? `${displayName} — غير متوفر` : `إضافة ${displayName} إلى السلة`}
         aria-disabled={soldOut}
-        className={`flex min-w-0 flex-col text-start ${soldOut ? 'cursor-default' : ''}`}
+        className={`flex min-w-0 flex-col text-start lg:flex-none ${soldOut ? 'cursor-default' : ''}`}
       >
         {product.image_url ? (
           <Image

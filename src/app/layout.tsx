@@ -189,6 +189,10 @@ export default function RootLayout({
             ("إعادة تحميل") appears after EVERY deploy, i.e. on the merchant's device. */}
         <Toaster
           position="top-center"
+          /* top-center used to sit ON the sticky headers: the menu's brand row and
+             the dashboard top bar. 68px clears a 57px header plus its border. */
+          offset={68}
+          mobileOffset={68}
           richColors
           dir="rtl"
           // Sonner ships its own system-font stack and injects it inline on the
