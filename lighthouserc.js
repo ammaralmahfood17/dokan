@@ -14,17 +14,15 @@
  * and opens a task; the PR-blocking lab gate over a local build lands in Wave 4
  * together with the seeded staging server.
  *
- * THRESHOLDS ARE BASELINE-RELATIVE, WITH A DOCUMENTED TARGET. Measured on
- * production 2026-10-22 (one cold run each, 360×800, simulated 4G):
- *   /                     LCP 2627 ms
- *   /login                LCP 2828 ms   TBT 638 ms
- *   /estikana             under 2500 ms
- *   /estikana/menu/...    LCP 2862 ms   TBT 447 ms
- * The plan's target is 2500 ms; today's baseline is 2627–2862 ms, so an error
- * at 2500 would be red on every nightly run and teach everyone to ignore it.
- * The error sits at 3200 ms (baseline + ~12% for run-to-run noise) and catches
- * real regressions — e.g. re-importing the 315 KB font sheet. Wave 4 owns
- * bringing LCP under 2500 ms and then tightening this number to 2500.
+ * THRESHOLDS: the 2500 ms target, enforced since Wave 4 (2026-10-22).
+ * Baseline before Wave 4 was 2627–2862 ms (single cold run each); after it,
+ * medians of two runs: / 1656, /login 1535, /estikana 1402, menu 1902 ms —
+ * 2500 keeps ~31% headroom over the slowest route. The one change with a
+ * structural proof is the menu: its products used to sit in a hidden streamed
+ * segment (bodyText 16 chars at DOMContentLoaded); after removing loading.tsx
+ * they are in the initial HTML (1104 chars, zero hidden segments). The landing
+ * and login numbers moved without a code change, so treat them as run-condition
+ * variance, not as a claimed optimisation.
  * TBT is a warning: it is an INP proxy, and real INP comes from `web_vitals`
  * field data via `scripts/cwv-report.mjs`.
  */
@@ -59,7 +57,7 @@ module.exports = {
     },
     assert: {
       assertions: {
-        'largest-contentful-paint': ['error', { maxNumericValue: 3200 }],
+        'largest-contentful-paint': ['error', { maxNumericValue: 2500 }],
         'cumulative-layout-shift': ['error', { maxNumericValue: 0.05 }],
         'total-blocking-time': ['warn', { maxNumericValue: 600 }],
         'total-byte-weight': ['warn', { maxNumericValue: 600000 }],
