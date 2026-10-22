@@ -40,6 +40,15 @@ const nextConfig: NextConfig = {
       process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN || '',
   },
   images: {
+    // AVIF first, WebP fallback. `qualities` must list every value a component
+    // passes — Next 16 rejects an unlisted quality at build time.
+    formats: ['image/avif', 'image/webp'],
+    qualities: [60, 65, 75],
+    // Defaults extended (not replaced): 360/420 are the Android widths the menu
+    // cards actually request at 2 columns.
+    deviceSizes: [360, 420, 640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [96, 128, 160, 200, 240, 320, 384],
+    minimumCacheTTL: 2592000, // 30 days — product photos change rarely
     remotePatterns: [
       {
         protocol: 'https',

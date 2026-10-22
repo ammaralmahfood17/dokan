@@ -1,6 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
+import dynamic from 'next/dynamic';
+
+// Opened only when a product needs options — not part of the POS first paint.
+const PosAddonPicker = dynamic(
+  () => import('@/components/pos/pos-addon-picker').then((m) => m.PosAddonPicker),
+  { ssr: false }
+);
 import { lockBodyScroll } from '@/lib/use-body-scroll-lock';
 import { Check, Search, ShoppingBag, WifiOff, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -17,7 +24,7 @@ import { CartPanel } from '@/components/pos/cart-panel';
 import { PosProductGrid } from '@/components/pos/pos-product-grid';
 import { PosMobileCart } from '@/components/pos/pos-mobile-cart';
 import { PosOrderConfirmed } from '@/components/pos/pos-order-confirmed';
-import { PosAddonPicker } from '@/components/pos/pos-addon-picker';
+
 import { ProductCard } from '@/components/pos/product-card';
 import type { PosLine } from '@/components/pos/types';
 import { toast } from 'sonner';

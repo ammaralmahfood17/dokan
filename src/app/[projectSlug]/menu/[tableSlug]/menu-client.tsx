@@ -1,6 +1,12 @@
 'use client';
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+// The picker only exists after a tap. Loading it with the menu would put a modal
+// in the customer's first byte budget on a 3G phone.
+const ProductPickerSheet = dynamic(
+  () => import('@/components/menu/product-picker-sheet').then((m) => m.ProductPickerSheet),
+  { ssr: false }
+);
 import { ShoppingBag, X, Check, Bell, FileText, Search, Languages } from 'lucide-react';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
 import { isSoldOut, maxOrderableQty } from '@/lib/product-stock';
@@ -49,7 +55,7 @@ import { MenuHeader } from '@/components/menu/menu-header';
 import { MenuCategoryPills } from '@/components/menu/menu-category-pills';
 import { MenuProductArea } from '@/components/menu/menu-product-area';
 import { MenuCartBar } from '@/components/menu/menu-cart-bar';
-import { ProductPickerSheet } from '@/components/menu/product-picker-sheet';
+
 import { MenuProductRow, type MenuProduct } from '@/components/menu/product-card';
 // D7: offline indicator on the customer-facing menu (banner, not blocker).
 import { OfflineBanner } from '@/components/ui/offline-banner';

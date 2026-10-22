@@ -86,7 +86,8 @@ function MenuProductRowBase({
             priority={isFirst}
             placeholder="blur"
             blurDataURL={BLUR_PLACEHOLDER}
-            sizes="(max-width: 480px) 50vw, 33vw"
+            sizes="(max-width: 767px) 46vw, (max-width: 1023px) 32vw, 320px"
+            quality={65}
             className={`aspect-[1/0.82] w-full bg-[var(--color-surface-sunken)] object-cover ${
               soldOut ? 'opacity-50 grayscale' : ''
             }`}

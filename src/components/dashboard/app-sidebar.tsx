@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useFinePointer } from '@/lib/use-fine-pointer';
 import { toast } from 'sonner';
 import type { StaffRole } from '@/lib/types';
 
@@ -68,8 +69,12 @@ export function AppSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  // Prefetch is a desktop affordance: on a phone/tablet it spends the waiter's
+  // data on routes they may never open.
+  const canPrefetch = useFinePointer();
 
   useEffect(() => {
+    if (!canPrefetch) return;
     if (role === 'owner') {
       try { router.prefetch('/dashboard/settings'); } catch {}
     }
@@ -77,7 +82,7 @@ export function AppSidebar({
       try { router.prefetch('/dashboard/tables'); } catch {}
       try { router.prefetch('/dashboard/analytics'); } catch {}
     }
-  }, [role, router]);
+  }, [role, router, canPrefetch]);
 
   async function logout() {
     try {
@@ -124,7 +129,7 @@ export function AppSidebar({
       <Link
         key={item.href}
         href={item.href}
-        prefetch={true}
+        prefetch={canPrefetch}
         onClick={() => setIsOpen(false)}
         aria-current={active ? 'page' : undefined}
         className={cn(
