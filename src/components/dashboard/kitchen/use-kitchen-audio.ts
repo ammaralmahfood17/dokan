@@ -3,9 +3,14 @@
 // FIX-C-002: Kitchen audio engine — extracted from kitchen-client.tsx.
 // Singleton AudioContext + WAV preload → oscillator fallback → queue;
 // attachAudioResumeOnInteraction unlocks iOS audio after first gesture.
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function useKitchenAudio() {
+  // Browsers keep a freshly created AudioContext suspended until a real user
+  // gesture. Until it is running, every chime is silent — so the board has to
+  // be able to SEE that state and ask for the one tap that unlocks it
+  // (audit 2026-10-22: the first order after a screen reboot was silent).
+  const [audioReady, setAudioReady] = useState(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const chimeBufRef = useRef<AudioBuffer | null>(null);
   const loadingChimeRef = useRef(false);
@@ -30,9 +35,13 @@ export function useKitchenAudio() {
     const ctx = getAudioCtx();
     if (!ctx) return false;
     if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
+      ctx
+        .resume()
+        .then(() => setAudioReady(true))
+        .catch(() => {});
       return false;
     }
+    if (ctx.state === 'running') setAudioReady(true);
     return ctx.state === 'running';
   }, [getAudioCtx]);
 
@@ -104,7 +113,12 @@ export function useKitchenAudio() {
       if (!ctx) return;
 
       if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
+        ctx
+          .resume()
+          .then(() => setAudioReady(true))
+          .catch(() => {});
+      } else {
+        setAudioReady(true);
       }
 
       // If we have the decoded buffer, play it
@@ -145,8 +159,14 @@ export function useKitchenAudio() {
   const attachAudioResumeOnInteraction = useCallback(() => {
     const handler = () => {
       const ctx = getAudioCtx();
-      if (ctx?.state === 'suspended') {
-        ctx.resume().catch(() => {});
+      if (!ctx) return;
+      if (ctx.state === 'suspended') {
+        ctx
+          .resume()
+          .then(() => setAudioReady(true))
+          .catch(() => {});
+      } else if (ctx.state === 'running') {
+        setAudioReady(true);
       }
     };
     document.addEventListener('click', handler);
@@ -159,5 +179,5 @@ export function useKitchenAudio() {
     };
   }, [getAudioCtx]);
 
-  return { playChime, ensureAudioReady, preloadChime, attachAudioResumeOnInteraction };
+  return { playChime, ensureAudioReady, preloadChime, attachAudioResumeOnInteraction, audioReady };
 }

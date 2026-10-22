@@ -16,6 +16,7 @@ import { arabicNewOrders } from '@/lib/arabic';
 /* ========== FIX-C-002: Audio System (extracted hook) ========== */
 import { NotificationsBanner } from '@/components/dashboard/notifications-banner';
 import { useKitchenAudio } from '@/components/dashboard/kitchen/use-kitchen-audio';
+import { useOnline } from '@/components/ui/use-online';
 // FIX-C-002: بطاقة الطلب مستخرجة
 import { KitchenTicket } from '@/components/dashboard/kitchen/kitchen-ticket';
 // FIX-C-003 (audit 2.4): العنوان الوامض + لوحة الطلبات/Realtime + الأوامر
@@ -84,7 +85,10 @@ export function KitchenClient({
     }
   };
 
-  const { playChime, preloadChime, attachAudioResumeOnInteraction } = useKitchenAudio();
+  const { playChime, ensureAudioReady, preloadChime, attachAudioResumeOnInteraction, audioReady } =
+    useKitchenAudio();
+  // Real connection state — the dot and label below used to be hard-coded.
+  const isOnline = useOnline();
   const { flashTitle, clearFlash, syncTitle, resetTitle } = useTitleFlash();
 
   // Notification helper
@@ -245,9 +249,20 @@ export function KitchenClient({
           <h1 className="font-display text-[16px] font-bold text-[var(--color-text)]">
             {projectName} — شاشة المطبخ
           </h1>
-          <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[var(--color-text-secondary)]">
-            <span className="h-[7px] w-[7px] rounded-full bg-[var(--color-success)]" aria-hidden="true" />
-            متصل مباشر
+          <span
+            role="status"
+            aria-live="polite"
+            className={`flex items-center gap-1.5 text-[12.5px] font-semibold ${
+              isOnline ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-danger)]'
+            }`}
+          >
+            <span
+              className={`h-[7px] w-[7px] rounded-full ${
+                isOnline ? 'bg-[var(--color-success)]' : 'bg-[var(--color-danger)]'
+              }`}
+              aria-hidden="true"
+            />
+            {isOnline ? 'متصل مباشر' : 'غير متصل — الطلبات ما توصل'}
           </span>
         </div>
 
@@ -333,6 +348,25 @@ export function KitchenClient({
           </button>
         </div>
       </header>
+
+      {/* A cold-booted board has a suspended AudioContext: the first order
+          arrives silently. Ask for the one tap that unlocks it, and disappear
+          the moment the context is running (or the cook muted the board). */}
+      {soundOn && !audioReady && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-warn)]/30 bg-[var(--color-warn-tint)] px-6 py-2 text-[12.5px] font-semibold text-[var(--color-warn)]">
+          <span>صوت التنبيه ما يشتغل قبل أول لمسة — الطلب الأول ممكن يوصلك صامت.</span>
+          <button
+            type="button"
+            onClick={() => {
+              ensureAudioReady();
+              playChime();
+            }}
+            className="min-h-[36px] rounded-[var(--radius-md)] bg-[var(--color-warn)] px-3 text-[12.5px] font-bold text-white"
+          >
+            تفعيل الصوت
+          </button>
+        </div>
+      )}
 
       {/* Service requests — «طلب موظف / طلب فاتورة» from the table menu.
           A customer waiting to be served is as time-critical as a ticket, so

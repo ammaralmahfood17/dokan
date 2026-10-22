@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { getCurrentProject } from '@/lib/project';
 import { AppSidebar } from '@/components/dashboard/app-sidebar';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
+import { OfflineBanner } from '@/components/ui/offline-banner';
 import { getImpersonationById } from '@/lib/super-admin';
 
 /** F-18: rendered per request so the proxy's CSP nonce reaches this page. */
@@ -100,6 +101,12 @@ export default async function DashboardLayout({
             {expiryWarn}
           </div>
         )}
+
+        {/* Merchant-side connection state: the kitchen claimed «متصل مباشر»
+            with no connection check until the 2026-10-22 audit, and this banner
+            existed only on the customer menu. Bottom placement so it cannot
+            cover the support-mode bar. */}
+        <OfflineBanner placement="bottom" />
 
         {/* Main */}
         <main className="flex-1">

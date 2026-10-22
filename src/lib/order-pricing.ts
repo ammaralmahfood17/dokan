@@ -221,28 +221,41 @@ export async function createSecureOrder(
   // the total from that recomputation, so a merchant edit between our read
   // and this insert is either serialised against the order or rejected as
   // sold out — never silently accepted at the stale price.
-  const { data: created, error: createErr } = await supabase.rpc(
+  const rpcArgs = {
+    p_project_id: projectId,
+    p_table_id: tableId ?? undefined,
+    p_type: type,
+    p_status: 'pending',
+    p_total_amount: totalAmount,
+    p_notes: orderNotes.trim() || undefined,
+    p_order_number: 0,
+    p_caller_user_id: callerUserId,
+    p_client_request_id: clientRequestId ?? null,
+    p_items: validated.map((line) => ({
+      product_id: line.product_id,
+      product_name: line.product_name,
+      quantity: line.quantity,
+      unit_price: line.unit_price,
+      addons: line.addons as unknown as Json,
+      notes: line.notes,
+    })),
+  };
+
+  let { data: created, error: createErr } = await supabase.rpc(
     'create_order_transactional',
-    {
-      p_project_id: projectId,
-      p_table_id: tableId ?? undefined,
-      p_type: type,
-      p_status: 'pending',
-      p_total_amount: totalAmount,
-      p_notes: orderNotes.trim() || undefined,
-      p_order_number: 0,
-      p_caller_user_id: callerUserId,
-      p_client_request_id: clientRequestId ?? null,
-      p_items: validated.map((line) => ({
-        product_id: line.product_id,
-        product_name: line.product_name,
-        quantity: line.quantity,
-        unit_price: line.unit_price,
-        addons: line.addons as unknown as Json,
-        notes: line.notes,
-      })),
-    }
+    rpcArgs
   );
+
+  // A duplicate order NUMBER (23505) is a collision on the per-day sequence, not
+  // a bad request — the customer saw this as a bare 500 «فشل إنشاء الطلب»
+  // (audit 2026-10-22). The RPC is idempotent on p_client_request_id, so one
+  // retry is safe: a replay returns the same order, a genuine second attempt
+  // gets the next number.
+  if (!created && (createErr as { code?: string } | null)?.code === '23505') {
+    const retry = await supabase.rpc('create_order_transactional', rpcArgs);
+    created = retry.data;
+    createErr = retry.error;
+  }
 
   if (createErr || !created) {
     const msg = createErr?.message ?? '';
@@ -282,6 +295,22 @@ export async function createSecureOrder(
     // unexpected order-creation failure produced a console line and nothing else — the worst
     // possible silent failure in this product. The known rejections above are handled marketing
     // wording; anything that reaches here is a real error and is reported.
+    // A collision that survived the retry is a busy server, not a bad cart:
+    // the customer can safely try again (idempotent) and should be told so.
+    if ((createErr as { code?: string } | null)?.code === '23505') {
+      console.error('Order create error (order_number collision after retry):', createErr);
+      Sentry.captureException(createErr, { tags: { area: 'order-create', projectId } });
+      return { ok: false, error: 'الخادم مشغول — أعد المحاولة بعد لحظة', status: 503 };
+    }
+    // A dead connection surfaces here as a fetch TypeError, and used to be
+    // reported as «فشل إنشاء الطلب» — the same text as a real server fault.
+    if (/fetch failed|failed to fetch|network|timeout/i.test(msg)) {
+      return {
+        ok: false,
+        error: 'تعذّر الاتصال بالخادم — تحقّق من الشبكة وأعد المحاولة',
+        status: 503,
+      };
+    }
     console.error('Order create error:', createErr);
     Sentry.captureException(createErr, { tags: { area: 'order-create', projectId } });
     return { ok: false, error: 'فشل إنشاء الطلب', status: 500 };

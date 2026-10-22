@@ -200,7 +200,7 @@ export function AnalyticsClient({
               aria-label={`الإيراد اليومي — ${byDay.map((d) => `${d.label} ${formatMoney(d.revenue, currency)}`).join('، ')}`}
             >
               {byDay.map((d, idx) => (
-                <div key={d.key} className="group relative flex flex-1 flex-col items-center gap-1" title={`${d.label} — ${formatMoney(d.revenue, currency)}`}>
+                <div key={d.key} className="group relative flex h-full flex-1 flex-col items-center gap-1" title={`${d.label} — ${formatMoney(d.revenue, currency)}`}>
                   {/* Value: only on the top bar (always) or on hover (desktop) */}
                   <span
                     className={`whitespace-nowrap text-[11.5px] font-semibold text-[var(--color-text-muted)] ${
@@ -211,10 +211,16 @@ export function AnalyticsClient({
                   >
                     {d.revenue > 0 ? formatMoney(d.revenue, currency).split(' ')[0] : ''}
                   </span>
-                  <div
-                    className="w-full rounded-t-[4px] bg-[var(--color-primary)] transition-all group-hover:opacity-80"
-                    style={{ height: `${Math.max((d.revenue / maxDayRevenue) * 100, d.revenue > 0 ? 4 : 2)}%` }}
-                  />
+                  {/* The PLOT area is the only box with a definite height, so the
+                      bar's percentage resolves against it. Without this wrapper the
+                      column was auto-height and every bar computed to 0px — the
+                      chart rendered empty for every merchant (audit 2026-10-22). */}
+                  <div className="flex w-full flex-1 items-end">
+                    <div
+                      className="w-full rounded-t-[4px] bg-[var(--color-primary)] transition-all group-hover:opacity-80"
+                      style={{ height: `${Math.max((d.revenue / maxDayRevenue) * 100, d.revenue > 0 ? 4 : 2)}%` }}
+                    />
+                  </div>
                   {/* Weekday label: all for ≤7d, every 5th for 30d (fits on mobile) */}
                   <span
                     className={`text-[11.5px] text-[var(--color-text-secondary)] ${
@@ -239,7 +245,7 @@ export function AnalyticsClient({
                 aria-label={`ذروة الساعات — ${byHour.map((h, i) => (h.count > 0 ? `ساعة ${i} عدد ${h.count}` : '')).filter(Boolean).join('، ') || 'لا توجد طلبات'}`}
               >
                 {byHour.map((h) => (
-                  <div key={h.label} className="group relative flex flex-1 flex-col justify-end">
+                  <div key={h.label} className="group relative flex h-full flex-1 flex-col justify-end">
                     <div
                       className={`w-full rounded-t-[4px] transition-all ${
                         h.count === maxHourCount
