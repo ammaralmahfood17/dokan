@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   availableChoices,
   effectiveBounds,
+  freeAddonChoices,
+  hasAddons,
+  isAddonGroup,
   isRequired,
   selectedChoices,
   validateOptionSelection,
@@ -114,6 +117,34 @@ describe('validateOptionSelection', () => {
 
   it('treats a product with no groups as valid', () => {
     expect(validateOptionSelection([], [])).toBeNull();
+  });
+});
+
+describe('add-ons on the card (isAddonGroup / hasAddons / freeAddonChoices)', () => {
+  it('treats a required group as a choice, not an add-on', () => {
+    expect(isAddonGroup(SIZE)).toBe(false);
+    expect(isAddonGroup(EXTRAS)).toBe(true);
+  });
+
+  it('does not call a fully sold-out group an add-on', () => {
+    expect(isAddonGroup(SOLD_OUT_SIZE)).toBe(false);
+    expect(hasAddons([SIZE, SOLD_OUT_SIZE])).toBe(false);
+    expect(hasAddons([SIZE, EXTRAS])).toBe(true);
+  });
+
+  it('surfaces only the FREE optional varieties, capped for the card', () => {
+    const tea = group('extras', 0, 3, [
+      choice('mint', 0),
+      choice('basil', 0),
+      choice('saffron', 0.2),
+      choice('cardamom', 0),
+    ]);
+    expect(freeAddonChoices([SIZE, tea]).map((c) => c.id)).toEqual(['mint', 'basil', 'cardamom']);
+    expect(freeAddonChoices([SIZE, tea], 2).map((c) => c.id)).toEqual(['mint', 'basil']);
+  });
+
+  it('returns nothing for a product whose only group is required', () => {
+    expect(freeAddonChoices([SIZE])).toEqual([]);
   });
 });
 

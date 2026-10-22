@@ -12,6 +12,7 @@ import { Check, Minus, Plus, X } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
 import { langOfText } from '@/lib/i18n';
 import { isSoldOut, lowStockLabel, maxOrderableQty } from '@/lib/product-stock';
+import { freeAddonChoices, hasAddons } from '@/lib/product-options';
 import type { Product, ProductOptionGroup } from '@/lib/types';
 
 /** Generic blur placeholder for product images — tiny 16×16 grey base64 */
@@ -28,6 +29,7 @@ function MenuProductRowBase({
   quantity,
   displayName,
   onQuickAdd,
+  onAddWithChoice,
   onDecrement,
 }: {
   product: MenuProduct;
@@ -39,6 +41,8 @@ function MenuProductRowBase({
   /** Name in the active language (ar default, en when available + toggled). */
   displayName: string;
   onQuickAdd: (p: MenuProduct) => void;
+  /** Open the picker with one free variety already chosen (an add-on chip). */
+  onAddWithChoice: (p: MenuProduct, choiceId: string) => void;
   onDecrement: (p: MenuProduct) => void;
 }) {
   // UX-6: sold-out items stay visible, greyed, with a «غير متوفر» badge —
@@ -50,6 +54,10 @@ function MenuProductRowBase({
   // matter (lowStockLabel returns null for untracked / sold-out / plenty).
   const remaining = lowStockLabel(product);
   const atMax = quantity >= maxOrderableQty(product);
+  // The add-ons the customer can SEE before tapping: free, optional varieties.
+  // Paid ones stay inside the sheet, where the running total is live.
+  const freeAddons = freeAddonChoices(product.option_groups ?? []);
+  const addonHint = freeAddons.length === 0 && hasAddons(product.option_groups ?? []);
   return (
     <div className="relative flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors duration-150 hover:border-[var(--color-border-strong)]">
       {soldOut && (
@@ -104,6 +112,29 @@ function MenuProductRowBase({
           )}
         </div>
       </button>
+      {(freeAddons.length > 0 || addonHint) && !soldOut && (
+        <div className="flex flex-wrap gap-1 px-3 pb-1">
+          {freeAddons.length > 0 ? (
+            freeAddons.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onAddWithChoice(product, c.id)}
+                aria-label={`إضافة ${displayName} مع ${c.name}`}
+                className="chip-addon"
+              >
+                <Plus className="h-3 w-3" aria-hidden="true" />
+                {c.name}
+              </button>
+            ))
+          ) : (
+            <span className="inline-flex min-h-6 items-center gap-0.5 rounded-full bg-[var(--color-primary-tint)] px-2 text-[11.5px] font-bold text-[var(--color-primary)]">
+              <Plus className="h-3 w-3" aria-hidden="true" />
+              إضافات
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 px-3 pb-3 pt-2">
         <span className="font-mono text-[14px] font-bold tabular-nums text-[var(--color-text)]" dir="ltr">
           {formatMoney(Number(product.price), currency)}

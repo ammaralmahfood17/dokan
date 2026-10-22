@@ -135,7 +135,7 @@ export function MenuProductArea({
                         {catProducts.length} {catProducts.length === 1 ? 'صنف' : 'أصناف'}
                       </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3 lg:grid-cols-3">
                       {catProducts.map((p, idx) => renderProduct(p, idx === 0 && catIdx === 0))}
                     </div>
                   </section>
@@ -150,7 +150,7 @@ export function MenuProductArea({
                       {uncategorized.length} {uncategorized.length === 1 ? 'صنف' : 'أصناف'}
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3 lg:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3 lg:grid-cols-3">
                     {uncategorized.map((p, idx) => renderProduct(p, idx === 0 && categories.length === 0))}
                   </div>
                 </section>
@@ -158,7 +158,7 @@ export function MenuProductArea({
             </>
           ) : (
             /* Single category: flat list */
-            <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3 lg:grid-cols-3">
               {filtered.map((p, idx) => renderProduct(p, idx === 0))}
             </div>
           )}

@@ -44,6 +44,36 @@ export function isRequired(group: ProductOptionGroup): boolean {
   return effectiveBounds(group).min >= 1;
 }
 
+/**
+ * Optional groups = the add-ons («إضافات»): mint, basil, extra cardamom.
+ *
+ * A product card uses this to say, BEFORE the tap, that the item can be
+ * customised — the customer used to discover a product's varieties only after
+ * opening the sheet (design audit 2026-10-22, P1).
+ */
+export function isAddonGroup(group: ProductOptionGroup): boolean {
+  return !isRequired(group) && availableChoices(group).length > 0;
+}
+
+/** Does the product carry any optional variety at all? */
+export function hasAddons(groups: ProductOptionGroup[]): boolean {
+  return groups.some(isAddonGroup);
+}
+
+/**
+ * The free uncounted varieties of the optional groups, capped for a card.
+ *
+ * Free and optional is what belongs on the card: a surcharge changes the price
+ * the customer sees, so it stays inside the sheet where the total is live.
+ */
+export function freeAddonChoices(groups: ProductOptionGroup[], limit = 3): ProductOptionChoice[] {
+  return groups
+    .filter(isAddonGroup)
+    .flatMap((g) => availableChoices(g))
+    .filter((c) => Number(c.price) === 0)
+    .slice(0, limit);
+}
+
 export type OptionSelectionError = { groupName: string; message: string };
 
 /**

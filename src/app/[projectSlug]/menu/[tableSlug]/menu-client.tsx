@@ -285,13 +285,20 @@ export function MenuClient({
     }, 50);
   }, []);
 
-  const openProduct = useCallback((p: ProductWithOptions) => {
+  const openProduct = useCallback((p: ProductWithOptions, preselect?: string) => {
     setPicker(p);
-    setSelectedOptions([]);
+    // An add-on chip on the card opens the sheet with that variety already
+    // ticked; the customer still answers any required group.
+    setSelectedOptions(preselect ? [preselect] : []);
     setItemNotes('');
     setPickerQty(1);
     setEditingKey(null);
   }, []);
+
+  const addWithChoice = useCallback(
+    (p: ProductWithOptions, choiceId: string) => openProduct(p, choiceId),
+    [openProduct]
+  );
 
   /**
    * Re-open the picker on an existing line (audit 2026-10-22: changing a size
@@ -620,6 +627,7 @@ export function MenuClient({
         quantity={cartQtyByProduct.get(p.id) ?? 0}
         displayName={displayName(p)}
         onQuickAdd={quickAdd}
+        onAddWithChoice={addWithChoice}
         onDecrement={decrementProduct}
       />
     );
