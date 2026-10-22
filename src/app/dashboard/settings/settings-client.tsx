@@ -51,7 +51,7 @@ function SubscriptionCard({
   const daysLeft = expiryDaysLeft ?? Infinity;
 
   return (
-    <div className="card card-body mb-4 max-w-lg">
+    <div className="card card-body">
       <h2 className="mb-1 text-sm font-bold">الاشتراك</h2>
       {expiry ? (
         <p className="mb-1 text-sm text-[var(--color-text-secondary)]">
@@ -137,30 +137,27 @@ export function SettingsClient({
         </div>
       </div>
 
-      {/* Push Notification Settings */}
-      <div className="mb-4 max-w-lg">
+      {/* Two columns above lg. Each card used to cap itself at max-w-lg (512px)
+          inside a 1200px column, which is why the screen was one narrow ribbon
+          of cards down the right edge (audit 2026-10-22). Width now comes from
+          the grid cell, so a card fills its column instead of floating. */}
+      <div className="grid max-w-5xl gap-4 lg:grid-cols-2 lg:items-start">
+        {/* Push Notification Settings */}
         <PushNotificationManager projectId={projectId} />
-      </div>
 
-      {/* Telegram Alert Settings */}
-      <div className="mb-4 max-w-lg">
+        {/* Telegram Alert Settings */}
         <TelegramManager projectId={projectId} />
-      </div>
 
-      {/* One button that proves both channels (F-18 follow-up, 2026-10-18) */}
-      <div className="mb-4 max-w-lg">
+        {/* One button that proves both channels (F-18 follow-up, 2026-10-18) */}
         <NotificationsTest projectId={projectId} />
-      </div>
 
-      {/* Per-staff notification channel prefs */}
-      <div className="mb-4 max-w-lg">
+        {/* Per-staff notification channel prefs */}
         <NotificationPrefs projectId={projectId} />
-      </div>
 
-      {/* Subscription — renewals/extensions are handled by the admin team only */}
-      <SubscriptionCard project={project} expiryDaysLeft={expiryDaysLeft} />
+        {/* Subscription — renewals/extensions are handled by the admin team only */}
+        <SubscriptionCard project={project} expiryDaysLeft={expiryDaysLeft} />
 
-      <form onSubmit={onSubmit} className="card card-body max-w-lg">
+        <form onSubmit={onSubmit} className="card card-body w-full">
         <div className="field">
           <label className="label" htmlFor="store-name">اسم المتجر</label>
           <input
@@ -254,7 +251,8 @@ export function SettingsClient({
         <Button type="submit" disabled={loading}>
           {loading ? 'جاري الحفظ…' : 'حفظ التغييرات'}
         </Button>
-      </form>
+        </form>
+      </div>
 
       {confirmDeactivate && (
         <div
