@@ -25,7 +25,7 @@ export function MenuCartBar({
 }) {
   return (
     <div className="fixed inset-x-0 bottom-0 z-[var(--z-sticky)] p-3 pb-safe-bottom">
-      <div className="mx-auto w-full max-w-[480px] px-1 pb-1">
+      <div className="menu-shell px-1 pb-1">
         <button
           type="button"
           onClick={onOpen}

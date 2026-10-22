@@ -5,11 +5,34 @@
 // beforeinstallprompt; the menu's PWA hint (share → add to home screen) is
 // shown separately in the UI when supported. Dismissed state is remembered
 // for the session only.
+//
+// Audit 2026-10-22 (P1): the card used to appear on the FIRST screen load of
+// every route — including /login and the merchant dashboard — and covered the
+// product grid, the orders table and the sign-in form. It is now gated twice:
+// (a) never on an app/auth route (a cashier does not need it inside POS), and
+// (b) only for a RETURNING visitor (2nd+ full page load): a customer who just
+// scanned the QR wants to order, not install. Local dismissal still wins.
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Download, X } from 'lucide-react';
 
 const DISMISSED_AT_KEY = 'dokan-install-dismissed-at';
 const DISMISS_FOR_MS = 7 * 24 * 60 * 60 * 1000;
+const VISITS_KEY = 'dokan-visit-count';
+
+/** Routes where the install card is never relevant (merchant app, auth, legal). */
+const APP_ROUTE_PREFIXES = [
+  '/dashboard',
+  '/super-admin',
+  '/onboarding',
+  '/login',
+  '/register',
+  '/reset-password',
+  '/update-password',
+  '/terms',
+  '/privacy',
+];
+
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -17,7 +40,18 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function InstallPrompt() {
+  const pathname = usePathname();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  // Read before paint, like `dismissed`: the card may only render for a visitor
+  // who has already loaded the product once (see the header comment).
+  const [returning] = useState(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      return (Number(localStorage.getItem(VISITS_KEY)) || 0) >= 1;
+    } catch {
+      return false;
+    }
+  });
   const [dismissed, setDismissed] = useState(() => {
     try {
       if (typeof window === 'undefined') return false;
@@ -39,6 +73,14 @@ export function InstallPrompt() {
     };
     window.addEventListener('beforeinstallprompt', handler);
     window.addEventListener('appinstalled', installed);
+    // Count this page load for the NEXT visit; a side effect only, so the gate
+    // above can stay a pure read (setState inside an effect is a lint error here).
+    try {
+      const visits = Number(localStorage.getItem(VISITS_KEY)) || 0;
+      localStorage.setItem(VISITS_KEY, String(visits + 1));
+    } catch {
+      // Storage unavailable: the prompt stays first-visit-only (hidden) — fail quiet.
+    }
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
       window.removeEventListener('appinstalled', installed);
@@ -54,7 +96,10 @@ export function InstallPrompt() {
     }
   }
 
-  if (!deferred || dismissed) return null;
+  const onAppRoute = APP_ROUTE_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`)
+  );
+  if (!deferred || dismissed || !returning || onAppRoute) return null;
 
   return (
     <div

@@ -58,7 +58,10 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-dvh bg-[var(--color-bg)]">
+    /* Column first: the support banner is a SIBLING of the sidebar+content row, never a
+       flex child of it. As a row child it stretched to the full document height and
+       painted the whole dashboard red (measured 1466px tall on a 1466px page). */
+    <div className="flex min-h-dvh flex-col bg-[var(--color-bg)]">
       {/* Phase C: persistent support-mode banner (top of every dashboard page) */}
       {impersonation && (
         <ImpersonationBanner
@@ -68,14 +71,15 @@ export default async function DashboardLayout({
         />
       )}
 
-      {/* Sidebar */}
-      <AppSidebar
-        projectName={ctx.project.name}
-        role={ctx.membership.role}
-      />
+      <div className="flex min-h-0 flex-1">
+        {/* Sidebar */}
+        <AppSidebar
+          projectName={ctx.project.name}
+          role={ctx.membership.role}
+        />
 
-      {/* Content */}
-      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Content */}
+        <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile header */}
         <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur-md px-4 py-3 lg:hidden print:hidden">
           <div className="flex items-center gap-2.5">
@@ -103,6 +107,7 @@ export default async function DashboardLayout({
             {children}
           </div>
         </main>
+        </div>
       </div>
     </div>
   );

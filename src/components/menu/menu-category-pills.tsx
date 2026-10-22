@@ -30,7 +30,7 @@ export function MenuCategoryPills({
     <div className="sticky top-[57px] z-[var(--z-sticky)] border-b border-[var(--color-border)] bg-[var(--color-bg)]">
       {/* FIX-R-003: fade على الحواف يشير لوجود محتوى إضافي (scrollbar مخفي) */}
       <div
-        className="mx-auto flex max-w-[480px] gap-2 overflow-x-auto px-3 pb-1 pt-1"
+        className="menu-shell flex gap-2 overflow-x-auto px-3 pb-1 pt-1"
         style={{
           scrollbarWidth: 'none',
           maskImage: 'linear-gradient(to left, transparent, black 24px)',

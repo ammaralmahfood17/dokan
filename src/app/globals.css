@@ -216,6 +216,20 @@
    customer's buttons would read smaller than their own text. */
 .storefront .btn { font-size: 0.9375rem; }
 
+/* Menu shell — ONE width source for the four pieces of the customer menu
+   (header, category pills, product area, cart bar). The menu is phone-first:
+   480px on a phone, but a 480px strip centred on a 1440px screen left 66% of
+   the viewport empty (measured 2026-10-22). At desktop width it grows and the
+   grid adds a column, so the same markup reads as a proper menu board. */
+.menu-shell {
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
+}
+@media (min-width: 1024px) {
+  .menu-shell { max-width: 960px; }
+}
+
 /* ==========================================================================
    Buttons — 4 styles × 3 sizes (spec §6.1)
    sm 32px / md 36px / lg 44px. Radius: sm for sm/md, md for lg.

@@ -27,7 +27,7 @@ export function MenuHeader({
       className="sticky top-0 z-[var(--z-sticky)] border-b border-[var(--color-border)] px-4 py-3.5 backdrop-blur-md"
       style={{ background: 'color-mix(in srgb, var(--color-bg) 92%, transparent)' }}
     >
-      <div className="mx-auto flex max-w-[480px] items-center justify-between gap-3">
+      <div className="menu-shell flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--color-text)] font-display text-[18px] font-bold text-[var(--color-bg)]">
             {projectName.slice(0, 1)}
