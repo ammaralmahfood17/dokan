@@ -110,6 +110,19 @@ export function KitchenClient({
     notifyNewOrder,
   });
 
+  // Offline, the board is a snapshot. «متصل مباشر» alone does not say how old
+  // the snapshot is — a cook needs the age to decide whether to trust it.
+  // Derived from the rows (max updated_at), not from a fetch timestamp: it is
+  // the age of the DATA, survives a reconnect, and needs no state or effect.
+  const lastSync = useMemo(() => {
+    let newest = 0;
+    for (const row of orders as Array<{ updated_at?: string | null }>) {
+      const t = row.updated_at ? Date.parse(row.updated_at) : NaN;
+      if (Number.isFinite(t) && t > newest) newest = t;
+    }
+    return newest || null;
+  }, [orders]);
+
   // «طلب موظف / طلب فاتورة» — same chime + badge as a new order, because a
   // customer waiting to be served is exactly as time-critical as a ticket.
   const notifyServiceRequest = useCallback(
@@ -264,6 +277,17 @@ export function KitchenClient({
             />
             {isOnline ? 'متصل مباشر' : 'غير متصل — الطلبات ما توصل'}
           </span>
+          {lastSync !== null && (
+            <span className="text-caption text-[var(--color-text-muted)]">
+              آخر تحديث{' '}
+              <span dir="ltr" className="font-mono tabular-nums">
+                {new Date(lastSync).toLocaleTimeString('en-GB', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            </span>
+          )}
         </div>
 
         <nav className="flex items-center gap-5 text-[13px]" aria-label="تصنيف الطلبات">
@@ -494,6 +518,7 @@ export function KitchenClient({
                       onStart={() => advanceOrder(t.order.id, 'preparing', 'preparing')}
                       onReady={() => advanceOrder(t.order.id, 'ready', 'ready')}
                       onDeliver={() => deliverOrder(t.order.id)}
+                      disabled={!isOnline}
                     />
                   ))}
                 </div>

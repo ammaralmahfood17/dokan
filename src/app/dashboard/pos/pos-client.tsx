@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { lockBodyScroll } from '@/lib/use-body-scroll-lock';
-import { Check, Search, ShoppingBag, X } from 'lucide-react';
+import { Check, Search, ShoppingBag, WifiOff, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
 import type { OrderType, Product, ProductOptionGroup, ProductWithOptions } from '@/lib/types';
@@ -22,6 +22,14 @@ import { ProductCard } from '@/components/pos/product-card';
 import type { PosLine } from '@/components/pos/types';
 import { toast } from 'sonner';
 import { isSoldOut } from '@/lib/product-stock';
+import { postPosOrder } from '@/lib/pos-submit';
+import {
+  enqueuePosOrder,
+  listPosQueue,
+  pendingPosCount,
+  removePosOrder,
+  type PosQueuePayload,
+} from '@/lib/pos-offline-queue';
 import { cartTotal, needsPicker, productQtyInCart, toggleOptionSelection } from '@/lib/menu-cart';
 import {
   addPosLine,
@@ -268,50 +276,137 @@ export function PosClient({
     setLines((prev) => setPosQty(prev, key, qty));
   }
 
+  // ---------- Offline queue (Wave 3) ----------
+  // A sale must not be lost when the link drops. The queue stores product ids
+  // only (the server prices it), and every item carries the clientRequestId it
+  // was first sent with, so the flush can never create a second order.
+  const [pending, setPending] = useState(0);
+  const flushing = useRef(false);
+
+  const refreshPending = useCallback(async () => {
+    try {
+      setPending(await pendingPosCount());
+    } catch {
+      // IndexedDB unavailable (private mode / old webview): the POS still works
+      // online; it just cannot promise durability. Never block the sale for it.
+    }
+  }, []);
+
+  const flushQueue = useCallback(async () => {
+    if (flushing.current) return;
+    flushing.current = true;
+    try {
+      const items = await listPosQueue();
+      for (const item of items) {
+        const result = await postPosOrder({ ...item.payload, clientRequestId: item.id });
+        if (result.ok) {
+          await removePosOrder(item.id);
+          toast.success(
+            `تم إرسال طلب محفوظ order-${result.order.orderNumber} — ${formatMoney(result.order.totalAmount, currency)}`
+          );
+          continue;
+        }
+        if (result.outcome === 'retry') {
+          // Network still down / server busy: keep this one AND everything
+          // after it, in order. Retrying out of order would renumber the day.
+          break;
+        }
+        // The server will never accept this payload (sold out, deleted table,
+        // forbidden). Retrying forever would be a lie; surface it and drop it.
+        await removePosOrder(item.id);
+        toast.error(`طلب محفوظ لم يُقبل: ${result.error}`);
+      }
+    } finally {
+      flushing.current = false;
+      await refreshPending();
+    }
+  }, [currency, refreshPending]);
+
+  useEffect(() => {
+    // Deferred one tick: the first read must not setState inside the effect body
+    // (React's cascading-render rule), and a queue read is not urgent.
+    const boot = window.setTimeout(() => {
+      void refreshPending();
+      void flushQueue();
+    }, 0);
+    const onOnline = () => void flushQueue();
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.clearTimeout(boot);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [flushQueue, refreshPending]);
+
+  // While anything is queued, poll slowly so a flaky link that never fires an
+  // `online` event still drains (mobile browsers do both).
+  useEffect(() => {
+    if (pending <= 0) return;
+    const timer = window.setInterval(() => void flushQueue(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [pending, flushQueue]);
+
   async function submit() {
     if (!lines.length) {
       toast.error('السلة فارغة');
       return;
     }
     setSubmitting(true);
+    // One id per sale ATTEMPT: a retry reuses it (idempotent), a new sale gets
+    // a new one. Generated before the request so a lost response is still
+    // recoverable from the queue.
+    const clientRequestId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const payload: PosQueuePayload = {
+      projectId,
+      type,
+      notes: notes.trim() || undefined,
+      items: lines.map((l) => ({
+        productId: l.productId,
+        quantity: l.quantity,
+        optionIds: l.optionIds,
+      })),
+    };
+
     try {
-      const res = await fetch('/api/pos/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId,
-          type,
-          notes: notes.trim() || undefined,
-          items: lines.map((l) => ({
-            productId: l.productId,
-            quantity: l.quantity,
-            optionIds: l.optionIds,
-          })),
-        }),
-      });
-      const data = (await res.json()) as {
-        error?: string;
-        order?: { id: string; totalAmount: number; orderNumber: number };
-      };
-      if (!res.ok) {
-        console.error('[POS] Order creation failed', { error: data.error, type, itemCount: lines.length });
-        toast.error(data.error || 'فشل إنشاء الطلب');
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        await enqueuePosOrder({ id: clientRequestId, payload, createdAt: Date.now(), attempts: 1 });
+        await refreshPending();
+        toast.success('لا يوجد اتصال — حُفظ الطلب وسيُرسل تلقائيًا');
+        setLines([]);
+        setNotes('');
+        setCartOpen(false);
         return;
       }
+
+      const result = await postPosOrder({ ...payload, clientRequestId });
+      if (!result.ok) {
+        if (result.outcome === 'retry') {
+          // The request may have reached the server (timeout) — the SAME id
+          // makes the replay safe either way.
+          await enqueuePosOrder({ id: clientRequestId, payload, createdAt: Date.now(), attempts: 1 });
+          await refreshPending();
+          toast.success('تعذّر إكمال الطلب — حُفظ وسيُرسل تلقائيًا');
+          setLines([]);
+          setNotes('');
+          setCartOpen(false);
+          return;
+        }
+        console.error('[POS] Order creation failed', { error: result.error, type, itemCount: lines.length });
+        toast.error(result.error);
+        return;
+      }
+
       toast.success(
-        `تم الطلب order-${data.order?.orderNumber} — ${formatMoney(
-          data.order?.totalAmount ?? total,
-          currency
-        )}`
+        `تم الطلب order-${result.order.orderNumber} — ${formatMoney(result.order.totalAmount, currency)}`
       );
       setLines([]);
       setNotes('');
       setCartOpen(false);
       // Confirmation state — shows "الطلب وصل المطبخ" banner + allows
       // repeat-last-order to restore the exact same cart in one tap.
-      setLastConfirmed({ orderNumber: data.order?.orderNumber ?? 0, totalAmount: data.order?.totalAmount ?? 0 });
-    } catch {
-      toast.error('تعذّر الاتصال');
+      setLastConfirmed({ orderNumber: result.order.orderNumber, totalAmount: result.order.totalAmount });
     } finally {
       setSubmitting(false);
     }
@@ -349,6 +444,28 @@ export function PosClient({
           <h1>نقطة البيع</h1>
         </div>
       </div>
+
+      {/* Queued sales are visible at every width — a sale the cashier thinks is
+          sent but is sitting on the device is the worst possible state. */}
+      {pending > 0 && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-3 flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--color-warn)_35%,transparent)] bg-[var(--color-warn-tint)] px-3 py-2 text-[13px] font-semibold text-[var(--color-warn)]"
+        >
+          <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            {pending === 1 ? 'طلب محفوظ بانتظار الاتصال' : `${pending} طلبات محفوظة بانتظار الاتصال`}
+          </span>
+          <button
+            type="button"
+            onClick={() => void flushQueue()}
+            className="ms-auto min-h-11 rounded-[8px] border border-current px-3 text-[13px] font-bold"
+          >
+            إرسال الآن
+          </button>
+        </div>
+      )}
 
       <div data-pos-shell className="xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-4">
         {/* ── Left: product grid (extracted component, wave 4 phase b) ── */}

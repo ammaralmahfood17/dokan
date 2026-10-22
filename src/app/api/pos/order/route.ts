@@ -49,7 +49,19 @@ export async function POST(request: NextRequest) {
       items?: PublicOrderItemInput[];
       notes?: string;
       projectId?: string;
+      clientRequestId?: string;
     };
+
+    // Wave 3: the offline queue retries with the SAME id, and the RPC is
+    // idempotent on it. Optional by design — an online cashier who taps twice
+    // deliberately still gets two orders (two different generated ids).
+    let clientRequestId: string | null = null;
+    if (body.clientRequestId !== undefined) {
+      if (typeof body.clientRequestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.clientRequestId)) {
+        return NextResponse.json({ error: 'معرّف طلب غير صالح' }, { status: 400 });
+      }
+      clientRequestId = body.clientRequestId;
+    }
 
     const type: OrderType =
       body.type === 'drivethru' || body.type === 'walkin' || body.type === 'dinein'
@@ -142,10 +154,10 @@ export async function POST(request: NextRequest) {
       items: body.items,
       notes: body.notes,
       callerUserId: user.id,
-      // No clientRequestId: POS is a staff-entered order with no retry
-      // ambiguity — a double tap is a deliberate second order, and the
-      // idempotency key is reserved for the anonymous public path where a
-      // lost response is indistinguishable from a failed one.
+      // Per-attempt id from the client: prevents a queued retry from creating a
+      // second order. A deliberate double tap generates a new id, so it stays
+      // two orders — the idempotency key protects RETRIES, not intent.
+      clientRequestId,
     });
 
     if (!result.ok) {
@@ -153,6 +165,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { id: orderId, status: orderStatus, totalAmount, orderNumber } = result.order;
+    // A replay already wrote its audit row and sent its notifications on the
+    // first attempt. Re-running the side effects would push «طلب جديد» twice
+    // for one order — the cashier would think two tickets reached the kitchen.
+    const replayed = result.order.replayed === true;
 
     // Post-create side effects (audit, push, telegram) run AFTER the response
     // is sent via after() — the POS staff sees the success toast immediately
@@ -160,7 +176,7 @@ export async function POST(request: NextRequest) {
     // guaranteed on Vercel (unlike fire-and-forget, which gets frozen).
     // Security unchanged: the order was already created + validated above;
     // these are notifications/logging only.
-    after(async () => {
+    if (!replayed) after(async () => {
       await Promise.all([
         // Phase 3: Audit log
         (async () => {
@@ -196,6 +212,9 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
+      // `replayed` lets the client (and the offline queue) log a retry as a
+      // retry instead of promising a second order number.
+      replayed,
       order: {
         id: orderId,
         status: orderStatus,

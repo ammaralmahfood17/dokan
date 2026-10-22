@@ -38,6 +38,7 @@ export function KitchenTicket({
   onStart,
   onReady,
   onDeliver,
+  disabled = false,
 }: {
   ticket: KitchenTicketData;
   /**
@@ -51,6 +52,9 @@ export function KitchenTicket({
   onStart: () => void;
   onReady: () => void;
   onDeliver: () => void;
+  /** Offline: a stage change cannot reach the server, so the action is refused
+   *  instead of failing silently and leaving the board and the DB disagreeing. */
+  disabled?: boolean;
 }) {
   const { order, lines } = ticket;
   const status = order.status as OrderStatus;
@@ -164,7 +168,9 @@ export function KitchenTicket({
           <button
             type="button"
             onClick={onStart}
-            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-primary)] px-4 text-[14px] font-bold text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+            disabled={disabled}
+            title={disabled ? 'غير متصل — لا يمكن تحديث الحالة' : undefined}
+            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-primary)] px-4 text-[14px] font-bold text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
           >
             بدء التحضير
           </button>
@@ -173,7 +179,9 @@ export function KitchenTicket({
           <button
             type="button"
             onClick={onReady}
-            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-success-tint)] px-4 text-[14px] font-bold text-[var(--color-success)] transition-colors hover:bg-[var(--color-success)] hover:text-white"
+            disabled={disabled}
+            title={disabled ? 'غير متصل — لا يمكن تحديث الحالة' : undefined}
+            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-success-tint)] px-4 text-[14px] font-bold text-[var(--color-success)] transition-colors hover:bg-[var(--color-success)] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
           >
             جاهز للتسليم
           </button>
@@ -182,7 +190,9 @@ export function KitchenTicket({
           <button
             type="button"
             onClick={onDeliver}
-            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-bg)] px-4 text-[13px] font-bold text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-border)] hover:text-[var(--color-text)]"
+            disabled={disabled}
+            title={disabled ? 'غير متصل — لا يمكن تحديث الحالة' : undefined}
+            className="min-h-[44px] flex-1 rounded-[10px] bg-[var(--color-bg)] px-4 text-[13px] font-bold text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-border)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-45"
           >
             تم التسليم ✓
           </button>
