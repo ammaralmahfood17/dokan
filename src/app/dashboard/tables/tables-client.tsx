@@ -302,7 +302,9 @@ export function TablesClient({
             </Button>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="grid gap-2 lg:grid-cols-2">
+            {/* Two columns on a desktop: a full-width row left ~700px of empty
+                card beside the actions once they moved next to the identity. */}
             {tables.map((t) => {
               // Audit T2 #1: the copyable link must carry the scan token too, otherwise the
               // merchant copies a link that cannot complete an order once enforcement is on.
