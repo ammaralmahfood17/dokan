@@ -78,12 +78,12 @@ export function ProductPickerSheet({
                 <p className="section-title flex flex-wrap items-center gap-2">
                   {group.name}
                   {bounds.min >= 1 && (
-                    <span className="rounded-full bg-[var(--color-primary-tint)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-primary)]">
+                    <span className="rounded-full bg-[var(--color-primary-tint)] px-2 py-0.5 text-caption font-bold text-[var(--color-primary)]">
                       إلزامي
                     </span>
                   )}
                   {!single && (
-                    <span className="text-[11.5px] font-normal text-[var(--color-text-muted)]">
+                    <span className="text-caption font-normal text-[var(--color-text-muted)]">
                       {pickedInGroup}/{bounds.max} — اختر حتى {bounds.max}
                     </span>
                   )}

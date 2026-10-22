@@ -56,25 +56,9 @@
      screen must sit above it: offset = this + env(safe-area-inset-bottom). */
   --bottom-nav-h: 3.5rem;
 
-  /* Containers — one source of width. 720 reading / 1280 app / 1440 marketing. */
-  --container-reading: 45rem;
-  --container-app: 80rem;
-  --container-wide: 90rem;
-
-  /* Type scale — fluid, six roles. Arabic needs a taller line (1.65 body) than
-     Latin 1.5: diacritics and dots need vertical room. No negative tracking. */
-  --text-display: clamp(2.5rem, 6vw, 4rem);
-  --leading-display: 1.25; /* Arabic display: 1.15 clips marks; 1.25 keeps it tight but legible */
-  --text-h1: clamp(1.5rem, 3vw, 1.75rem);
-  --leading-h1: 1.3;
-  --text-h2: clamp(1.125rem, 2vw, 1.25rem);
-  --leading-h2: 1.35;
-  --text-body: clamp(0.9375rem, 0.9vw + 0.75rem, 1rem);
-  --leading-body: 1.65;
-  --text-label: 0.8125rem;
-  --leading-label: 1.5;
-  --text-caption: 0.75rem;
-  --leading-caption: 1.5;
+  /* The six type roles live in @theme below, where Tailwind can emit
+     text-display / text-h1 / text-h2 / text-body / text-label / text-caption.
+     They are NOT overrides of Tailwind's own --text-xs..9xl scale. */
 }
 
 @theme {
@@ -146,6 +130,32 @@
   --font-display: "thmanyah sans", ui-serif, serif;
   --font-serif: "thmanyah sans", ui-serif, serif;
   --font-mono: "thmanyah sans", ui-monospace, monospace;
+
+  /* Six-role fluid scale (Wave 2). Arabic needs a taller body line (1.65) than
+     Latin 1.5: diacritics and dots need vertical room. No negative tracking.
+     `text-caption` is the 12px floor — nothing in the UI may render smaller. */
+  --text-display: clamp(2.5rem, 6vw, 4rem);
+  --text-display--line-height: 1.25;
+  --text-display--font-weight: 800;
+  --text-h1: clamp(1.5rem, 3vw, 1.75rem);
+  --text-h1--line-height: 1.3;
+  --text-h1--font-weight: 700;
+  --text-h2: clamp(1.125rem, 2vw, 1.25rem);
+  --text-h2--line-height: 1.35;
+  --text-h2--font-weight: 700;
+  --text-body: clamp(0.9375rem, 0.9vw + 0.75rem, 1rem);
+  --text-body--line-height: 1.65;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.5;
+  --text-label--font-weight: 600;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.5;
+
+  /* Width system — one source per reading mode. `.page` stays 1120 (the
+     measured enterprise column); `.page-wide` opts a screen into 1440 (POS). */
+  --container-reading: 45rem;
+  --container-app: 80rem;
+  --container-wide: 90rem;
 
   /* Radius — small by intent; full-round reads "consumer" */
   --radius-sm: 6px;
@@ -272,6 +282,11 @@
   max-width: 480px;
   margin-inline: auto;
 }
+/* 768 is the tablet: 480px there produced three 140px cards and wrapped the
+   price onto a second line («0.100» / «BHD»). 760 gives ~235px cards. */
+@media (min-width: 768px) {
+  .menu-shell { max-width: 760px; }
+}
 @media (min-width: 1024px) {
   .menu-shell { max-width: 960px; }
 }
@@ -312,7 +327,7 @@
   border-radius: var(--radius-md); font-weight: 600; font-size: 0.875rem;
   height: 36px; padding: 0 1rem; border: 1px solid transparent; cursor: pointer;
   white-space: nowrap;
-  transition: background 0.1s linear, border-color 0.1s linear, color 0.1s linear;
+  transition: background var(--motion-instant) linear, border-color var(--motion-instant) linear, color var(--motion-instant) linear;
 }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
@@ -481,7 +496,8 @@
    ========================================================================== */
 .section-title {
   /* FIX-T-001: تخفيف التتبع على العربي (0.03em → 0.01em) */
-  font-size: 0.75rem; font-weight: 600;
+  font-size: var(--text-caption); line-height: var(--text-caption--line-height);
+  font-weight: 600;
   letter-spacing: 0.01em; color: var(--color-text-secondary); margin-bottom: 0.75rem;
 }
 
@@ -492,11 +508,22 @@
   max-width: 1120px; margin: 0 auto;
   padding: 1.5rem 1rem 4rem;
 }
+/* Opt-in wider column. Unlayered like `.page`, and declared after it, so it
+   actually wins — the `md:max-w-[1440px]` utility on the POS never did (utilities
+   lose to unlayered CSS; measured in the built sheet). */
+.page-wide { max-width: var(--container-wide); }
+@media (min-width: 1024px) {
+  .page-wide { padding-inline: 1.5rem; }
+}
 .page-header {
   display: flex; flex-wrap: wrap; align-items: flex-start;
   justify-content: space-between; gap: 0.75rem; margin-bottom: 1.5rem;
 }
-.page-header h1 { font-size: 1.375rem; font-weight: 800; }
+.page-header h1 {
+  font-size: var(--text-h1);
+  line-height: var(--text-h1--line-height);
+  font-weight: var(--text-h1--font-weight);
+}
 .page-header p { margin: 0.25rem 0 0; color: var(--color-text-secondary); font-size: 0.8125rem; }
 
 /* ==========================================================================

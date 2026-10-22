@@ -61,12 +61,12 @@ function MenuProductRowBase({
   return (
     <div className="relative flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors duration-150 hover:border-[var(--color-border-strong)]">
       {soldOut && (
-        <span className="absolute start-2 top-2 z-10 rounded-full bg-[var(--color-text)] px-2.5 py-1 text-[11.5px] font-bold text-white">
+        <span className="absolute start-2 top-2 z-10 rounded-full bg-[var(--color-text)] px-2.5 py-1 text-caption font-bold text-white">
           غير متوفر
         </span>
       )}
       {!soldOut && remaining !== null && (
-        <span className="absolute end-2 top-2 z-10 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[11.5px] font-bold text-[var(--color-text-secondary)]">
+        <span className="absolute end-2 top-2 z-10 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-caption font-bold text-[var(--color-text-secondary)]">
           باقي <span dir="ltr">{remaining}</span>
         </span>
       )}
@@ -128,7 +128,7 @@ function MenuProductRowBase({
               </button>
             ))
           ) : (
-            <span className="inline-flex min-h-6 items-center gap-0.5 rounded-full bg-[var(--color-primary-tint)] px-2 text-[11.5px] font-bold text-[var(--color-primary)]">
+            <span className="inline-flex min-h-6 items-center gap-0.5 rounded-full bg-[var(--color-primary-tint)] px-2 text-caption font-bold text-[var(--color-primary)]">
               <Plus className="h-3 w-3" aria-hidden="true" />
               إضافات
             </span>
@@ -136,7 +136,7 @@ function MenuProductRowBase({
         </div>
       )}
       <div className="flex items-center justify-between gap-2 px-3 pb-3 pt-2">
-        <span className="font-mono text-[14px] font-bold tabular-nums text-[var(--color-text)]" dir="ltr">
+        <span className="whitespace-nowrap font-mono text-[14px] font-bold tabular-nums text-[var(--color-text)]" dir="ltr">
           {formatMoney(Number(product.price), currency)}
         </span>
         {soldOut ? (

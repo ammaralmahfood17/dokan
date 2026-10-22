@@ -42,7 +42,7 @@ export default function RegisterPage() {
             <MessageCircle className="h-4 w-4" />
             اطلب فتح متجرك
           </a>
-          <p className="mt-3 text-center text-[11.5px] leading-6 text-[var(--color-text-tertiary)]">
+          <p className="mt-3 text-center text-caption leading-6 text-[var(--color-text-tertiary)]">
             14 يوم تجربة مجانية كاملة — بلا بطاقة ائتمان.
           </p>
         </div>

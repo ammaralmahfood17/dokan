@@ -87,7 +87,7 @@ export function PullToRefresh({
           ) : (
             <>
               <ArrowDown
-                className={`h-4 w-4 transition-transform duration-200 ${
+                className={`h-4 w-4 transition-transform duration-[var(--motion-fast)] ${
                   indicator.distance >= 50 ? 'rotate-180' : ''
                 }`}
                 style={{ transform: `translateY(${indicator.distance * 0.5}px)` }}

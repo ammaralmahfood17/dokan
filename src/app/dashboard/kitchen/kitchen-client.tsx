@@ -280,7 +280,7 @@ export function KitchenClient({
               }`}
             >
               {TAB_LABELS[t]}
-              <span dir="ltr" className="ms-1.5 inline-block whitespace-nowrap font-mono text-[11.5px] tabular-nums opacity-70">
+              <span dir="ltr" className="ms-1.5 inline-block whitespace-nowrap font-mono text-caption tabular-nums opacity-70">
                 · {countByTab[t]}
               </span>
               {tab === t && (
@@ -385,7 +385,7 @@ export function KitchenClient({
             <h2 className="text-[13.5px] font-bold text-[var(--color-primary)]">
               🔔 طلبات الخدمة
             </h2>
-            <span className="rounded-full border border-[var(--color-primary)] px-2 py-0.5 text-[11.5px] font-bold tabular-nums text-[var(--color-primary)]">
+            <span className="rounded-full border border-[var(--color-primary)] px-2 py-0.5 text-caption font-bold tabular-nums text-[var(--color-primary)]">
               {serviceRequests.length}
             </span>
           </div>
@@ -442,7 +442,7 @@ export function KitchenClient({
             }`}
           >
             {label}
-            <span dir="ltr" className="ms-1 inline-block font-mono text-[11.5px] tabular-nums opacity-70">
+            <span dir="ltr" className="ms-1 inline-block font-mono text-caption tabular-nums opacity-70">
               · {String((stageBuckets.get(s) ?? []).length).padStart(2, '0')}
             </span>
             {stage === s && (

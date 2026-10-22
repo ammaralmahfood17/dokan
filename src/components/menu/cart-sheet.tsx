@@ -67,7 +67,7 @@ export function CartSheet({
               <button
                 type="button"
                 onClick={() => onEdit(l)}
-                className="mt-1 inline-flex min-h-[32px] items-center gap-1 text-[11.5px] font-bold text-[var(--color-primary)]"
+                className="mt-1 inline-flex min-h-[32px] items-center gap-1 text-caption font-bold text-[var(--color-primary)]"
               >
                 <Pencil className="h-3 w-3" />
                 تعديل
@@ -162,7 +162,7 @@ export function CartSheet({
         </div>
       )}
 
-      <p className="mt-2 text-center text-[11.5px] text-[var(--color-text-muted)]">
+      <p className="mt-2 text-center text-caption text-[var(--color-text-muted)]">
         الأسعار تُحسب من الخادم
       </p>
     </Sheet>

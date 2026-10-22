@@ -134,7 +134,7 @@ export default function LandingPage() {
                     priority
                   />
                 </div>
-                <p className="mt-3 text-center text-[11.5px] text-[var(--color-text-muted)]">
+                <p className="mt-3 text-center text-caption text-[var(--color-text-muted)]">
                   قائمة حقيقية — جرّبها بنفسك
                 </p>
               </div>
@@ -192,7 +192,7 @@ export default function LandingPage() {
                   واتساب الدعم
                 </a>
               </div>
-              <p className="mt-3 text-[11.5px] text-[var(--color-text-muted)]" dir="ltr">
+              <p className="mt-3 text-caption text-[var(--color-text-muted)]" dir="ltr">
                 +973 3689 7959
               </p>
             </div>
@@ -259,7 +259,7 @@ export default function LandingPage() {
                   {!signupOpen && <MessageCircle className="h-4 w-4" />}
                   اطلب تجربتك المجانية
                 </a>
-                <p className="mt-3 text-[11.5px] text-[var(--color-text-tertiary)]">
+                <p className="mt-3 text-caption text-[var(--color-text-tertiary)]">
                   نفتح لك الحساب ونجهّزه معك — بلا بطاقة ائتمان.
                 </p>
               </div>

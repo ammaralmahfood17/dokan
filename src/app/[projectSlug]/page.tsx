@@ -185,7 +185,7 @@ export default async function StorefrontPage({
       <div className="mt-auto pb-8 pt-6 text-center">
         <Link
           href="/"
-          className="inline-flex min-h-[44px] items-center text-[11.5px] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
+          className="inline-flex min-h-[44px] items-center text-caption text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
           dir="ltr"
         >
           Powered by Dokan

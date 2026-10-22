@@ -128,11 +128,11 @@ export function AppSidebar({
         onClick={() => setIsOpen(false)}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'group flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-semibold transition-all duration-200',
+          'group flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-semibold transition-all duration-[var(--motion-fast)]',
           // Tablet (768–1023): 88px icon rail — icon above a 11.5px label, so
           // the Arabic label is visible without a 270px drawer eating the
           // counter screen. Back to a row at 1024.
-          'md:flex-col md:gap-1 md:px-1 md:py-2 md:text-[11.5px] md:leading-tight md:text-center',
+          'md:flex-col md:gap-1 md:px-1 md:py-2 md:text-caption md:leading-tight md:text-center',
           'lg:flex-row lg:gap-3 lg:px-3 lg:py-2 lg:text-[13px]',
           active
             ? 'text-[var(--color-primary)]'
@@ -140,7 +140,7 @@ export function AppSidebar({
         )}
       >
         <div className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-md)] transition-all duration-200',
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-md)] transition-all duration-[var(--motion-fast)]',
           'md:h-9 md:w-9 lg:h-7 lg:w-7',
           active
             ? 'bg-[var(--color-primary-tint-strong)] text-[var(--color-primary)]'
@@ -177,7 +177,7 @@ export function AppSidebar({
           a modal backdrop on mobile or intercepts its backdrop-click-to-close. */}
       <aside
         className={cn(
-          'fixed start-0 top-0 z-[var(--z-drawer)] flex h-dvh w-[270px] flex-col border-e border-[var(--color-border)] bg-[var(--color-surface)] transition-transform duration-300',
+          'fixed start-0 top-0 z-[var(--z-drawer)] flex h-dvh w-[270px] flex-col border-e border-[var(--color-border)] bg-[var(--color-surface)] transition-transform duration-[var(--motion-modal)]',
           isOpen ? 'translate-x-0' : 'translate-x-full',
           // 768–1023: a permanent 88px icon rail (a drawer would cost the
           // cashier a tap on every switch); 1024+: the familiar 224px sidebar.
@@ -199,7 +199,7 @@ export function AppSidebar({
               <div className="truncate text-sm font-bold text-[var(--color-text)]">
                 {projectName}
               </div>
-              <div className="flex items-center gap-1 text-[11.5px] text-[var(--color-text-muted)]">
+              <div className="flex items-center gap-1 text-caption text-[var(--color-text-muted)]">
                 <span>دكان</span>
                 <span className="h-1 w-1 rounded-full bg-[var(--color-text-muted)]" />
                 <span>المطعم</span>
@@ -229,7 +229,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={logout}
-            className="flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-danger-tint)] hover:text-[var(--color-danger)] transition-all duration-200 md:min-h-0 md:flex-col md:gap-1 md:px-1 md:py-2 md:text-[11.5px] md:leading-tight md:text-center lg:min-h-0 lg:flex-row lg:gap-3 lg:px-3 lg:py-2 lg:text-[13px]"
+            className="flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-danger-tint)] hover:text-[var(--color-danger)] transition-all duration-[var(--motion-fast)] md:min-h-0 md:flex-col md:gap-1 md:px-1 md:py-2 md:text-caption md:leading-tight md:text-center lg:min-h-0 lg:flex-row lg:gap-3 lg:px-3 lg:py-2 lg:text-[13px]"
           >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-md)] md:h-9 md:w-9 lg:h-7 lg:w-7">
               <LogOut className="h-4 w-4 md:h-5 md:w-5 lg:h-4 lg:w-4" />
@@ -258,7 +258,7 @@ export function AppSidebar({
                   prefetch={false}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex h-14 w-full flex-col items-center justify-center gap-1 text-[11.5px] font-semibold',
+                    'flex h-14 w-full flex-col items-center justify-center gap-1 text-caption font-semibold',
                     active
                       ? 'text-[var(--color-primary)]'
                       : 'text-[var(--color-text-secondary)]'
@@ -274,7 +274,7 @@ export function AppSidebar({
             <button
               type="button"
               onClick={() => setIsOpen(true)}
-              className="flex h-14 w-full flex-col items-center justify-center gap-1 text-[11.5px] font-semibold text-[var(--color-text-secondary)]"
+              className="flex h-14 w-full flex-col items-center justify-center gap-1 text-caption font-semibold text-[var(--color-text-secondary)]"
             >
               <Menu className="h-5 w-5" aria-hidden="true" />
               <span>المزيد</span>

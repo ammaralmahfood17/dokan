@@ -115,7 +115,7 @@ export function InstallPrompt() {
     >
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-bold">ثبّت تطبيق دكان</p>
-        <p className="text-[11.5px] text-[var(--color-text-secondary)]">
+        <p className="text-caption text-[var(--color-text-secondary)]">
           أضف دكان إلى شاشتك الرئيسية لفتح أسرع
         </p>
       </div>

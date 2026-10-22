@@ -34,7 +34,7 @@ export function OrdersFilterChips({
         >
           {f.label}
           <span
-            className={`rounded-full px-1.5 py-0.5 text-[11.5px] tabular-nums ${
+            className={`rounded-full px-1.5 py-0.5 text-caption tabular-nums ${
               filter === f.value
                 ? 'bg-white/20 text-white'
                 : 'bg-[var(--color-bg)] text-[var(--color-text-muted)]'

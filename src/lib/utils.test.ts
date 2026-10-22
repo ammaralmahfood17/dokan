@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
+  cn,
   generateSlug,
   money,
   currencyDecimals,
@@ -256,5 +257,20 @@ describe('generateLinkCode() — audit T2 #7', () => {
   it('the webhook accepts a 32-char code', () => {
     const webhook = readFileSync(resolve(process.cwd(), 'src/app/api/telegram/webhook/route.ts'), 'utf8');
     expect(webhook).toMatch(/\{6,32\}/);
+  });
+});
+
+describe('cn() and the six type roles', () => {
+  // tailwind-merge classified the custom `text-caption` as a COLOUR because it
+  // shares the `text-` prefix, so `cn('text-caption', 'text-[var(--color-…)]')`
+  // dropped the font size and the phone bottom nav rendered 14px instead of 12.
+  it('keeps a type role when merged with a text colour', () => {
+    const merged = cn('text-caption', 'text-[var(--color-text-secondary)]');
+    expect(merged).toContain('text-caption');
+    expect(merged).toContain('text-[var(--color-text-secondary)]');
+  });
+
+  it('still lets a later font size win', () => {
+    expect(cn('text-caption', 'text-xs')).toBe('text-xs');
   });
 });

@@ -91,7 +91,7 @@ export default async function DashboardLayout({
               {ctx.project.name}
             </span>
           </div>
-          <span className="text-[11.5px] font-medium text-[var(--color-text-secondary)]">
+          <span className="text-caption font-medium text-[var(--color-text-secondary)]">
             دكان
           </span>
         </header>

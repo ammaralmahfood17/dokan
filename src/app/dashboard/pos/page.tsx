@@ -27,7 +27,7 @@ const PosClient = dynamic<{
 
 function PosLoader() {
   return (
-    <div className="page md:max-w-[1440px]">
+    <div className="page page-wide">
       <div className="page-header">
         <div>
           <h1>نقطة البيع</h1>

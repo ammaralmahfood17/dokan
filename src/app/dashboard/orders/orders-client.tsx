@@ -44,7 +44,7 @@ export function OrdersClient({
             <p>متابعة فقط · الحالة تتحدث من شاشة المطبخ</p>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <p className="text-[11.5px] text-[var(--color-text-secondary)]">مبيعات اليوم</p>
+            <p className="text-caption text-[var(--color-text-secondary)]">مبيعات اليوم</p>
             <p
               className="font-mono text-lg font-bold tabular-nums text-[var(--color-text)]"
               dir="ltr"

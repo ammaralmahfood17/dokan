@@ -343,7 +343,7 @@ export function PosClient({
   };
 
   return (
-    <div className="page page-pos md:max-w-[1440px]">
+    <div className="page page-wide page-pos">
       <div className="page-header">
         <div>
           <h1>نقطة البيع</h1>

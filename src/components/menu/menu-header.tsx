@@ -36,7 +36,7 @@ export function MenuHeader({
             <h1 lang={langOfText(projectName)} className="truncate font-display text-[17px] font-bold">
               {projectName}
             </h1>
-            <p className="text-[11.5px] text-[var(--color-text-secondary)]">امسح واطلب من طاولتك</p>
+            <p className="text-caption text-[var(--color-text-secondary)]">امسح واطلب من طاولتك</p>
           </div>
         </div>
         {/* Table chip */}

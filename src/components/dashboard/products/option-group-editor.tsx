@@ -44,7 +44,7 @@ export function OptionGroupEditor({
           خيار جديد
         </button>
       </div>
-      <p className="mb-3 text-[11.5px] leading-relaxed text-[var(--color-text-muted)]">
+      <p className="mb-3 text-caption leading-relaxed text-[var(--color-text-muted)]">
         مثال: خيار «الحجم» وأنواعه صغير / وسط / كبير — ولكل نوع سعره.
       </p>
 
@@ -99,7 +99,7 @@ export function OptionGroupEditor({
             </label>
           </div>
 
-          <p className="mb-1.5 text-[11.5px] font-semibold text-[var(--color-text-secondary)]">الأنواع</p>
+          <p className="mb-1.5 text-caption font-semibold text-[var(--color-text-secondary)]">الأنواع</p>
           {group.choices.map((choice) => (
             <div key={choice.key} className="mb-2 flex items-center gap-2">
               <input

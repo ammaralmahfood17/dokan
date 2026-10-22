@@ -213,11 +213,11 @@ export default async function SuperAdminAnalyticsPage({
                 style={{ height: `${Math.max(4, (t.revenue / maxTrend) * 100)}%` }}
                 title={`${t.label}: ${moneyFmt.format(t.revenue)} (${t.orders} طلب)`}
               />
-              <span className="text-[11.5px] text-[var(--color-text-muted)]">{t.label}</span>
+              <span className="text-caption text-[var(--color-text-muted)]">{t.label}</span>
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[11.5px] text-[var(--color-text-muted)]">
+        <p className="mt-2 text-caption text-[var(--color-text-muted)]">
           الإجمالي الكلي: {moneyFmt.format(totalRevenue)} · {numFmt.format(totalOrders)} طلب مكتمل
         </p>
       </div>
@@ -255,10 +255,10 @@ export default async function SuperAdminAnalyticsPage({
               <tr key={r.id} className="border-b border-[var(--color-border)]/60 last:border-0">
                 <td className="px-3 py-2.5">
                   <div className="font-bold">{r.name}</div>
-                  <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-text-muted)]">
+                  <div className="flex items-center gap-1.5 text-caption text-[var(--color-text-muted)]">
                     <span dir="ltr">{r.slug}</span>
                     {!r.is_active && (
-                      <span className="rounded-full bg-[var(--color-danger-tint)] px-1.5 py-px text-[11.5px] font-bold text-[var(--color-danger)]">
+                      <span className="rounded-full bg-[var(--color-danger-tint)] px-1.5 py-px text-caption font-bold text-[var(--color-danger)]">
                         موقوف
                       </span>
                     )}
@@ -284,7 +284,7 @@ export default async function SuperAdminAnalyticsPage({
           تنبيه: وصل الاستعلام إلى سقف 5000 طلب — الأرقام أدناه ناقصة. مطلوب جدول تجميع (rollup) الآن.
         </div>
       )}
-      <p className="mt-4 text-[11.5px] text-[var(--color-text-muted)]">
+      <p className="mt-4 text-caption text-[var(--color-text-muted)]">
         قرار الأداء الموثق: استعلام مباشر محدود بـ5000 طلب لكل صفحة. بعد تجاوز هذا الحجم
         تُستبدل هذه الصفحة بجدول تجميع مجدول (rollup) دون إعادة كتابة — والتحذير أعلاه
         يظهر لحظة بلوغ السقف بدل الاقتطاع الصامت.

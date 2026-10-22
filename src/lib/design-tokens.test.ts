@@ -220,21 +220,22 @@ describe('the radius scale is ascending (audit T1 #9)', () => {
 });
 
 describe('Arabic legibility floor (audit T1 #19)', () => {
-  it('no UI text below 11.5px', () => {
+  it('no UI text below 12px — the floor is the caption role now', () => {
     // Arabic at 10px loses its dots and diacritic spacing - the finding counted 63 uses of 10px/11px
-    // in one UI. The floor is 11.5px for everything rather than "11px for numeric badges", because a
-    // guard cannot see what a className is written on, and a rule with an exception it cannot check
-    // is a rule that will be broken.
+    // in one UI. The floor was 11.5px, but 11.5 was doing four different jobs (label, caption, badge,
+    // helper) and read as a flat scale. Wave 2 raised every one of those 95 usages to the caption
+    // token (12px) and made 12 the floor: nothing may render smaller, and `text-caption` is the name
+    // for it. A guard cannot see what a className is written on, so the rule has no exceptions.
     const px = (v: string) => (v.endsWith('rem') ? parseFloat(v) * 16 : parseFloat(v));
     const offenders: string[] = [];
     for (const f of globSync('src/**/*.{ts,tsx}').filter((f) => !/\.test\./.test(f))) {
       readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
         for (const m of line.matchAll(/text-\[(\d*\.?\d+)(px|rem)\]/g)) {
           const size = px(m[1] + m[2]);
-          if (size < 11.5) offenders.push(`${f}:${i + 1} ${m[0]} (${size}px)`);
+          if (size < 12) offenders.push(`${f}:${i + 1} ${m[0]} (${size}px)`);
         }
       });
     }
-    expect(offenders, 'text below the Arabic floor: raise it to text-[11.5px]').toEqual([]);
+    expect(offenders, 'text below the Arabic floor: use text-caption (12px)').toEqual([]);
   });
 });

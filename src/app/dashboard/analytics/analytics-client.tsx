@@ -29,7 +29,7 @@ function DeltaBadge({ curr, prev, invert = false }: { curr: number; prev: number
     : 'bg-[var(--color-danger-tint)] text-[var(--color-danger)]';
   const arrow = up ? '▲' : '▼';
   return (
-    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11.5px] font-bold ${cls}`}>
+    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-caption font-bold ${cls}`}>
       {arrow} {Math.abs(pct)}%
     </span>
   );
@@ -203,7 +203,7 @@ export function AnalyticsClient({
                 <div key={d.key} className="group relative flex h-full flex-1 flex-col items-center gap-1" title={`${d.label} — ${formatMoney(d.revenue, currency)}`}>
                   {/* Value: only on the top bar (always) or on hover (desktop) */}
                   <span
-                    className={`whitespace-nowrap text-[11.5px] font-semibold text-[var(--color-text-muted)] ${
+                    className={`whitespace-nowrap text-caption font-semibold text-[var(--color-text-muted)] ${
                       d.revenue === maxDayRevenue
                         ? 'opacity-100'
                         : 'opacity-0 transition-opacity group-hover:opacity-100'
@@ -223,7 +223,7 @@ export function AnalyticsClient({
                   </div>
                   {/* Weekday label: all for ≤7d, every 5th for 30d (fits on mobile) */}
                   <span
-                    className={`text-[11.5px] text-[var(--color-text-secondary)] ${
+                    className={`text-caption text-[var(--color-text-secondary)] ${
                       byDay.length > 7 && idx % 5 !== 0 && idx !== byDay.length - 1 ? 'invisible' : ''
                     }`}
                   >
@@ -257,7 +257,7 @@ export function AnalyticsClient({
                   </div>
                 ))}
               </div>
-              <div className="mt-1.5 flex justify-between text-[11.5px] text-[var(--color-text-muted)]" dir="ltr">
+              <div className="mt-1.5 flex justify-between text-caption text-[var(--color-text-muted)]" dir="ltr">
                 <span>12ص</span>
                 <span>6ص</span>
                 <span>12م</span>

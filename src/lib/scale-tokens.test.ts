@@ -90,9 +90,11 @@ describe('Arabic type scale', () => {
   });
 
   it('body line-height >= 1.6 and headings >= 1.2 (Arabic diacritics need room)', () => {
-    expect(Number(token('leading-body'))).toBeGreaterThanOrEqual(1.6);
+    // Tailwind v4 emits the pairing as --text-<role>--line-height, so the
+    // assertion follows the same name the utility uses.
+    expect(Number(token('text-body--line-height'))).toBeGreaterThanOrEqual(1.6);
     for (const role of ['display', 'h1', 'h2']) {
-      expect(Number(token(`leading-${role}`))).toBeGreaterThanOrEqual(1.2);
+      expect(Number(token(`text-${role}--line-height`))).toBeGreaterThanOrEqual(1.2);
     }
   });
 

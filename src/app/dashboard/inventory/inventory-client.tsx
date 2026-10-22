@@ -371,7 +371,7 @@ export function InventoryClient({
               <Plus className="h-4 w-4" />
               إضافة مكوّن للوصفة
             </Button>
-            <p className="text-[11.5px] text-[var(--color-text-muted)]">
+            <p className="text-caption text-[var(--color-text-muted)]">
               حذف جميع الأسطر يحوّل المنتج إلى غير متتبّع، ولا يغيّر رصيد المكونات.
             </p>
             <div className="flex gap-2 pt-2">

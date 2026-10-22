@@ -71,12 +71,12 @@ export function OrderCard({ order, currency }: { order: OrderRow; currency: stri
               );
             })}
           </div>
-          <p className="mt-1 text-[11.5px] text-[var(--color-text-muted)]" dir="rtl">
+          <p className="mt-1 text-caption text-[var(--color-text-muted)]" dir="rtl">
             {ORDER_STATUS_LABELS[order.status]}
           </p>
         </div>
       ) : (
-        <p className="border-b border-[var(--color-border)] px-4 py-2 text-[11.5px] font-bold text-[var(--color-danger)]">
+        <p className="border-b border-[var(--color-border)] px-4 py-2 text-caption font-bold text-[var(--color-danger)]">
           {ORDER_STATUS_LABELS.cancelled}
         </p>
       )}

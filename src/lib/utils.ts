@@ -1,7 +1,24 @@
 import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { extendTailwindMerge } from 'tailwind-merge';
 
-/** Merge Tailwind classes safely */
+/**
+ * Merge Tailwind classes safely.
+ *
+ * The six type roles (text-caption/label/body/h1/h2/display) share the `text-`
+ * prefix with colour utilities. Without this registration tailwind-merge treats
+ * `text-caption` as a COLOUR and silently drops it whenever `cn()` also merges a
+ * `text-[var(--color-…)]` — which is how the phone bottom nav rendered its
+ * labels at 14px while the class said 12. Registering them in the font-size
+ * group makes `cn` understand the scale it ships.
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      'font-size': [{ text: ['caption', 'label', 'body', 'h1', 'h2', 'display'] }],
+    },
+  },
+});
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

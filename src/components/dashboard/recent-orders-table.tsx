@@ -19,7 +19,7 @@ export function RecentOrdersTable({
         آخر الطلبات
         <Link
           href="/dashboard/orders"
-          className="inline-flex min-h-[44px] items-center text-[11.5px] font-normal text-[var(--color-primary)]"
+          className="inline-flex min-h-[44px] items-center text-caption font-normal text-[var(--color-primary)]"
         >
           عرض الكل
         </Link>
@@ -40,10 +40,10 @@ export function RecentOrdersTable({
           {/* FIX-T-004: رأس ثابت عند التمرير في الجداول الطويلة */}
           <thead className="sticky top-0 z-[var(--z-sticky)]">
             <tr>
-              <th className="border-b border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-1.5 text-start text-[11.5px] font-medium text-[var(--color-text-secondary)]">#</th>
-              <th className="border-b border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-1.5 text-start text-[11.5px] font-medium text-[var(--color-text-secondary)]">الطاولة</th>
-              <th className="border-b border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-1.5 text-start text-[11.5px] font-medium text-[var(--color-text-secondary)]">المبلغ</th>
-              <th className="border-b border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-1.5 text-start text-[11.5px] font-medium text-[var(--color-text-secondary)]">الحالة</th>
+              <th className="border-b border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-1.5 text-start text-caption font-medium text-[var(--color-text-secondary)]">#</th>
+              <th className="border-b border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-1.5 text-start text-caption font-medium text-[var(--color-text-secondary)]">الطاولة</th>
+              <th className="border-b border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-1.5 text-start text-caption font-medium text-[var(--color-text-secondary)]">المبلغ</th>
+              <th className="border-b border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-1.5 text-start text-caption font-medium text-[var(--color-text-secondary)]">الحالة</th>
             </tr>
           </thead>
           <tbody>

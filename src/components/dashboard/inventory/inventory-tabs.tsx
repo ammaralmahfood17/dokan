@@ -64,7 +64,7 @@ export function IngredientsTab({
               <div className="flex items-center gap-2">
                 <span className="font-bold">{ingredient.name}</span>
                 {low && (
-                  <span className="rounded-full bg-[var(--color-danger-tint)] px-2 py-0.5 text-[11.5px] font-semibold text-[var(--color-danger)]">
+                  <span className="rounded-full bg-[var(--color-danger-tint)] px-2 py-0.5 text-caption font-semibold text-[var(--color-danger)]">
                     إعادة الطلب
                   </span>
                 )}

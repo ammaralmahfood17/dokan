@@ -39,19 +39,19 @@ export function KpiCards({
           {formatMoney(todaySales, currency)}
         </p>
         {salesDelta !== null ? (
-          <p className={`mt-1.5 text-[11.5px] font-semibold ${salesDelta >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
+          <p className={`mt-1.5 text-caption font-semibold ${salesDelta >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
             {salesDelta >= 0 ? '↑' : '↓'} {Math.abs(salesDelta)}٪ عن أمس
           </p>
         ) : (
-          <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">— لا مبيعات أمس</p>
+          <p className="mt-1.5 text-caption text-[var(--color-text-muted)]">— لا مبيعات أمس</p>
         )}
         {pendingValue > 0 && (
-          <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">
+          <p className="mt-1.5 text-caption text-[var(--color-text-muted)]">
             منها {formatMoney(pendingValue, currency)} قيد التحضير
           </p>
         )}
         {peakHour && peakHour.revenue > 0 && (
-          <p className="mt-1.5 text-[11.5px] text-[var(--color-text-secondary)]">
+          <p className="mt-1.5 text-caption text-[var(--color-text-secondary)]">
             ⏰ وقت الذروة: {peakHour.label} — {formatMoney(peakHour.revenue, currency)}
           </p>
         )}
@@ -66,11 +66,11 @@ export function KpiCards({
           {todayOrders ?? 0}
         </p>
         {ordersDelta !== 0 ? (
-          <p className={`mt-1.5 text-[11.5px] font-semibold ${ordersDelta > 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
+          <p className={`mt-1.5 text-caption font-semibold ${ordersDelta > 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
             {ordersDelta > 0 ? '↑' : '↓'} {Math.abs(ordersDelta)} طلبات
           </p>
         ) : (
-          <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">— مثل أمس</p>
+          <p className="mt-1.5 text-caption text-[var(--color-text-muted)]">— مثل أمس</p>
         )}
       </Link>
 
@@ -83,11 +83,11 @@ export function KpiCards({
           {pendingCount ?? 0}
         </p>
         {(pendingCount ?? 0) > 0 ? (
-          <span className="mt-1.5 inline-block text-[11.5px] font-semibold text-[var(--color-primary)]">
+          <span className="mt-1.5 inline-block text-caption font-semibold text-[var(--color-primary)]">
             شاشة المطبخ ←
           </span>
         ) : (
-          <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">— كل شيء جاهز</p>
+          <p className="mt-1.5 text-caption text-[var(--color-text-muted)]">— كل شيء جاهز</p>
         )}
       </Link>
 
@@ -100,7 +100,7 @@ export function KpiCards({
           {occupiedCount}
           <span className="text-[16px] text-[var(--color-text-muted)]">/{totalActiveTables}</span>
         </p>
-        <p className="mt-1.5 text-[11.5px] text-[var(--color-text-muted)]">
+        <p className="mt-1.5 text-caption text-[var(--color-text-muted)]">
           {occupiedCount > 0 ? `${occupiedCount} مشغولة الآن` : '— كلها متاحة'}
         </p>
       </Link>
