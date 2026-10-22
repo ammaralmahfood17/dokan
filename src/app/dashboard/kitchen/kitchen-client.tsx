@@ -9,7 +9,7 @@ import {
   type OrderRow,
 } from '@/lib/kitchen-tickets';
 import { toast } from 'sonner';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, Volume2, VolumeX } from 'lucide-react';
 import type { OrderStatus } from '@/lib/types';
 import { arabicNewOrders } from '@/lib/arabic';
 
@@ -281,7 +281,7 @@ export function KitchenClient({
             >
               {TAB_LABELS[t]}
               <span dir="ltr" className="ms-1.5 inline-block whitespace-nowrap font-mono text-[11.5px] tabular-nums opacity-70">
-                · {String(countByTab[t]).padStart(2, '0')}
+                · {countByTab[t]}
               </span>
               {tab === t && (
                 <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--color-primary)]" />
@@ -331,7 +331,11 @@ export function KitchenClient({
             aria-pressed={soundOn}
             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-[7px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)]"
           >
-            <span aria-hidden="true">{soundOn ? '🔊' : '🔇'}</span>
+            {soundOn ? (
+              <Volume2 className="h-5 w-5" aria-hidden="true" />
+            ) : (
+              <VolumeX className="h-5 w-5" aria-hidden="true" />
+            )}
           </button>
           <button
             type="button"
@@ -344,7 +348,8 @@ export function KitchenClient({
             title="اختبار الصوت"
             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-[7px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-success)]"
           >
-            <span aria-hidden="true">🔊</span> <span className="hidden sm:inline">اختبار</span>
+            <Volume2 className="h-4 w-4" aria-hidden="true" />
+            <span className="ms-1">اختبار</span>
           </button>
         </div>
       </header>
@@ -472,7 +477,7 @@ export function KitchenClient({
                 aria-label={label}
               >
                 <div className="flex items-center justify-between px-0.5">
-                  <h2 className="text-[13.5px] font-bold text-[var(--color-text-secondary)]">
+                  <h2 className="text-[15px] font-bold text-[var(--color-text-secondary)]">
                     {label}
                   </h2>
                   <span className="rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[12px] font-bold tabular-nums text-[var(--color-text-tertiary)]">

@@ -311,7 +311,10 @@ export function TablesClient({
               return (
                 <div
                   key={t.id}
-                  className="dashboard-card card flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                  /* Actions sit NEXT to the table's identity: justify-between put
+                     them ~800px away on a 1440 screen (measured), so the eye
+                     crossed the whole row for every table (audit 2026-10-22). */
+                  className="dashboard-card card flex flex-wrap items-center gap-3 px-4 py-3"
                 >
                   <div>
                     <div className="flex items-center gap-2">

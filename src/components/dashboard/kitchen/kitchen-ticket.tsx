@@ -92,7 +92,7 @@ export function KitchenTicket({
           >
             #{String(order.order_number).padStart(3, '0')}
           </p>
-          <p className="mt-0.5 text-[12px] font-semibold text-[var(--color-text-secondary)]">
+          <p className="mt-0.5 text-[14px] font-semibold text-[var(--color-text-secondary)]">
             {typeLabel}{' '}
             <span className="font-mono tabular-nums" dir="ltr">
               {labelNumber}
