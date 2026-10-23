@@ -192,6 +192,25 @@ export async function POST(request: NextRequest) {
     }
 
     const { id: orderId, status: orderStatus, totalAmount, orderNumber } = result.order;
+
+    // Who opened the table? The customer path leaves opened_by NULL by design;
+    // a staff sale is attributable, so stamp it on the session the trigger just
+    // opened. Only when it is still NULL — the first person at the table keeps
+    // the credit, and a later order must not overwrite it.
+    if (tableId) {
+      const { data: placed } = await supabase
+        .from('orders')
+        .select('session_id')
+        .eq('id', orderId)
+        .maybeSingle();
+      if (placed?.session_id) {
+        await supabase
+          .from('table_sessions')
+          .update({ opened_by: user.id })
+          .eq('id', placed.session_id)
+          .is('opened_by', null);
+      }
+    }
     // A replay already wrote its audit row and sent its notifications on the
     // first attempt. Re-running the side effects would push «طلب جديد» twice
     // for one order — the cashier would think two tickets reached the kitchen.

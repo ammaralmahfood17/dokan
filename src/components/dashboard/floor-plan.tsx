@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Armchair, GripVertical, LayoutGrid } from 'lucide-react';
+import { Armchair, Download, GripVertical, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import type { Table, TableBoardRow } from '@/lib/types';
 import { chipSubline, tableState, OCCUPANCY_LABEL } from '@/lib/floor-plan';
+import { drawFloorPlan, planChips } from '@/lib/floor-plan-image';
 import { toast } from 'sonner';
 
 /**
@@ -72,6 +73,7 @@ export function FloorPlan({
   const [dragPositions, setDragPositions] = useState<Map<string, Pos>>(new Map());
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   /**
    * The duration is computed AFTER mount, never during render: the server's
    * clock and the browser's differ, so rendering «12 د» on both sides is a
@@ -210,6 +212,76 @@ export function FloorPlan({
     onChanged();
   }
 
+  /**
+   * «تنزيل المخطط» — what a merchant prints for the pass or sends to a new hire.
+   * Drawn on a canvas from the SAME resolved positions and the SAME state/total
+   * the screen is showing, so the paper cannot disagree with the screen.
+   */
+  async function exportPng() {
+    setExporting(true);
+    try {
+      const W = 2000;
+      const H = 1500;
+      const PAD = 60;
+      const TOP = 140;
+      const BOTTOM = 80;
+
+      const positions = new Map<string, { x: number; y: number }>();
+      for (const t of tables) {
+        const p = posOf(t);
+        if (p) positions.set(t.id, p);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no 2d context');
+
+      const chips = planChips({
+        tables: tables.map((t) => ({ id: t.id, number: t.number, seats: t.seats ?? null })),
+        positions,
+        stateOf: (id) => {
+          const row = rows.get(id);
+          return row ? tableState(row) : 'free';
+        },
+        subOf: (id) => {
+          const row = rows.get(id);
+          return row ? chipSubline(row, tableState(row), now ?? Date.now()) : null;
+        },
+        width: W,
+        height: H,
+        padding: PAD,
+        topInset: TOP,
+        bottomInset: BOTTOM,
+      });
+
+      drawFloorPlan(
+        ctx,
+        chips,
+        { title: 'مخطط الصالة', subtitle: new Date().toLocaleDateString('ar-BH') },
+        { width: W, height: H, padding: PAD, topInset: TOP, bottomInset: BOTTOM }
+      );
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('toBlob returned null');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `floor-plan-${new Date().toISOString().slice(0, 10)}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('نزّلنا المخطط');
+    } catch (err) {
+      console.error('[FloorPlan] export failed', err);
+      toast.error('ما قدرنا نصدّر المخطط');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function clearLayout() {
     setBusy(true);
     try {
@@ -249,10 +321,16 @@ export function FloorPlan({
           اسحب الطاولة على مكانها — الحفظ تلقائي. ومن الكيبورد: ركّز الطاولة وحرّكها بالأسهم، وEnter
           يفتح جلستها.
         </p>
-        <Button variant="ghost" size="sm" onClick={() => void clearLayout()} disabled={busy}>
-          <LayoutGrid className="h-3.5 w-3.5" />
-          ترتيب تلقائي
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={() => void exportPng()} disabled={exporting}>
+            <Download className="h-3.5 w-3.5" />
+            تنزيل المخطط
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => void clearLayout()} disabled={busy}>
+            <LayoutGrid className="h-3.5 w-3.5" />
+            ترتيب تلقائي
+          </Button>
+        </div>
       </div>
 
       <div

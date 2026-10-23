@@ -1,7 +1,7 @@
 'use client';
 
-import { FormEvent, useState, useCallback, useRef } from 'react';
-import { Plus, Copy, ExternalLink, Printer, Trash2, LayoutGrid, List } from 'lucide-react';
+import { FormEvent, useState, useCallback, useEffect, useRef } from 'react';
+import { Plus, Copy, ExternalLink, Printer, Trash2, LayoutGrid, List, Clock } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
   generateQrToken,
@@ -60,8 +60,16 @@ export function TablesClient({
   const [tables, setTables] = useState(initialTables);
   const [board, setBoard] = useState<TableBoardRow[]>(initialBoard);
   const [view, setView] = useState<'floor' | 'list'>('floor');
+  // Mount timestamp: the «أُغلق آليًا» marker is relative to NOW, and reading the
+  // clock during render is both a hydration mismatch (React #418) and impure.
+  const [mountedAt, setMountedAt] = useState<number | null>(null);
   const [activeRow, setActiveRow] = useState<TableBoardRow | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const id = setTimeout(() => setMountedAt(Date.now()), 0);
+    return () => clearTimeout(id);
+  }, []);
 
   const boardByTable = new Map(board.map((r) => [r.table_id, r]));
   const stateByTable = new Map(board.map((r) => [r.table_id, tableState(r)]));
@@ -442,8 +450,18 @@ export function TablesClient({
                         </span>
                       ) : null}
                     </p>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
+                    {mountedAt !== null &&
+                    !boardByTable.get(t.id)?.session_id &&
+                    boardByTable.get(t.id)?.last_closed_automatically &&
+                    boardByTable.get(t.id)?.last_closed_at &&
+                    mountedAt - Date.parse(boardByTable.get(t.id)!.last_closed_at!) < 24 * 3600e3 ? (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--color-surface-sunken)] px-2 py-0.5 text-caption text-[var(--color-text-secondary)]">
+                        <Clock className="h-3 w-3" aria-hidden="true" />
+                        أُغلق آليًا
+                      </span>
+                    ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
                     <Button
                       variant={boardByTable.get(t.id)?.session_id ? 'primary' : 'secondary'}
                       size="sm"

@@ -222,6 +222,9 @@ export interface TableBoardRow {
   total_amount: number;
   paid_amount: number;
   unpaid_amount: number;
+  /** Last closed session, for the «أُغلق آليًا» marker. */
+  last_closed_at: string | null;
+  last_closed_automatically: boolean | null;
 }
 
 export interface OrderItem {

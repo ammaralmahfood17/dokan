@@ -110,6 +110,25 @@ export function TableSessionDrawer({
     onChanged();
   }
 
+  /**
+   * Collect ONE order. The session total is derived from rows, so this is also
+   * how a customer pays their own order in cash without settling the table.
+   */
+  async function payOrder(orderId: string) {
+    setBusy(true);
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc('mark_order_paid', { p_order_id: orderId });
+    setBusy(false);
+    if (error) {
+      toast.error(error.message.includes('NOT_AUTHORIZED') ? 'ما عندك صلاحية' : 'فشل تحصيل الطلب');
+      return;
+    }
+    const already = Boolean((data as { already_paid?: boolean } | null)?.already_paid);
+    toast.success(already ? 'الطلب مدفوع أصلًا' : 'تم تحصيل الطلب');
+    await load();
+    onChanged();
+  }
+
   async function submitClose(force: boolean) {
     if (!row.session_id) return;
     if (force && reason.trim().length < 3) {
@@ -216,7 +235,14 @@ export function TableSessionDrawer({
                         {o.paid_at ? (
                           <span className="text-caption font-semibold text-[var(--color-success)]">مدفوع</span>
                         ) : o.status !== 'cancelled' ? (
-                          <span className="text-caption text-[var(--color-text-secondary)]">غير مدفوع</span>
+                          <button
+                            type="button"
+                            onClick={() => void payOrder(o.id)}
+                            disabled={busy}
+                            className="min-h-9 rounded-full border border-[var(--color-border-strong)] px-2.5 text-caption font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-sunken)]"
+                          >
+                            تحصيل
+                          </button>
                         ) : null}
                         <span className="text-sm font-semibold tabular-nums" dir="ltr">
                           {formatMoney(o.total_amount, currency)}

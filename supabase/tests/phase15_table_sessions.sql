@@ -16,7 +16,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(19);
+SELECT plan(22);
 
 -- ---------------------------------------------------------------------------
 -- Structure
@@ -98,6 +98,18 @@ SELECT ok(
 SELECT ok(
   EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'auto-close-table-sessions'),
   'the 8-hour sweep is scheduled'
+);
+
+-- Per-order collection (20261023150000): staff can settle one order without
+-- closing the table, and the public menu cannot.
+SELECT has_function('public', 'mark_order_paid', ARRAY['uuid'], 'per-order payment RPC exists');
+SELECT ok(
+  has_function_privilege('authenticated', 'public.mark_order_paid(uuid)', 'EXECUTE'),
+  'staff can collect one order'
+);
+SELECT ok(
+  NOT has_function_privilege('anon', 'public.mark_order_paid(uuid)', 'EXECUTE'),
+  'the public menu cannot mark an order paid'
 );
 
 -- ---------------------------------------------------------------------------

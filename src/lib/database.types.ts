@@ -1093,6 +1093,10 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: Json
       }
+      mark_order_paid: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
       ensure_table_session: {
         Args: { p_project_id: string; p_table_id: string; p_opened_at?: string }
         Returns: string
