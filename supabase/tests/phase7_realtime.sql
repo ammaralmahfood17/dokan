@@ -69,16 +69,19 @@ SELECT is(
   'no table is published to Realtime without RLS enabled'
 );
 
--- 4. The publication stays exactly these three tables. A table added by accident is a leak
+-- 4. The publication stays exactly these FOUR tables. A table added by accident is a leak
 --    waiting for its first subscriber, and this is the assertion that makes that visible.
+--    table_sessions joined the set deliberately on 2026-10-23: the floor plan and the kitchen
+--    strip must see a table open/close without a poll, and the table carries RLS + a
+--    member-only SELECT policy (asserted above). Any FIFTH table still fails here.
 SELECT is(
   (
     SELECT count(*)::integer
       FROM pg_publication_tables
      WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
   ),
-  3,
-  'the realtime publication contains exactly orders + order_items + service_requests'
+  4,
+  'the realtime publication contains exactly orders + order_items + service_requests + table_sessions'
 );
 
 SELECT * FROM finish();
