@@ -19,6 +19,7 @@ import { useKitchenAudio } from '@/components/dashboard/kitchen/use-kitchen-audi
 import { useOnline } from '@/components/ui/use-online';
 // FIX-C-002: بطاقة الطلب مستخرجة
 import { KitchenTicket } from '@/components/dashboard/kitchen/kitchen-ticket';
+import { KitchenTablesStrip } from '@/components/dashboard/kitchen/kitchen-tables-strip';
 // FIX-C-003 (audit 2.4): العنوان الوامض + لوحة الطلبات/Realtime + الأوامر
 // مستخرجة — نقل حرفي بدون تغيير سلوك
 import { useTitleFlash } from '@/components/dashboard/kitchen/use-title-flash';
@@ -35,12 +36,14 @@ import {
 export function KitchenClient({
   projectId,
   projectName,
+  currency,
   initialOrders,
   initialServiceRequests = [],
   notificationState,
 }: {
   projectId: string;
   projectName: string;
+  currency: string;
   initialOrders: OrderRow[];
   /** Open «طلب موظف / طلب فاتورة» rows, seeded by the server render. */
   initialServiceRequests?: ServiceRequestRow[];
@@ -59,6 +62,8 @@ export function KitchenClient({
   const [time, setTime] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
   const [tab, setTab] = useState<'all' | 'dinein' | 'drivethru' | 'walkin'>('all');
+  /** «الصالة» strip: filter the board to one table (null = every table). */
+  const [tableFilter, setTableFilter] = useState<string | null>(null);
   // The board is three columns (~840px). At 375px it used to clip the second and third
   // stage behind a horizontal scroll with no affordance — the first ticket was cut off.
   // Below `lg` the stages become tabs (one column at a time); on tablet+ all stay visible.
@@ -214,14 +219,15 @@ export function KitchenClient({
   );
 
   const sorted = useMemo(() => {
-    const visible = tab === 'all' ? tickets : tickets.filter((t) => (t.order.type ?? null) === tab);
+    const byType = tab === 'all' ? tickets : tickets.filter((t) => (t.order.type ?? null) === tab);
+    const visible = tableFilter ? byType.filter((t) => t.order.table_id === tableFilter) : byType;
     return [...visible].sort((a, b) => {
       const ra = STAGE_RANK[a.order.status] ?? 0;
       const rb = STAGE_RANK[b.order.status] ?? 0;
       if (ra !== rb) return ra - rb;
       return a.order.created_at.localeCompare(b.order.created_at);
     });
-  }, [tickets, tab]);
+  }, [tickets, tab, tableFilter]);
 
   // One pass instead of a filter per stage column.
   const stageBuckets = useMemo(() => {
@@ -475,6 +481,13 @@ export function KitchenClient({
           </button>
         ))}
       </nav>
+
+      <KitchenTablesStrip
+        projectId={projectId}
+        currency={currency}
+        selected={tableFilter}
+        onSelect={setTableFilter}
+      />
 
       {/* Board — Calm Surface mockup: three fixed stage columns */}
       <main

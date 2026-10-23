@@ -12,7 +12,7 @@ import { lockBodyScroll } from '@/lib/use-body-scroll-lock';
 import { Check, Search, ShoppingBag, WifiOff, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatMoney, money, currencyDecimals } from '@/lib/utils';
-import type { OrderType, Product, ProductOptionGroup, ProductWithOptions } from '@/lib/types';
+import type { OrderType, Product, ProductOptionGroup, ProductWithOptions, TableBoardRow } from '@/lib/types';
 import {
   availableChoices,
   effectiveBounds,
@@ -62,6 +62,8 @@ export function PosClient({
   products,
   productFrequency,
   categories = [],
+  tables = [],
+  initialBoard = [],
 }: {
   projectId: string;
   currency: string;
@@ -70,8 +72,22 @@ export function PosClient({
   productFrequency?: Record<string, number>;
   /** Menu categories for the cashier filter (UX-17). */
   categories?: { id: string; name: string }[];
+  /** Active tables for a dine-in sale. */
+  tables?: { id: string; number: number; slug: string }[];
+  /** table_board(): which tables are busy and for how much. */
+  initialBoard?: TableBoardRow[];
 }) {
   const [type, setType] = useState<OrderType>('walkin');
+  const [tableId, setTableId] = useState<string | null>(null);
+  const [board, setBoard] = useState<TableBoardRow[]>(initialBoard);
+
+  const boardByTable = useMemo(() => new Map(board.map((r) => [r.table_id, r])), [board]);
+
+  const loadBoard = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase.rpc('table_board', { p_project_id: projectId });
+    if (data) setBoard(data as TableBoardRow[]);
+  }, [projectId]);
   const [lines, setLines] = useState<PosLine[]>([]);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -368,6 +384,7 @@ export function PosClient({
     const payload: PosQueuePayload = {
       projectId,
       type,
+      tableId: type === 'dinein' ? tableId : null,
       notes: notes.trim() || undefined,
       items: lines.map((l) => ({
         productId: l.productId,
@@ -414,6 +431,9 @@ export function PosClient({
       // Confirmation state — shows "الطلب وصل المطبخ" banner + allows
       // repeat-last-order to restore the exact same cart in one tap.
       setLastConfirmed({ orderNumber: result.order.orderNumber, totalAmount: result.order.totalAmount });
+      // The table just became busy (or its total grew): refresh the picker so
+      // the next sale sees the truth instead of the page-load snapshot.
+      void loadBoard();
     } finally {
       setSubmitting(false);
     }
@@ -452,6 +472,58 @@ export function PosClient({
         </div>
       </div>
 
+      {/* Dine-in needs a TABLE, and the cashier has to see whether that table
+          already has customers and a running total — otherwise two waiters open
+          two parallel bills at one table. The picker is only shown for «طاولة»
+          because a walk-in sale must not be attached to a table by accident. */}
+      {type === 'dinein' && (
+        <section className="mb-3" aria-label="اختيار الطاولة">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <p className="section-title mb-0">الطاولة</p>
+            {tableId && boardByTable.get(tableId)?.session_id ? (
+              <span className="text-caption font-semibold text-[var(--color-primary)]">
+                مفتوحة — الإجمالي {formatMoney(boardByTable.get(tableId)!.total_amount, currency)}
+              </span>
+            ) : tableId ? (
+              <span className="text-caption text-[var(--color-text-secondary)]">متاحة — بتفتح جلسة جديدة</span>
+            ) : (
+              <span className="text-caption text-[var(--color-text-secondary)]">
+                اختر طاولة، أو اتركها فارغة لطلب بدون طاولة
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {tables.map((t) => {
+              const row = boardByTable.get(t.id);
+              const busy = Boolean(row?.session_id);
+              const selected = tableId === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setTableId(selected ? null : t.id)}
+                  className={`flex min-h-11 items-center gap-1.5 rounded-[var(--radius-md)] border px-3 text-label font-bold ${
+                    selected
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
+                      : busy
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)] text-[var(--color-primary)]'
+                        : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text)]'
+                  }`}
+                >
+                  <span dir="ltr">{String(t.number).padStart(2, '0')}</span>
+                  {busy && row ? (
+                    <span className="text-caption font-semibold" dir="ltr">
+                      {formatMoney(row.total_amount, currency)}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Queued sales are visible at every width — a sale the cashier thinks is
           sent but is sitting on the device is the worst possible state. */}
       {pending > 0 && (
@@ -478,7 +550,12 @@ export function PosClient({
         {/* ── Left: product grid (extracted component, wave 4 phase b) ── */}
         <PosProductGrid
           type={type}
-          onTypeChange={setType}
+          onTypeChange={(t) => {
+            setType(t);
+            // Leaving «طاولة» must drop the selection: a stale id would attach a
+            // takeaway sale to somebody's open bill.
+            if (t !== 'dinein') setTableId(null);
+          }}
           submitting={submitting}
           query={query}
           onQueryChange={setQuery}

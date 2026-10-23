@@ -50,6 +50,8 @@ export async function POST(request: NextRequest) {
       notes?: string;
       projectId?: string;
       clientRequestId?: string;
+      /** Optional table: a dine-in order joins that table's live session. */
+      tableId?: string;
     };
 
     // Wave 3: the offline queue retries with the SAME id, and the RPC is
@@ -63,10 +65,21 @@ export async function POST(request: NextRequest) {
       clientRequestId = body.clientRequestId;
     }
 
-    const type: OrderType =
+    let type: OrderType =
       body.type === 'drivethru' || body.type === 'walkin' || body.type === 'dinein'
         ? body.type
         : 'walkin';
+
+    // A table makes this a dine-in order by definition; accepting «walkin + table»
+    // would put an order on a table that the floor plan never opens a session for.
+    let tableId: string | null = null;
+    if (body.tableId !== undefined && body.tableId !== null) {
+      if (typeof body.tableId !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.tableId)) {
+        return NextResponse.json({ error: 'معرّف طاولة غير صالح' }, { status: 400 });
+      }
+      tableId = body.tableId;
+      type = 'dinein';
+    }
 
     if (!Array.isArray(body.items) || body.items.length === 0) {
       return NextResponse.json({ error: 'السلة فارغة' }, { status: 400 });
@@ -125,6 +138,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The table must belong to THIS project and be active. Without this check a
+    // staff member of store A could attach an order to store B's table id.
+    if (tableId) {
+      const { data: table } = await userClient
+        .from('tables')
+        .select('id, is_active')
+        .eq('id', tableId)
+        .eq('project_id', membership.project_id)
+        .maybeSingle();
+      if (!table || !table.is_active) {
+        return NextResponse.json({ error: 'الطاولة غير متاحة' }, { status: 400 });
+      }
+    }
+
     // Rate limit POS orders per staff user (prevent spam)
     const rateKey = `${membership.project_id}:${user.id}`;
     const limitResult = await rateLimit(rateKey, {
@@ -149,7 +176,7 @@ export async function POST(request: NextRequest) {
     const result = await createSecureOrder(supabase, {
       projectId: membership.project_id,
       currency,
-      tableId: null,
+      tableId,
       type,
       items: body.items,
       notes: body.notes,

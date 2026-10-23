@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { getCurrentProject } from '@/lib/project';
 import { createClient } from '@/lib/supabase/server';
-import type { Product, ProductOptionGroup, ProductWithOptions } from '@/lib/types';
+import type { Product, ProductOptionGroup, ProductWithOptions, TableBoardRow } from '@/lib/types';
 
 
 /**
@@ -17,6 +17,8 @@ const PosClient = dynamic<{
   // UX-U12: تكرار المنتجات
   productFrequency?: Record<string, number>;
   categories?: { id: string; name: string }[];
+  tables?: { id: string; number: number; slug: string }[];
+  initialBoard?: TableBoardRow[];
 }>(
   () => import('./pos-client').then((mod) => ({ default: mod.PosClient })),
   {
@@ -89,7 +91,7 @@ export default async function PosPage() {
   // project id). In sequence the second cost a full round trip before the grid
   // could render — and the POS is opened dozens of times a shift.
   const since = new Date(new Date().getTime() - 7 * 86400e3).toISOString();
-  const [{ data: products }, { data: orderRows }, { data: categories }] = await Promise.all([
+  const [{ data: products }, { data: orderRows }, { data: categories }, { data: tables }, { data: board }] = await Promise.all([
     supabase
       .from('products')
       .select('*, option_groups(*, option_choices(*))')
@@ -108,6 +110,15 @@ export default async function PosPage() {
       .select('id,name')
       .eq('project_id', ctx.project.id)
       .order('sort_order'),
+    // A POS «طاولة» order must name the table, and the cashier needs to see
+    // which ones are already busy and for how much (phase C, 2026-10-23).
+    supabase
+      .from('tables')
+      .select('id, number, slug, is_active')
+      .eq('project_id', ctx.project.id)
+      .eq('is_active', true)
+      .order('number'),
+    supabase.rpc('table_board', { p_project_id: ctx.project.id }),
   ]);
 
   const frequency: Record<string, number> = {};
@@ -125,6 +136,8 @@ export default async function PosPage() {
         (products ?? []) as (Product & { option_groups: ProductOptionGroup[] })[]
       }
       productFrequency={frequency}
+      tables={(tables ?? []) as { id: string; number: number; slug: string }[]}
+      initialBoard={(board ?? []) as TableBoardRow[]}
       categories={(categories ?? []) as { id: string; name: string }[]}
     />
   );

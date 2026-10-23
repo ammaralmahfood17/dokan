@@ -25,6 +25,8 @@ const VERSION = 1;
 export type PosQueuePayload = {
   projectId: string;
   type: 'walkin' | 'drivethru' | 'dinein';
+  /** Dine-in only. Stored as an id, never a price — the server prices the sale. */
+  tableId?: string | null;
   notes?: string;
   items: Array<{ productId: string; quantity: number; optionIds: string[] }>;
 };

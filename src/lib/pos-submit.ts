@@ -12,6 +12,8 @@ export type PosSubmitPayload = {
   projectId: string;
   clientRequestId: string;
   type: 'walkin' | 'drivethru' | 'dinein';
+  /** Dine-in only: the table this order belongs to (joins its live session). */
+  tableId?: string | null;
   notes?: string;
   items: Array<{ productId: string; quantity: number; optionIds: string[] }>;
 };
