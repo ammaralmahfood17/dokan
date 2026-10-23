@@ -42,6 +42,11 @@ export interface Table {
   slug: string;
   qrcode: string;
   is_active: boolean;
+  /** Floor-plan placement (0..1000 grid). NULL = not placed yet. */
+  pos_x?: number | null;
+  pos_y?: number | null;
+  seats?: number | null;
+  zone?: string | null;
   created_at?: string;
 }
 
@@ -181,6 +186,42 @@ export interface Order {
   order_number: number;
   notes: string | null;
   created_at: string;
+  /** Live table session this order belongs to (NULL for takeaway/service rows). */
+  session_id?: string | null;
+  /** Set when staff collected the money; NULL = unpaid. */
+  paid_at?: string | null;
+}
+
+/** One occupancy of a table — the source of truth for «مشغولة». */
+export interface TableSession {
+  id: string;
+  project_id: string;
+  table_id: string;
+  opened_at: string;
+  opened_by: string | null;
+  closed_at: string | null;
+  closed_by: string | null;
+  close_reason: string | null;
+  closed_automatically: boolean;
+  bill_requested_at: string | null;
+}
+
+/** One row of `table_board()` — a table plus its live session totals. */
+export interface TableBoardRow {
+  table_id: string;
+  number: number;
+  slug: string;
+  zone: string | null;
+  seats: number | null;
+  is_active: boolean;
+  session_id: string | null;
+  opened_at: string | null;
+  bill_requested_at: string | null;
+  orders_count: number;
+  active_orders: number;
+  total_amount: number;
+  paid_amount: number;
+  unpaid_amount: number;
 }
 
 export interface OrderItem {

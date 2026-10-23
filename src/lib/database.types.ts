@@ -379,6 +379,8 @@ export type Database = {
           table_id: string | null
           total_amount: number
           type: Database["public"]["Enums"]["order_type"]
+          session_id: string | null
+          paid_at: string | null
         }
         Insert: {
           client_request_id?: string | null
@@ -392,6 +394,8 @@ export type Database = {
           table_id?: string | null
           total_amount?: number
           type?: Database["public"]["Enums"]["order_type"]
+          session_id?: string | null
+          paid_at?: string | null
         }
         Update: {
           client_request_id?: string | null
@@ -405,6 +409,8 @@ export type Database = {
           table_id?: string | null
           total_amount?: number
           type?: Database["public"]["Enums"]["order_type"]
+          session_id?: string | null
+          paid_at?: string | null
         }
         Relationships: [
           {
@@ -992,7 +998,46 @@ export type Database = {
           },
         ]
       }
-            web_vitals: {
+            table_sessions: {
+        Row: {
+          bill_requested_at: string | null
+          close_reason: string | null
+          closed_at: string | null
+          closed_automatically: boolean
+          closed_by: string | null
+          id: string
+          opened_at: string
+          opened_by: string | null
+          project_id: string
+          table_id: string
+        }
+        Insert: {
+          bill_requested_at?: string | null
+          close_reason?: string | null
+          closed_at?: string | null
+          closed_automatically?: boolean
+          closed_by?: string | null
+          id?: string
+          opened_at?: string
+          opened_by?: string | null
+          project_id: string
+          table_id: string
+        }
+        Update: {
+          bill_requested_at?: string | null
+          close_reason?: string | null
+          closed_at?: string | null
+          closed_automatically?: boolean
+          closed_by?: string | null
+          id?: string
+          opened_at?: string
+          opened_by?: string | null
+          project_id?: string
+          table_id?: string
+        }
+        Relationships: []
+      }
+      web_vitals: {
         Row: {
           bucket_at: string
           created_at: string
@@ -1024,6 +1069,41 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_close_stale_sessions: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      close_table_session: {
+        Args: { p_session_id: string; p_reason?: string | null; p_force?: boolean }
+        Returns: Json
+      }
+      collect_table_session: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
+      ensure_table_session: {
+        Args: { p_project_id: string; p_table_id: string; p_opened_at?: string }
+        Returns: string
+      }
+      table_board: {
+        Args: { p_project_id: string }
+        Returns: {
+          table_id: string
+          number: number
+          slug: string
+          zone: string | null
+          seats: number | null
+          is_active: boolean
+          session_id: string | null
+          opened_at: string | null
+          bill_requested_at: string | null
+          orders_count: number
+          active_orders: number
+          total_amount: number
+          paid_amount: number
+          unpaid_amount: number
+        }[]
+      }
       advance_order_status: {
         Args: {
           p_caller_user_id?: string
