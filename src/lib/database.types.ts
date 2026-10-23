@@ -894,6 +894,10 @@ export type Database = {
           project_id: string
           qrcode: string
           slug: string
+          pos_x: number | null
+          pos_y: number | null
+          seats: number | null
+          zone: string | null
         }
         Insert: {
           branch_id?: string | null
@@ -904,6 +908,10 @@ export type Database = {
           project_id: string
           qrcode?: string
           slug: string
+          pos_x?: number | null
+          pos_y?: number | null
+          seats?: number | null
+          zone?: string | null
         }
         Update: {
           branch_id?: string | null
@@ -914,6 +922,10 @@ export type Database = {
           project_id?: string
           qrcode?: string
           slug?: string
+          pos_x?: number | null
+          pos_y?: number | null
+          seats?: number | null
+          zone?: string | null
         }
         Relationships: [
           {

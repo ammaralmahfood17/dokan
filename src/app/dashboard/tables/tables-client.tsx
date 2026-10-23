@@ -1,7 +1,7 @@
 'use client';
 
-import { FormEvent, useState, useCallback } from 'react';
-import { Plus, Copy, ExternalLink, Printer, Trash2 } from 'lucide-react';
+import { FormEvent, useState, useCallback, useRef } from 'react';
+import { Plus, Copy, ExternalLink, Printer, Trash2, LayoutGrid, List } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
   generateQrToken,
@@ -12,30 +12,88 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { PullToRefresh } from '@/components/ui/pull-to-refresh';
 import { QrReprintBanner } from '@/components/dashboard/qr-reprint-banner';
-import type { Table } from '@/lib/types';
+import { FloorPlan } from '@/components/dashboard/floor-plan';
+import { TableSessionDrawer } from '@/components/dashboard/table-session-drawer';
+import { usePostgresSubscription } from '@/lib/realtime/use-postgres-subscription';
+import { OCCUPANCY_LABEL, tableState, type TableOccupancy } from '@/lib/floor-plan';
+import { formatMoney } from '@/lib/utils';
+import type { Table, TableBoardRow } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 type TableRow = Table;
+
+/** Pill colour per occupancy — one map, so list and floor cannot disagree. */
+function stateTone(state: TableOccupancy): string {
+  return state === 'busy'
+    ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary)]'
+    : state === 'awaiting_bill'
+      ? 'bg-[var(--color-warn-tint)] text-[var(--color-warn)]'
+      : state === 'inactive'
+        ? 'bg-[var(--color-surface-sunken)] text-[var(--color-text-secondary)]'
+        : 'bg-[var(--color-success-tint)] text-[var(--color-success)]';
+}
 
 export function TablesClient({
   projectId,
   projectSlug,
   siteUrl,
   initialTables,
-  occupiedTableIds,
+  initialBoard,
+  currency,
+  canManage,
   qrReprintedAt,
 }: {
   projectId: string;
   projectSlug: string;
   siteUrl: string;
   initialTables: Table[];
-  occupiedTableIds: Set<string>;
+  /** table_board() — occupancy + running totals, computed server-side. */
+  initialBoard: TableBoardRow[];
+  currency: string;
+  /** staff run the floor and close sessions; table/QR editing stays owner+manager. */
+  canManage: boolean;
   /** projects.qr_reprinted_at — NULL means the merchant has not dealt with the reprint yet. */
   qrReprintedAt: string | null;
 }) {
   const router = useRouter();
   const [tables, setTables] = useState(initialTables);
+  const [board, setBoard] = useState<TableBoardRow[]>(initialBoard);
+  const [view, setView] = useState<'floor' | 'list'>('floor');
+  const [activeRow, setActiveRow] = useState<TableBoardRow | null>(null);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const boardByTable = new Map(board.map((r) => [r.table_id, r]));
+  const stateByTable = new Map(board.map((r) => [r.table_id, tableState(r)]));
+
+  /**
+   * Re-read from the RPC, never recompute in the browser: these are money
+   * totals and `table_board()` is the one place that sums them.
+   */
+  const loadBoard = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc('table_board', { p_project_id: projectId });
+    if (error) return;
+    const next = (data ?? []) as TableBoardRow[];
+    setBoard(next);
+    setActiveRow((prev) =>
+      prev ? (next.find((r) => r.table_id === prev.table_id) ?? null) : null
+    );
+  }, [projectId]);
+
+  const scheduleBoard = useCallback(() => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    // One QR order emits an order row and a session row; 400ms coalesces them
+    // into one board read instead of one per row.
+    reloadTimer.current = setTimeout(() => {
+      void loadBoard();
+    }, 400);
+  }, [loadBoard]);
+
+  usePostgresSubscription('table-board', [
+    { table: 'table_sessions', event: '*', handler: scheduleBoard },
+    { table: 'orders', event: '*', handler: scheduleBoard },
+  ]);
   // Owner decision 1: the reprint banner persists per project. Set on print (the real act)
   // and on dismiss (the escape hatch), so it never comes back on another device.
   const [reprinted, setReprinted] = useState(Boolean(qrReprintedAt));
@@ -260,7 +318,7 @@ export function TablesClient({
           <h1>الطاولات و QR</h1>
           <p>الطاولات وروابط القوائم العامة</p>
         </div>
-        <div className="flex gap-2">
+        <div className={`flex gap-2 ${canManage ? '' : 'hidden'}`}>
           {tables.length > 0 && (
             <Button variant="secondary" size="sm" onClick={printAllQrs}>
               <Printer className="h-4 w-4" />
@@ -274,15 +332,56 @@ export function TablesClient({
         </div>
       </div>
 
+      {/* Two lenses on the same objects: the floor is what a shift uses, the
+          list is where QR codes and table CRUD live. The floor is the default. */}
+      <div className="mb-4 inline-flex rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-0.5">
+        <button
+          type="button"
+          onClick={() => setView('floor')}
+          aria-pressed={view === 'floor'}
+          className={`flex min-h-9 items-center gap-1.5 rounded-[var(--radius-sm)] px-3 text-label ${
+            view === 'floor'
+              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary)]'
+              : 'text-[var(--color-text-secondary)]'
+          }`}
+        >
+          <LayoutGrid className="h-4 w-4" />
+          مخطط الصالة
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('list')}
+          aria-pressed={view === 'list'}
+          className={`flex min-h-9 items-center gap-1.5 rounded-[var(--radius-sm)] px-3 text-label ${
+            view === 'list'
+              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary)]'
+              : 'text-[var(--color-text-secondary)]'
+          }`}
+        >
+          <List className="h-4 w-4" />
+          الطاولات و QR
+        </button>
+      </div>
+
+      {view === 'floor' ? (
+        <FloorPlan
+          projectId={projectId}
+          tables={tables}
+          board={board}
+          onOpen={setActiveRow}
+          onChanged={() => void loadBoard()}
+        />
+      ) : (
+        <>
       {/* Only a store that already has tables can be holding old printed sheets. A brand-new
           store used to see «أعد طباعة رموز QR» before it had ever created one — nonsense on the
           first screen a merchant opens. */}
-      {!reprinted && tables.length > 0 && (
+      {canManage && !reprinted && tables.length > 0 && (
         <QrReprintBanner onDismiss={() => void markReprinted()} />
       )}
 
       {/* D2: رابط المتجر — يشاركه التاجر مع زبائنه (يفتح صفحة المتجر العامة) */}
-      <section className="mb-6">
+      <section className={`mb-6 ${canManage ? '' : 'hidden'}`}>
         <p className="section-title">رابط المتجر</p>
         <div className="dashboard-card card flex flex-wrap items-center gap-3 px-4 py-3">
           <p className="text-sm text-[var(--color-text-secondary)]" dir="ltr">
@@ -305,9 +404,11 @@ export function TablesClient({
           <div className="card empty">
             <h3>ما فيه طاولات بعد</h3>
             <p className="mb-4 text-sm">أضف أول طاولة عشان تولّد QR ويقدر العملاء يطلبون.</p>
-            <Button onClick={openCreateModal}>
-              أضف أول طاولة
-            </Button>
+            {canManage && (
+              <Button onClick={openCreateModal}>
+                أضف أول طاولة
+              </Button>
+            )}
           </div>
         ) : (
           <div className="grid gap-2 lg:grid-cols-2">
@@ -329,21 +430,32 @@ export function TablesClient({
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold">طاولة {t.number}</p>
-                      {occupiedTableIds.has(t.id) ? (
-                        <span className="rounded-full bg-[var(--color-warn-tint)] px-2 py-0.5 text-caption font-bold text-[var(--color-warn)]">
-                          مشغولة
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-[var(--color-success-tint)] px-2 py-0.5 text-caption font-bold text-[var(--color-success)]">
-                          متاحة
-                        </span>
-                      )}
+                      <span className={`rounded-full px-2 py-0.5 text-caption font-bold ${stateTone(stateByTable.get(t.id) ?? 'free')}`}>
+                        {OCCUPANCY_LABEL[stateByTable.get(t.id) ?? 'free']}
+                      </span>
                     </div>
                     <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
                       <span dir="ltr">{t.slug}</span>
+                      {(boardByTable.get(t.id)?.total_amount ?? 0) > 0 ? (
+                        <span className="ms-2 font-semibold text-[var(--color-text)]" dir="ltr">
+                          {formatMoney(boardByTable.get(t.id)!.total_amount, currency)}
+                        </span>
+                      ) : null}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-1">
+                    <Button
+                      variant={boardByTable.get(t.id)?.session_id ? 'primary' : 'secondary'}
+                      size="sm"
+                      onClick={() => {
+                        const row = boardByTable.get(t.id);
+                        if (row) setActiveRow(row);
+                      }}
+                    >
+                      الجلسة
+                    </Button>
+                    {canManage && (
+                    <>
                     <Button
                       variant="secondary"
                       size="sm"
@@ -376,13 +488,17 @@ export function TablesClient({
                     >
                       <Trash2 className="h-3.5 w-3.5 text-[var(--color-danger)]" />
                     </Button>
+                    </>
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-      </section>
+          </section>
+        </>
+      )}
       </PullToRefresh>
 
       {/* Create Table Modal — sibling of PullToRefresh */}
@@ -490,6 +606,14 @@ export function TablesClient({
             </div>
           </div>
         </Modal>
+      )}
+      {activeRow && (
+        <TableSessionDrawer
+          row={activeRow}
+          currency={currency}
+          onClose={() => setActiveRow(null)}
+          onChanged={() => void loadBoard()}
+        />
       )}
     </div>
   );
