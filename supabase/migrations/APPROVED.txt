@@ -54,3 +54,4 @@
 20261018202853_drop_unused_reservations.sql 2026-10-18
 20261019000000_provision_auth_user.sql 2026-10-19
 20261022130000_order_number_resync.sql 2026-10-22
+20261023120000_table_sessions.sql 2026-10-23
