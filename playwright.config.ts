@@ -44,13 +44,34 @@ export default defineConfig({
     // this one would multiply every fixture-creating spec by six.
     {
       name: 'chrome',
-      testIgnore: /responsive\.spec\.ts/,
+      testIgnore: /(^|\/)(responsive|authed-responsive|ios)\.spec\.ts$/,
       use: { browserName: 'chromium', channel: process.env.PW_CHANNEL || 'chrome' },
     },
     {
       name: 'responsive',
-      testMatch: /responsive\.spec\.ts/,
+      testMatch: /(^|\/)responsive\.spec\.ts$/,
       use: { browserName: 'chromium', channel: process.env.PW_CHANNEL || 'chrome' },
     },
+    // Wave 6. The merchant matrix creates ONE fixture merchant per run and then
+    // loads 8 screens at 5 widths — a write against the target database, so it
+    // is opt-in (`npm run test:authed`) and never part of the default suite a
+    // developer runs casually. Without the flag this project does not exist and
+    // the file is simply not collected.
+    ...(process.env.E2E_AUTHED_MATRIX === '1'
+      ? [
+          {
+            name: 'authed-responsive',
+            testMatch: /(^|\/)authed-responsive\.spec\.ts$/,
+            use: { browserName: 'chromium' as const, channel: process.env.PW_CHANNEL || 'chrome' },
+          },
+        ]
+      : []),
+    // Wave 6. WebKit is a SEPARATE opt-in project: the browser is not installed
+    // by `npx playwright install chromium`, so making it default would break the
+    // full suite on any machine that only ever needed Chromium. Nightly CI and
+    // `npm run test:webkit` install/use it deliberately.
+    ...(process.env.E2E_WEBKIT === '1'
+      ? [{ name: 'webkit', testMatch: /(^|\/)ios\.spec\.ts$/, use: { browserName: 'webkit' as const } }]
+      : []),
   ],
 });

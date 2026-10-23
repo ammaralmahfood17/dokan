@@ -21,6 +21,8 @@
     "test:e2e:fast": "playwright test --grep-invert 'resilience|kitchen-ops'",
     "test:e2e:ui": "playwright test --ui",
     "test:responsive": "playwright test --project=responsive",
+    "test:authed": "E2E_AUTHED_MATRIX=1 playwright test --project=authed-responsive",
+    "test:webkit": "E2E_WEBKIT=1 playwright test --project=webkit",
     "test:watch": "vitest"
   },
   "engines": {

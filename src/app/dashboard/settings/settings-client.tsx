@@ -213,7 +213,9 @@ export function SettingsClient({
                 setPrimaryColor(e.target.value);
                 if (errors.color) setErrors((prev) => ({ ...prev, color: undefined }));
               }}
-              className="h-10 w-12 cursor-pointer rounded border border-[var(--color-border)]"
+              /* 44px on touch: a colour swatch is a target, and 40px failed the
+                 house floor the authed matrix now enforces at 768/640. */
+              className="h-11 w-12 cursor-pointer rounded border border-[var(--color-border)]"
             />
             <input
               id="store-color-hex"

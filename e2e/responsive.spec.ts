@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { measureLayout } from './lib/layout-probe';
 
 /**
  * Responsive baseline — Wave 0 (2026-10-22).
@@ -54,17 +55,6 @@ const VIEWPORTS: Vp[] = [
   { name: '640-zoom200', width: 640, height: 512, touch: true },
 ];
 
-type Measurement = {
-  viewportWidth: number;
-  scrollWidth: number;
-  clientWidth: number;
-  direction: string;
-  bodyTextLength: number;
-  overflowCount: number;
-  overflowSample: { tag: string; label: string; left: number; right: number }[];
-  smallIconButtons: { label: string; width: number; height: number }[];
-};
-
 for (const vp of VIEWPORTS) {
   test.describe(`@responsive ${vp.name}`, () => {
     test.use({
@@ -95,75 +85,7 @@ for (const vp of VIEWPORTS) {
           })
           .catch(() => {});
 
-        const m = await page.evaluate((): Measurement => {
-          const doc = document.documentElement;
-          const vw = window.innerWidth;
-          const isVisible = (el: Element) => {
-            const cs = getComputedStyle(el);
-            if (cs.display === 'none' || cs.visibility === 'hidden') return false;
-            if (Number(cs.opacity) === 0) return false;
-            const r = el.getBoundingClientRect();
-            return r.width > 0 && r.height > 0;
-          };
-
-          // A control scrolled out of a horizontal chip rail is intentional, not
-          // an overflow bug: the rail is the affordance (the category strip on
-          // the QR menu is exactly this). Only elements that overflow the PAGE
-          // are defects.
-          const inHorizontalScroller = (el: Element) => {
-            let node: Element | null = el.parentElement;
-            while (node && node !== document.body) {
-              const ox = getComputedStyle(node).overflowX;
-              if (ox === 'auto' || ox === 'scroll' || ox === 'hidden') return true;
-              node = node.parentElement;
-            }
-            return false;
-          };
-
-          const interactive = Array.from(
-            document.querySelectorAll<HTMLElement>(
-              'a,button,input,select,textarea,[role="button"],[role="switch"],[role="checkbox"]'
-            )
-          ).filter(isVisible);
-
-          const overflow = interactive
-            .filter((el) => !inHorizontalScroller(el))
-            .map((el) => {
-              const r = el.getBoundingClientRect();
-              return {
-                tag: el.tagName.toLowerCase(),
-                label: (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40),
-                left: Math.round(r.left),
-                right: Math.round(r.right),
-              };
-            })
-            .filter((r) => r.right > vw + 2 || r.left < -2);
-
-          // Icon-only controls carry the 44px floor (house rule, and the one
-          // shape scripts/check-touch-targets.mjs already guards statically).
-          // A control with a visible label is sized by its text.
-          const smallIconButtons = Array.from(
-            document.querySelectorAll<HTMLElement>('button,[role="switch"],[role="checkbox"]')
-          )
-            .filter(isVisible)
-            .map((el) => {
-              const r = el.getBoundingClientRect();
-              const label = (el.getAttribute('aria-label') || el.textContent || '').trim();
-              return { label, width: Math.round(r.width), height: Math.round(r.height) };
-            })
-            .filter((b) => b.label.length === 0 && (b.width < 44 || b.height < 44));
-
-          return {
-            viewportWidth: vw,
-            scrollWidth: doc.scrollWidth,
-            clientWidth: doc.clientWidth,
-            direction: getComputedStyle(doc).direction,
-            bodyTextLength: document.body.innerText.trim().length,
-            overflowCount: overflow.length,
-            overflowSample: overflow.slice(0, 8),
-            smallIconButtons: smallIconButtons.slice(0, 8),
-          };
-        });
+        const m = await measureLayout(page);
 
         expect(m.direction, 'the document must be RTL').toBe('rtl');
         expect(m.bodyTextLength, 'page rendered no text').toBeGreaterThan(20);

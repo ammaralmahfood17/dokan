@@ -63,3 +63,73 @@ jobs:
           # runner image change fails loudly here instead of picking a random
           # Chromium build with different throttling.
           CHROME_PATH: /usr/bin/google-chrome
+
+  # Wave 6 — iOS. The only gate that runs WebKit; Chromium cannot see Safari's
+  # collapsing toolbar, the 16px zoom rule, or dvh behaviour. Public routes
+  # only, read-only, so it belongs on the nightly timer.
+  webkit:
+    name: iOS smoke (WebKit, iPhone 13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - name: WebKit smoke
+        run: npm run test:webkit
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'https://dokanstore.xyz' }}
+
+  # Wave 6 — merchant responsive matrix. This job CREATES a fixture merchant
+  # (user + store + products + tables) and deletes it in afterAll, which means it
+  # writes to whatever database the secrets point at. That is why it is
+  # workflow_dispatch ONLY and never scheduled: a nightly writer into production
+  # is how one bad run leaves a real tenant behind. Requires the three Supabase
+  # secrets; if they are absent the job fails with an instruction, not silently.
+  authed-matrix:
+    name: Merchant matrix (8 screens × 5 widths)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Write the e2e env file
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SITE_URL: ${{ vars.E2E_BASE_URL || 'https://dokanstore.xyz' }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SERVICE_ROLE" ]; then
+            echo "::error::NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY secrets are not set."
+            echo "This job writes a temporary merchant, so it needs real credentials."
+            exit 1
+          fi
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$SUPABASE_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE"
+            echo "NEXT_PUBLIC_SITE_URL=$SITE_URL"
+          } > .env.local
+      - name: Merchant matrix
+        run: npm run test:authed
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'https://dokanstore.xyz' }}
+          PW_CHANNEL: chromium
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authed-matrix-failures
+          path: test-results/
+          retention-days: 7
