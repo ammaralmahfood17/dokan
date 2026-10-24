@@ -28,6 +28,8 @@ import { validateProduct, removeProductImage, compressImage, revalidateMenuCache
 import { ImageUploader } from '@/components/dashboard/products/image-uploader';
 // FIX-C-001: نموذج المنتج مستخرج
 import { ProductFormModal } from '@/components/dashboard/products/product-form-modal';
+// Activation: paste the menu the owner already has instead of typing every dish.
+import { MenuImportModal } from '@/components/dashboard/products/menu-import-modal';
 // FIX-C-001: modals التصنيفات مستخرجة
 import { CategoryManager } from '@/components/dashboard/products/category-manager';
 // FIX-C-003 (audit 2.4): البطاقة + شريط الفلترة + خطافا.bulk والتصنيفات مستخرجة — نقل حرفي
@@ -55,6 +57,7 @@ export function ProductsClient({
   const [categories, setCategories] = useState(initialCategories);
   const [products, setProducts] = useState(initialProducts);
   const [showProductForm, setShowProductForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState<ProductWithOptions | null>(null);
 
   // Search + category filter
@@ -184,6 +187,9 @@ export function ProductsClient({
               <Button variant="secondary" size="sm" onClick={() => bulk.setBulkMode(true)}>
                 تحديد
               </Button>
+              <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}>
+                استيراد منيو
+              </Button>
               <Button variant="secondary" size="sm" onClick={categoryCrud.openCategoryForm}>
                 تصنيف جديد
               </Button>
@@ -311,6 +317,21 @@ export function ProductsClient({
           onRequestDelete={(p) => {
             setShowProductForm(false);
             setConfirmDelete(p);
+          }}
+        />
+      )}
+
+      {/* ======== MENU IMPORT — paste the existing menu, preview, insert ======== */}
+      {showImport && (
+        <MenuImportModal
+          projectId={projectId}
+          currency={currency}
+          categories={categories}
+          existingNames={products.map((p) => p.name)}
+          onClose={() => setShowImport(false)}
+          onImported={() => {
+            setShowImport(false);
+            router.refresh();
           }}
         />
       )}
